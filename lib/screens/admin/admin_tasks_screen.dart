@@ -98,6 +98,13 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
     if (task?['scheduledAt'] != null) {
       try { scheduledDate = DateTime.parse(task!['scheduledAt'].toString()); } catch (_) {}
     }
+    TimeOfDay? estimatedArrivalTime;
+    if (task?['estimatedArrivalAt'] != null) {
+      try {
+        final dt = DateTime.parse(task!['estimatedArrivalAt'].toString());
+        estimatedArrivalTime = TimeOfDay(hour: dt.hour, minute: dt.minute);
+      } catch (_) {}
+    }
 
     // Dynamic items list - قائمة البنود القابلة للزيادة
     final List<TextEditingController> itemControllers = [];
@@ -270,6 +277,60 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // وقت وصول الفني المتوقع
+                      GestureDetector(
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: ctx,
+                            initialTime: estimatedArrivalTime ?? TimeOfDay.now(),
+                            builder: (c, child) => Theme(
+                              data: ThemeData.dark().copyWith(
+                                colorScheme: const ColorScheme.dark(primary: AppColors.primary),
+                              ),
+                              child: child!,
+                            ),
+                          );
+                          if (picked != null) setModalState(() => estimatedArrivalTime = picked);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: AppColors.bg,
+                            border: Border.all(color: estimatedArrivalTime != null ? AppColors.primary : AppColors.border),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(children: [
+                            Icon(Icons.access_time, color: estimatedArrivalTime != null ? AppColors.primary : AppColors.muted, size: 18),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('وقت وصول الفني المتوقع', style: TextStyle(color: AppColors.muted, fontSize: 11)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    estimatedArrivalTime != null
+                                        ? estimatedArrivalTime!.format(ctx)
+                                        : 'اضغط لتحديد الوقت',
+                                    style: TextStyle(
+                                      color: estimatedArrivalTime != null ? AppColors.text : AppColors.muted,
+                                      fontSize: 14,
+                                      fontWeight: estimatedArrivalTime != null ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (estimatedArrivalTime != null)
+                              GestureDetector(
+                                onTap: () => setModalState(() => estimatedArrivalTime = null),
+                                child: const Icon(Icons.close, color: AppColors.muted, size: 16),
+                              ),
+                          ]),
+                        ),
                       ),
                       const SizedBox(height: 14),
 
@@ -450,6 +511,11 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                                   'technicianId': selectedTechnicianId,
                                   'status': selectedStatus,
                                   'scheduledAt': scheduledDate?.toIso8601String(),
+                                  'estimatedArrivalAt': estimatedArrivalTime != null && scheduledDate != null
+                                      ? DateTime(scheduledDate!.year, scheduledDate!.month, scheduledDate!.day, estimatedArrivalTime!.hour, estimatedArrivalTime!.minute).toIso8601String()
+                                      : estimatedArrivalTime != null
+                                          ? DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day, estimatedArrivalTime!.hour, estimatedArrivalTime!.minute).toIso8601String()
+                                          : null,
                                   'amount': amountCtrl.text.isNotEmpty ? amountCtrl.text.trim() : null,
                                   'collectionType': selectedCollectionType,
                                   'notes': notesCtrl.text.isNotEmpty ? notesCtrl.text.trim() : null,
@@ -461,6 +527,11 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                                   'customerId': selectedCustomerId,
                                   'technicianId': selectedTechnicianId,
                                   'scheduledAt': scheduledDate?.toIso8601String(),
+                                  'estimatedArrivalAt': estimatedArrivalTime != null && scheduledDate != null
+                                      ? DateTime(scheduledDate!.year, scheduledDate!.month, scheduledDate!.day, estimatedArrivalTime!.hour, estimatedArrivalTime!.minute).toIso8601String()
+                                      : estimatedArrivalTime != null
+                                          ? DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day, estimatedArrivalTime!.hour, estimatedArrivalTime!.minute).toIso8601String()
+                                          : null,
                                   'amount': amountCtrl.text.isNotEmpty ? amountCtrl.text.trim() : null,
                                   'collectionType': selectedCollectionType,
                                   'notes': notesCtrl.text.isNotEmpty ? notesCtrl.text.trim() : null,

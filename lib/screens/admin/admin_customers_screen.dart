@@ -124,7 +124,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                       Navigator.pop(ctx);
                       try {
                         if (isEdit) {
-                          await ApiService.mutate('clients.updateUserById', {
+                          await ApiService.mutate('clients.updateUserById', input: {
                             'userId': user!['id'],
                             'name': nameCtrl.text.trim(),
                             if (phoneCtrl.text.isNotEmpty) 'phone': phoneCtrl.text.trim(),
@@ -132,10 +132,10 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                             if (addressCtrl.text.isNotEmpty) 'address': addressCtrl.text.trim(),
                           });
                           if (selectedRole != user['role']) {
-                            await ApiService.mutate('clients.updateRole', {'userId': user['id'], 'role': selectedRole});
+                            await ApiService.mutate('clients.updateRole', input: {'userId': user['id'], 'role': selectedRole});
                           }
                         } else {
-                          await ApiService.mutate('clients.create', {
+                          await ApiService.mutate('clients.create', input: {
                             'name': nameCtrl.text.trim(),
                             if (phoneCtrl.text.isNotEmpty) 'phone': phoneCtrl.text.trim(),
                             if (emailCtrl.text.isNotEmpty) 'email': emailCtrl.text.trim(),
@@ -179,7 +179,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
     );
     if (confirmed == true) {
       try {
-        await ApiService.mutate('clients.delete', {'userId': user['id']});
+        await ApiService.mutate('clients.delete', input: {'userId': user['id']});
         _loadUsers();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حذف المستخدم'), backgroundColor: AppColors.success));
       } catch (e) {

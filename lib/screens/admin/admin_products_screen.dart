@@ -122,9 +122,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         };
                         if (isEdit) {
                           body['id'] = product!['id'];
-                          await ApiService.mutate('products.update', body);
+                          await ApiService.mutate('products.update', input: body);
                         } else {
-                          await ApiService.mutate('products.create', body);
+                          await ApiService.mutate('products.create', input: body);
                         }
                         _loadProducts();
                         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEdit ? 'تم تحديث المنتج' : 'تمت إضافة المنتج'), backgroundColor: AppColors.success));
@@ -162,7 +162,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     );
     if (confirmed == true) {
       try {
-        await ApiService.mutate('products.delete', {'id': product['id']});
+        await ApiService.mutate('products.delete', input: {'id': product['id']});
         _loadProducts();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حذف المنتج'), backgroundColor: AppColors.success));
       } catch (e) {

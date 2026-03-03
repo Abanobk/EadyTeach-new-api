@@ -198,7 +198,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                             if (scheduledDate != null) body['scheduledAt'] = scheduledDate!.toIso8601String();
                             if (amountCtrl.text.isNotEmpty) body['amount'] = amountCtrl.text.trim();
                             if (notesCtrl.text.isNotEmpty) body['notes'] = notesCtrl.text.trim();
-                            await ApiService.mutate('tasks.update', body);
+                            await ApiService.mutate('tasks.update', input: body);
                           } else {
                             final body = <String, dynamic>{'title': titleCtrl.text.trim(), 'items': []};
                             if (selectedCustomerId != null) body['customerId'] = int.parse(selectedCustomerId!);
@@ -206,7 +206,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                             if (scheduledDate != null) body['scheduledAt'] = scheduledDate!.toIso8601String();
                             if (amountCtrl.text.isNotEmpty) body['amount'] = amountCtrl.text.trim();
                             if (notesCtrl.text.isNotEmpty) body['notes'] = notesCtrl.text.trim();
-                            await ApiService.mutate('tasks.create', body);
+                            await ApiService.mutate('tasks.create', input: body);
                           }
                           _loadAll();
                           if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEdit ? 'تم تحديث المهمة' : 'تمت إضافة المهمة'), backgroundColor: AppColors.success));
@@ -245,7 +245,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
     );
     if (confirmed == true) {
       try {
-        await ApiService.mutate('tasks.update', {'id': task['id'], 'status': 'cancelled'});
+        await ApiService.mutate('tasks.update', input: {'id': task['id'], 'status': 'cancelled'});
         _loadAll();
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إلغاء المهمة'), backgroundColor: AppColors.success));
       } catch (e) {

@@ -113,7 +113,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -168,7 +168,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                       // العميل
                       DropdownButtonFormField<int>(
                         value: selectedCustomerId,
-                        dropdownColor: AppColors.surface,
+                        dropdownColor: AppColors.card,
                         style: const TextStyle(color: AppColors.text),
                         decoration: _inputDecoration(label: 'العميل'),
                         hint: const Text('اختر العميل', style: TextStyle(color: AppColors.muted)),
@@ -186,7 +186,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                       // الفني
                       DropdownButtonFormField<int>(
                         value: selectedTechnicianId,
-                        dropdownColor: AppColors.surface,
+                        dropdownColor: AppColors.card,
                         style: const TextStyle(color: AppColors.text),
                         decoration: _inputDecoration(label: 'الفني المسؤول'),
                         hint: const Text('اختر الفني', style: TextStyle(color: AppColors.muted)),
@@ -205,7 +205,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                       if (isEdit) ...[
                         DropdownButtonFormField<String>(
                           value: selectedStatus,
-                          dropdownColor: AppColors.surface,
+                          dropdownColor: AppColors.card,
                           style: const TextStyle(color: AppColors.text),
                           decoration: _inputDecoration(label: 'الحالة'),
                           items: const [
@@ -276,7 +276,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                       // طريقة الدفع
                       DropdownButtonFormField<String>(
                         value: selectedCollectionType,
-                        dropdownColor: AppColors.surface,
+                        dropdownColor: AppColors.card,
                         style: const TextStyle(color: AppColors.text),
                         decoration: _inputDecoration(label: 'طريقة الدفع'),
                         items: const [
@@ -377,7 +377,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                                           hintText: 'وصف البند ${idx + 1}...',
                                           hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
                                           filled: true,
-                                          fillColor: AppColors.surface,
+                                          fillColor: AppColors.card,
                                           border: OutlineInputBorder(
                                             borderRadius: BorderRadius.circular(8),
                                             borderSide: const BorderSide(color: AppColors.border),
@@ -508,7 +508,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: AppColors.card,
         title: const Text('إدارة المهام', style: TextStyle(color: AppColors.text)),
         actions: [
           IconButton(
@@ -548,7 +548,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: AppColors.card,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: AppColors.border),
                       ),
@@ -622,7 +622,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                                       final confirm = await showDialog<bool>(
                                         context: context,
                                         builder: (c) => AlertDialog(
-                                          backgroundColor: AppColors.surface,
+                                          backgroundColor: AppColors.card,
                                           title: const Text('تأكيد الإلغاء', style: TextStyle(color: AppColors.text)),
                                           content: const Text('هل تريد إلغاء هذه المهمة؟', style: TextStyle(color: AppColors.muted)),
                                           actions: [

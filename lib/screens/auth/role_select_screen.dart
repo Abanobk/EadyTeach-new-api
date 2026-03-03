@@ -72,16 +72,15 @@ class RoleSelectScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
 
-                // Admin
-                if (user?.isAdmin == true)
-                  _RoleCard(
-                    icon: Icons.dashboard_outlined,
-                    title: 'مسؤول',
-                    subtitle: 'لوحة التحكم الكاملة — المنتجات، العملاء، المهام',
-                    color: const Color(0xFF7B4F1A),
-                    badge: 'دورك الحالي',
-                    onTap: () => Navigator.pushReplacementNamed(context, '/admin'),
-                  ),
+                // Admin - always visible
+                _RoleCard(
+                  icon: Icons.dashboard_outlined,
+                  title: 'مسؤول',
+                  subtitle: 'لوحة التحكم الكاملة — المنتجات، العملاء، المهام',
+                  color: const Color(0xFF7B4F1A),
+                  badge: user?.isAdmin == true ? 'دورك الحالي' : null,
+                  onTap: () => Navigator.pushReplacementNamed(context, '/admin'),
+                ),
 
                 const SizedBox(height: 24),
                 TextButton.icon(

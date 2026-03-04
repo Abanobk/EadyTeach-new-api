@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
@@ -318,9 +319,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     final notes = task['notes']?.toString();
     final hasCustomer = customerName != null || customerPhone != null || customerAddress != null;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
+    return Scaffold(
         backgroundColor: AppColors.bg,
         appBar: AppBar(
           backgroundColor: AppColors.card,

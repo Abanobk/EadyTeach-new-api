@@ -3,8 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // رابط الموقع المنشور
-  static const String baseUrl = 'https://easytechapp-n8wz4sb5.manus.space';
+  // رابط السيرفر المحلي (شغال حتى يتم النشر الرسمي)
+  static const String baseUrl = 'https://3000-iajtve8wzip4xotod3a3c-58edb681.sg1.manus.computer';
   static const String trpcUrl = '$baseUrl/api/trpc';
 
   static Future<String?> _getCookie() async {

@@ -644,11 +644,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               const SizedBox(height: 24),
             ],
           ],
-        ),
-      ),
+         ),
     );
   }
-
   // ── UI Helpers ────────────────────────────────────────────────────────────
 
   Widget _sectionTitle(String title, IconData icon) {

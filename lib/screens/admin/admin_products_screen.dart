@@ -10,12 +10,21 @@ class AdminProductsScreen extends StatefulWidget {
 
 class _AdminProductsScreenState extends State<AdminProductsScreen> {
   List<dynamic> _products = [];
+  List<dynamic> _categories = [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
     _loadProducts();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final res = await ApiService.query('products.getCategories');
+      setState(() => _categories = res['data'] ?? []);
+    } catch (_) {}
   }
 
   Future<void> _loadProducts() async {
@@ -52,6 +61,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     final descCtrl = TextEditingController(text: product?['description'] ?? '');
     final imageCtrl = TextEditingController(text: product?['mainImageUrl'] ?? '');
     bool isFeatured = product?['isFeatured'] == true;
+    int? selectedCategoryId = product?['categoryId'] as int?;
 
     showModalBottomSheet(
       context: context,
@@ -95,6 +105,34 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                 const SizedBox(height: 6),
                 TextField(controller: descCtrl, maxLines: 3, style: const TextStyle(color: AppColors.text), decoration: _inputDecoration(hint: 'وصف المنتج...')),
                 const SizedBox(height: 12),
+                // Category selector
+                const Text('الفئة', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.bg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int?>(
+                      value: selectedCategoryId,
+                      hint: const Text('اختر الفئة (اختياري)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                      dropdownColor: AppColors.card,
+                      isExpanded: true,
+                      items: [
+                        const DropdownMenuItem<int?>(value: null, child: Text('بدون فئة', style: TextStyle(color: AppColors.muted))),
+                        ..._categories.map((cat) => DropdownMenuItem<int?>(
+                          value: cat['id'] as int?,
+                          child: Text(cat['nameAr'] ?? cat['name'] ?? '', style: const TextStyle(color: AppColors.text)),
+                        )),
+                      ],
+                      onChanged: (v) => setModalState(() => selectedCategoryId = v),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Row(children: [
                   Switch(value: isFeatured, onChanged: (v) => setModalState(() => isFeatured = v), activeColor: AppColors.primary),
                   const SizedBox(width: 8),
@@ -119,6 +157,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           if (imageCtrl.text.isNotEmpty) 'mainImageUrl': imageCtrl.text.trim(),
                           'stock': int.tryParse(stockCtrl.text) ?? 0,
                           'isFeatured': isFeatured,
+                          if (selectedCategoryId != null) 'categoryId': selectedCategoryId,
                         };
                         if (isEdit) {
                           body['id'] = product!['id'];

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
 import '../../utils/app_theme.dart';
 
@@ -15,6 +16,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   bool _loading = true;
   bool _sending = false;
   bool _deleting = false;
+  bool _generatingPdf = false;
 
   final _statusLabels = {
     'draft': 'مسودة',
@@ -48,6 +50,41 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       });
     } catch (e) {
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _sendWhatsApp() async {
+    if (_quotation == null) return;
+    setState(() => _generatingPdf = true);
+    try {
+      final res = await ApiService.mutate('quotations.generatePdf', input: {'id': widget.quotationId});
+      final pdfUrl = res['url'] as String? ?? '';
+      final refNumber = res['refNumber'] as String? ?? '';
+      final clientName = _quotation!['clientName'] as String? ?? '';
+      final clientPhone = (_quotation!['clientPhone'] as String? ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+      final intlPhone = clientPhone.startsWith('0') ? '2\$clientPhone' : clientPhone;
+      final msg = Uri.encodeComponent('مرحباً $clientName,\n\nيسعدنا إرسال عرض السعر رقم $refNumber إليكم.\n\nرابط عرض السعر PDF:\n$pdfUrl\n\nشكراً لثقتكم بنا - Easy Tech');
+      final waUrl = intlPhone.isNotEmpty
+          ? 'https://wa.me/$intlPhone?text=$msg'
+          : 'https://wa.me/?text=$msg';
+      final uri = Uri.parse(waUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تعذر فتح WhatsApp'), backgroundColor: AppColors.error),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في توليد PDF: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _generatingPdf = false);
     }
   }
 
@@ -312,6 +349,23 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                           ),
                           const SizedBox(height: 20),
                           // Action buttons
+                          // WhatsApp PDF button - always visible
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: _generatingPdf ? null : _sendWhatsApp,
+                              icon: _generatingPdf
+                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Icon(Icons.chat, color: Colors.white),
+                              label: Text(_generatingPdf ? 'جاري توليد PDF...' : 'إرسال عبر WhatsApp PDF'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF25D366),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
                           if (_quotation!['status'] == 'draft' || _quotation!['status'] == 'sent') ...[
                             SizedBox(
                               width: double.infinity,

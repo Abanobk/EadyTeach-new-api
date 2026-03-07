@@ -14,6 +14,7 @@ import 'admin_categories_screen.dart';
 import 'admin_inbox_screen.dart';
 import 'admin_permissions_screen.dart';
 import 'admin_reports_screen.dart';
+import 'admin_quotations_screen.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -116,6 +117,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   _drawerItem(context, Icons.build_outlined, 'إدارة المهام', () { Navigator.pop(context); setState(() => _selectedIndex = 4); }),
                   const Divider(color: AppColors.border, height: 24),
                   _drawerSection('أنظمة متقدمة'),
+                  _drawerItem(context, Icons.request_quote_outlined, 'عروض الأسعار', () { Navigator.pop(context); _navigate(context, const AdminQuotationsScreen()); }, color: Colors.amber),
                   _drawerItem(context, Icons.category_outlined, 'التصنيفات', () { Navigator.pop(context); _navigate(context, const AdminCategoriesScreen()); }, color: Colors.teal),
                   _drawerItem(context, Icons.people_alt_outlined, 'نظام CRM', () { Navigator.pop(context); _navigate(context, const AdminCrmScreen()); }, color: Colors.indigo),
                   _drawerItem(context, Icons.inbox_outlined, 'صندوق الرسائل', () { Navigator.pop(context); _navigate(context, const AdminInboxScreen()); }, color: Colors.blue),
@@ -222,6 +224,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     _SystemCard(icon: Icons.calendar_month_outlined, label: 'السكرتارية', color: Colors.pink, onTap: () => _navigate(context, const AdminSecretaryScreen())),
                     _SystemCard(icon: Icons.bar_chart_outlined, label: 'التقارير', color: Colors.green, onTap: () => _navigate(context, const AdminReportsScreen())),
                     _SystemCard(icon: Icons.admin_panel_settings_outlined, label: 'الصلاحيات', color: Colors.red, onTap: () => _navigate(context, const AdminPermissionsScreen())),
+                    _SystemCard(icon: Icons.request_quote_outlined, label: 'عروض الأسعار', color: Colors.amber, onTap: () => _navigate(context, const AdminQuotationsScreen())),
                   ],
                 ),
                 const SizedBox(height: 24),

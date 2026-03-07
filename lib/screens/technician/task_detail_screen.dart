@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -41,16 +42,94 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   // Item media uploading state
   final Map<int, bool> _mediaUploading = {};
 
+  // GPS Tracking
+  StreamSubscription<Position>? _locationSub;
+  bool _gpsActive = false;
+  bool _arrivedDetected = false;
+
+  // Task Notes
+  List<Map<String, dynamic>> _notes = [];
+  bool _loadingNotes = false;
+  bool _addingNote = false;
+  final _noteCtrl = TextEditingController();
+  List<String> _noteMediaUrls = [];
+  List<String> _noteMediaTypes = [];
+  bool _noteVisibleToClient = true;
+  bool _uploadingNoteMedia = false;
+
   @override
   void initState() {
     super.initState();
     _loadFullTask();
+    _startGpsTracking();
   }
 
   @override
   void dispose() {
     _cashAmountCtrl.dispose();
+    _noteCtrl.dispose();
+    _locationSub?.cancel();
     super.dispose();
+  }
+
+  // ── GPS Tracking ──────────────────────────────────────────────────────────
+  Future<void> _startGpsTracking() async {
+    final task = widget.task;
+    final status = task['status']?.toString() ?? '';
+    if (status == 'completed' || status == 'cancelled') return;
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+      setState(() => _gpsActive = true);
+      _locationSub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 20),
+      ).listen((Position pos) async {
+        if (!mounted) return;
+        final taskId = widget.task['id'];
+        if (taskId == null) return;
+        final id = taskId is int ? taskId : int.tryParse(taskId.toString());
+        if (id == null) return;
+        final customer = _customer;
+        double? clientLat, clientLng;
+        final locStr = customer?['location']?.toString();
+        if (locStr != null && locStr.isNotEmpty) {
+          final parts = locStr.split(',');
+          if (parts.length >= 2) {
+            clientLat = double.tryParse(parts[0].trim());
+            clientLng = double.tryParse(parts[1].trim());
+          }
+        }
+        try {
+          await ApiService.mutate('technicianLocation.update', input: {
+            'taskId': id,
+            'latitude': pos.latitude,
+            'longitude': pos.longitude,
+            'accuracy': pos.accuracy,
+            if (clientLat != null) 'customerLat': clientLat,
+            if (clientLng != null) 'customerLng': clientLng,
+          });
+          if (!_arrivedDetected && clientLat != null && clientLng != null) {
+            final dist = Geolocator.distanceBetween(pos.latitude, pos.longitude, clientLat, clientLng);
+            if (dist < 100) {
+              setState(() => _arrivedDetected = true);
+              _locationSub?.cancel();
+              setState(() => _gpsActive = false);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('📍 تم اكتشاف وصولك للعميل تلقائياً! تم إشعار العميل.'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 4),
+                ));
+                await _loadFullTask();
+              }
+            }
+          }
+        } catch (_) {}
+      });
+    } catch (_) {}
   }
 
   // ── Data Loading ─────────────────────────────────────────────────────────
@@ -91,11 +170,85 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         _items = items;
         _loadingTask = false;
       });
+      // تحميل الملاحظات
+      final idInt = id is int ? id : int.tryParse(id.toString()) ?? 0;
+      await _loadNotes(idInt);
     } catch (e) {
       setState(() {
         _fullTask = Map<String, dynamic>.from(widget.task);
         _loadingTask = false;
       });
+    }
+  }
+
+  Future<void> _loadNotes(int taskId) async {
+    setState(() => _loadingNotes = true);
+    try {
+      final res = await ApiService.query('taskNotes.list', input: {'taskId': taskId});
+      final raw = res['data'];
+      if (raw is List) {
+        setState(() {
+          _notes = raw.map<Map<String, dynamic>>((n) => Map<String, dynamic>.from(n as Map)).toList();
+        });
+      }
+    } catch (_) {}
+    setState(() => _loadingNotes = false);
+  }
+
+  Future<void> _pickNoteMedia({bool isVideo = false}) async {
+    final picker = ImagePicker();
+    XFile? picked;
+    if (isVideo) {
+      picked = await picker.pickVideo(source: ImageSource.gallery);
+    } else {
+      picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    }
+    if (picked == null) return;
+    setState(() => _uploadingNoteMedia = true);
+    try {
+      final url = await ApiService.uploadFile(picked.path);
+      setState(() {
+        _noteMediaUrls.add(url);
+        _noteMediaTypes.add(isVideo ? 'video' : 'image');
+        _uploadingNoteMedia = false;
+      });
+    } catch (_) {
+      setState(() => _uploadingNoteMedia = false);
+      _showSnack('فشل رفع الملف', Colors.red);
+    }
+  }
+
+  Future<void> _submitNote(int taskId) async {
+    if (_noteCtrl.text.trim().isEmpty) return;
+    setState(() => _addingNote = true);
+    try {
+      await ApiService.mutate('taskNotes.create', input: {
+        'taskId': taskId,
+        'content': _noteCtrl.text.trim(),
+        'mediaUrls': _noteMediaUrls,
+        'mediaTypes': _noteMediaTypes,
+        'isVisibleToClient': _noteVisibleToClient,
+      });
+      _noteCtrl.clear();
+      setState(() {
+        _noteMediaUrls = [];
+        _noteMediaTypes = [];
+        _addingNote = false;
+      });
+      await _loadNotes(taskId);
+      _showSnack('✅ تم إضافة الملاحظة', Colors.green);
+    } catch (e) {
+      setState(() => _addingNote = false);
+      _showSnack('فشل إضافة الملاحظة', Colors.red);
+    }
+  }
+
+  Future<void> _deleteNote(int noteId, int taskId) async {
+    try {
+      await ApiService.mutate('taskNotes.delete', input: {'id': noteId});
+      await _loadNotes(taskId);
+    } catch (_) {
+      _showSnack('فشل حذف الملاحظة', Colors.red);
     }
   }
 
@@ -739,6 +892,157 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               ),
               const SizedBox(height: 24),
             ],
+
+            // ── قسم الملاحظات ─────────────────────────────────────────────────────
+            Builder(builder: (ctx) {
+              final taskId = (_fullTask ?? widget.task)['id'];
+              final id = taskId is int ? taskId : int.tryParse(taskId.toString()) ?? 0;
+              return _sectionCard(
+                label: '📝 ملاحظات الفني',
+                children: [
+                  // إضافة ملاحظة جديدة
+                  TextField(
+                    controller: _noteCtrl,
+                    maxLines: 3,
+                    style: const TextStyle(color: AppColors.text),
+                    decoration: InputDecoration(
+                      hintText: 'اكتب ملاحظة...',
+                      hintStyle: const TextStyle(color: AppColors.muted),
+                      filled: true,
+                      fillColor: AppColors.bg,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // ميديا مرفوعة
+                  if (_noteMediaUrls.isNotEmpty) ...
+                    _noteMediaUrls.asMap().entries.map((e) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(children: [
+                        Icon(_noteMediaTypes[e.key] == 'video' ? Icons.videocam : Icons.image,
+                            color: AppColors.primary, size: 16),
+                        const SizedBox(width: 6),
+                        Expanded(child: Text('ملف ${e.key + 1}',
+                            style: const TextStyle(color: AppColors.text, fontSize: 12))),
+                        GestureDetector(
+                          onTap: () => setState(() {
+                            _noteMediaUrls.removeAt(e.key);
+                            _noteMediaTypes.removeAt(e.key);
+                          }),
+                          child: const Icon(Icons.close, color: Colors.red, size: 16),
+                        ),
+                      ]),
+                    )).toList(),
+                  // أزرار الوسائط والإرسال
+                  Row(children: [
+                    IconButton(
+                      icon: const Icon(Icons.image, color: AppColors.primary),
+                      tooltip: 'إضافة صورة',
+                      onPressed: _uploadingNoteMedia ? null : () => _pickNoteMedia(isVideo: false),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.videocam, color: AppColors.primary),
+                      tooltip: 'إضافة فيديو',
+                      onPressed: _uploadingNoteMedia ? null : () => _pickNoteMedia(isVideo: true),
+                    ),
+                    Row(children: [
+                      Switch(
+                        value: _noteVisibleToClient,
+                        onChanged: (v) => setState(() => _noteVisibleToClient = v),
+                        activeColor: AppColors.primary,
+                      ),
+                      Text('ظاهر للعميل',
+                          style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                    ]),
+                    const Spacer(),
+                    if (_uploadingNoteMedia)
+                      const SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                    else
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                        onPressed: _addingNote ? null : () => _submitNote(id),
+                        child: _addingNote
+                            ? const SizedBox(width: 16, height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('إضافة', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                      ),
+                  ]),
+                  const Divider(color: AppColors.border),
+                  // عرض الملاحظات
+                  if (_loadingNotes)
+                    const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                  else if (_notes.isEmpty)
+                    const Text('لا توجد ملاحظات بعد',
+                        style: TextStyle(color: AppColors.muted, fontSize: 13))
+                  else
+                    ..._notes.map((note) {
+                      final noteId = note['id'] is int ? note['id'] as int : int.tryParse(note['id'].toString()) ?? 0;
+                      final urls = note['mediaUrls'];
+                      final types = note['mediaTypes'];
+                      final mediaList = urls is List ? urls.cast<String>() : <String>[];
+                      final typeList = types is List ? types.cast<String>() : <String>[];
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.bg,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [
+                            Expanded(child: Text(
+                              note['content']?.toString() ?? '',
+                              style: const TextStyle(color: AppColors.text, fontSize: 13),
+                            )),
+                            if (note['isVisibleToClient'] == true)
+                              const Icon(Icons.visibility, color: Colors.green, size: 14)
+                            else
+                              const Icon(Icons.visibility_off, color: AppColors.muted, size: 14),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () => _deleteNote(noteId, id),
+                              child: const Icon(Icons.delete_outline, color: Colors.red, size: 16),
+                            ),
+                          ]),
+                          if (mediaList.isNotEmpty) ...
+                            mediaList.asMap().entries.map((e) => Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: GestureDetector(
+                                onTap: () => launchUrl(Uri.parse(e.value)),
+                                child: typeList.length > e.key && typeList[e.key] == 'image'
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.network(e.value, height: 120, fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)))
+                                    : Row(children: [
+                                        const Icon(Icons.play_circle, color: AppColors.primary),
+                                        const SizedBox(width: 6),
+                                        Text('فيديو ${e.key + 1}',
+                                            style: const TextStyle(color: AppColors.primary, fontSize: 12)),
+                                      ]),
+                              ),
+                            )).toList(),
+                          const SizedBox(height: 4),
+                          Text(
+                            note['createdAt']?.toString().substring(0, 16) ?? '',
+                            style: const TextStyle(color: AppColors.muted, fontSize: 10),
+                          ),
+                        ]),
+                      );
+                    }).toList(),
+                ],
+              );
+            }),
+            const SizedBox(height: 32),
 
           ],
         ),

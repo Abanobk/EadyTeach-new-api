@@ -4,6 +4,8 @@ import 'api_service.dart';
 class GoogleAuthService {
   static final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
+    // Web Client ID من Firebase Console (client_type: 3)
+    serverClientId: '621394137104-dagkle6rgirjgnm7ksm9n065vnjmmk5e.apps.googleusercontent.com',
   );
 
   /// تسجيل الدخول بحساب Google

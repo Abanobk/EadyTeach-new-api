@@ -23,21 +23,19 @@ jobs:
           -o ProxyCommand="cloudflared access tcp --hostname ssh-deploy.easytecheg.net" \
           root@ssh-deploy.easytecheg.net << 'EOF'
             TARGET="/mnt/marichia/files/easytech-new-api"
-            
-            # حل مشكلة الثقة في الفولدر
             git config --global --add safe.directory "$TARGET"
-            
             cd "$TARGET"
+
+            # إعادة ضبط الربط بـ GitHub للتأكد إن مفيش أخطاء
+            rm -rf .git
+            git init
+            git remote add origin https://github.com/Abanobk/EadyTeach-new-api.git
             
-            # لو الفولدر مش مربوط بجيت، نربطه
-            if [ ! -d ".git" ]; then
-                git init
-                git remote add origin https://github.com/Abanobk/EadyTeach-new-api.git
-                git add .
-                git commit -m "Backup of existing files before first deploy"
-            fi
+            # جلب البيانات من GitHub بدون مسح ملفات السيرفر
+            git fetch --all
+            git add .
+            git commit -m "Local backup before sync" || true
             
-            # تحديث الكود "بذكاء" وبدون مسح ملفاتك
-            git fetch origin main
-            git merge -X theirs origin/main --allow-unrelated-histories
+            # دمج التغييرات الجديدة
+            git pull origin main --rebase
           EOF

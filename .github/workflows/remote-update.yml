@@ -26,16 +26,16 @@ jobs:
             git config --global --add safe.directory "$TARGET"
             cd "$TARGET"
 
-            # إعادة ضبط الربط بـ GitHub للتأكد إن مفيش أخطاء
-            rm -rf .git
-            git init
-            git remote add origin https://github.com/Abanobk/EadyTeach-new-api.git
+            # 1. لو فيه أي عملية قديمة معطلة السيرفر نلغيها
+            git rebase --abort || true
+            git merge --abort || true
+
+            # 2. جلب البيانات الجديدة من جيت هب في "مخزن" مؤقت
+            git fetch origin main
+
+            # 3. تحديث ملفات الكود فقط (بدون مسح أي ملفات تانية في السيرفر)
+            # الأمر ده معناه: "حدث اللي موجود في جيت هب بس، وسيب الباقي في حاله"
+            git checkout origin/main -- .
             
-            # جلب البيانات من GitHub بدون مسح ملفات السيرفر
-            git fetch --all
-            git add .
-            git commit -m "Local backup before sync" || true
-            
-            # دمج التغييرات الجديدة
-            git pull origin main --rebase
+            echo "Deployment completed safely."
           EOF

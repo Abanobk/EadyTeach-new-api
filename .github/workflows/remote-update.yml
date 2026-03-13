@@ -13,14 +13,14 @@ jobs:
           curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared.deb
 
-      - name: SSH and Pull via Tunnel
-        uses: appleboy/ssh-action@master
-        with:
-          host: ssh-deploy.easytecheg.net
-          username: root
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          # السر هنا: بنقول لـ SSH يستخدم Cloudflare كـ TCP tunnel مباشر
-          proxy_command: cloudflared access tcp --hostname ssh-deploy.easytecheg.net
-          script: |
-            cd /mnt/pool/data/easytech-new-api
-            git pull origin main
+      - name: Deploy via Tunnel
+        run: |
+          # 1. إنشاء ملف المفتاح
+          echo "${{ secrets.SERVER_SSH_KEY }}" > private_key
+          chmod 600 private_key
+          
+          # 2. تنفيذ الأمر من خلال النفق مباشرة
+          ssh -o StrictHostKeyChecking=no -i private_key \
+          -o ProxyCommand="cloudflared access tcp --hostname ssh-deploy.easytecheg.net" \
+          root@ssh-deploy.easytecheg.net \
+          "cd /mnt/pool/data/easytech-new-api && git pull origin main"

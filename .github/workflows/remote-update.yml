@@ -15,12 +15,12 @@ jobs:
 
       - name: Deploy via Tunnel
         run: |
-          # 1. إنشاء ملف المفتاح
-          echo "${{ secrets.SERVER_SSH_KEY }}" > private_key
-          chmod 600 private_key
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
           
-          # 2. تنفيذ الأمر من خلال النفق مباشرة
-          ssh -o StrictHostKeyChecking=no -i private_key \
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
           -o ProxyCommand="cloudflared access tcp --hostname ssh-deploy.easytecheg.net" \
           root@ssh-deploy.easytecheg.net \
-          "cd /mnt/pool/data/easytech-new-api && git pull origin main"
+          "cd /root/easytech-new-api && git pull origin main" 
+          # أنا غيرت المسار لـ /root/ لو الكود هناك، لو مكانه مختلف قولي

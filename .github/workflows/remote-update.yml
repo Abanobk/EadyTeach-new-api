@@ -10,7 +10,7 @@ jobs:
       - name: SSH and Pull
         uses: appleboy/ssh-action@master
         with:
-          host: ssh-deploy.easytecheg.net
+          host: 100.92.194.111
           username: root
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |

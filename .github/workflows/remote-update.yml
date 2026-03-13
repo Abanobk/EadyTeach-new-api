@@ -19,22 +19,22 @@ jobs:
           echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           
-          # الأمر ده هيدخل السيرفر ويدور على الفولدر ويحدثه أينما كان
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
           -o ProxyCommand="cloudflared access tcp --hostname ssh-deploy.easytecheg.net" \
           root@ssh-deploy.easytecheg.net << 'EOF'
-            TARGET=$(find /mnt -name "easytech-new-api" -type d -print -quit 2>/dev/null)
-            if [ -n "$TARGET" ]; then
-              echo "Found directory at $TARGET"
-              cd "$TARGET"
-              git pull origin main
-            else
-              echo "Directory not found in /mnt, checking /root"
-              if [ -d "/root/easytech-new-api" ]; then
-                cd /root/easytech-new-api && git pull origin main
-              else
-                echo "Project folder not found anywhere!"
-                exit 1
-              fi
+            TARGET="/mnt/marichia/files/easytech-new-api"
+            cd "$TARGET"
+
+            # لو الفولدر مش مربوط بـ Git، هنربطه دلوقتي من غير مسح
+            if [ ! -d ".git" ]; then
+                echo "Initializing Git in existing folder..."
+                git init
+                git remote add origin https://github.com/Abanobk/EadyTeach-new-api.git
+                git fetch
+                # هنجبره يشوف إن الملفات اللي موجودة هي هي اللي في GitHub
+                git checkout -f main
             fi
+
+            echo "Pulling latest changes..."
+            git pull origin main
           EOF

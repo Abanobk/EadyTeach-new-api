@@ -19,8 +19,8 @@ jobs:
           host: ssh-deploy.easytecheg.net
           username: root
           key: ${{ secrets.SERVER_SSH_KEY }}
-          # السر هنا: بنقول لـ SSH استخدم برنامج cloudflare عشان تلاقي السيرفر
-          proxy_command: cloudflared access ssh --hostname ssh-deploy.easytecheg.net
+          # السر هنا: بنقول لـ SSH يستخدم Cloudflare كـ TCP tunnel مباشر
+          proxy_command: cloudflared access tcp --hostname ssh-deploy.easytecheg.net
           script: |
             cd /mnt/pool/data/easytech-new-api
             git pull origin main

@@ -3,16 +3,24 @@ on:
   push:
     branches:
       - main
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: SSH and Pull
+      - name: Install Cloudflared
+        run: |
+          curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb
+
+      - name: SSH and Pull via Tunnel
         uses: appleboy/ssh-action@master
         with:
-          host: 100.92.194.111
+          host: ssh-deploy.easytecheg.net
           username: root
           key: ${{ secrets.SERVER_SSH_KEY }}
+          # السر هنا: بنقول لـ SSH استخدم برنامج cloudflare عشان تلاقي السيرفر
+          proxy_command: cloudflared access ssh --hostname ssh-deploy.easytecheg.net
           script: |
             cd /mnt/pool/data/easytech-new-api
             git pull origin main

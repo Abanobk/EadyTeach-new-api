@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'controllers/theme_controller.dart';
 import 'providers/auth_provider.dart';
 import 'providers/cart_provider.dart';
 import 'screens/auth/login_screen.dart';
@@ -11,7 +13,7 @@ import 'screens/technician/technician_home_screen.dart';
 import 'screens/technician/task_detail_screen.dart';
 import 'screens/admin/admin_home_screen.dart';
 import 'screens/admin/quotation_detail_screen.dart';
-import 'utils/app_theme.dart';
+import 'theme/app_theme.dart';
 import 'dart:async';
 import 'services/notification_service.dart';
 
@@ -47,12 +49,21 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeController()),
       ],
       child: const EasyTechApp(),
     ),
   );
 
   Future(() async {
+    // Skip Firebase/FCM on web when no options are configured
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        NotificationService().setNavigatorKey(navigatorKey);
+        NotificationService().processPendingNotification();
+      });
+      return;
+    }
     try {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
@@ -74,11 +85,14 @@ class EasyTechApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeController = Provider.of<ThemeController>(context);
     return MaterialApp(
       navigatorKey: navigatorKey,
       title: 'easytecheg',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: themeController.isDark ? ThemeMode.dark : ThemeMode.light,
       initialRoute: '/splash',
       routes: {
         '/splash': (_) => const SplashScreen(),
@@ -154,23 +168,20 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.asset(
-              'assets/images/splash_logo.png',
-              width: 240,
-              height: 240,
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(height: 40),
-            const CircularProgressIndicator(
-              color: Color(0xFFF5A623),
-              strokeWidth: 2,
-            ),
-          ],
+      body: Container(
+        decoration: AppThemeDecorations.gradientBackground(context),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ThemeToggleLogo(size: 120),
+              const SizedBox(height: 32),
+              CircularProgressIndicator(
+                color: Theme.of(context).colorScheme.primary,
+                strokeWidth: 2,
+              ),
+            ],
+          ),
         ),
       ),
     );

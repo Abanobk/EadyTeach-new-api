@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'api_service.dart';
 
@@ -26,7 +27,16 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+
+  /// Lazy FCM access — null on web when Firebase is not configured.
+  FirebaseMessaging? get _fcm {
+    try {
+      if (Firebase.apps.isEmpty) return null;
+      return FirebaseMessaging.instance;
+    } catch (_) {
+      return null;
+    }
+  }
 
   // NEW channel ID v2 - forces Android to recreate channel with correct sound/vibration settings
   // Old channel 'easy_tech_high_importance' may have been created without sound in a previous install
@@ -39,8 +49,13 @@ class NotificationService {
 
   /// Initialize notifications - call once at app start
   Future<void> initialize() async {
+    if (_fcm == null) {
+      debugPrint('[NotificationService] FCM not available (e.g. web without Firebase options).');
+      return;
+    }
+    final fcm = _fcm!;
     // 1. Request permission
-    final settings = await _fcm.requestPermission(
+    final settings = await fcm.requestPermission(
       alert: true,
       badge: true,
       sound: true,
@@ -95,14 +110,14 @@ class NotificationService {
 
     // 6. Handle initial message (app opened from terminated state via notification)
     // نؤجل التوجيه حتى يُعيَّن navigatorKey ويُبنى الشجرة
-    final initialMessage = await _fcm.getInitialMessage();
+    final initialMessage = await fcm.getInitialMessage();
     if (initialMessage != null) {
       debugPrint('[FCM] App opened from terminated state via notification');
       _pendingOpenMessage = initialMessage;
     }
 
     // 7. Set foreground notification presentation options (iOS)
-    await _fcm.setForegroundNotificationPresentationOptions(
+    await fcm.setForegroundNotificationPresentationOptions(
       alert: true,
       badge: true,
       sound: true,
@@ -114,10 +129,11 @@ class NotificationService {
   /// Get FCM token and save to server - with retry logic
   Future<String?> getAndSaveFcmToken() async {
     try {
+      if (_fcm == null) return null;
       // Wait a bit to ensure auth cookie is saved
       await Future.delayed(const Duration(milliseconds: 500));
 
-      final token = await _fcm.getToken();
+      final token = await _fcm!.getToken();
       if (token != null) {
         debugPrint('[FCM Token] Got token, saving to server...');
         // Retry up to 3 times in case of network issues
@@ -134,7 +150,7 @@ class NotificationService {
       }
 
       // Listen for token refresh
-      _fcm.onTokenRefresh.listen((newToken) {
+      _fcm!.onTokenRefresh.listen((newToken) {
         debugPrint('[FCM Token] Token refreshed, saving new token...');
         ApiService().saveFcmToken(newToken);
       });

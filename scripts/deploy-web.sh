@@ -1,45 +1,45 @@
 #!/usr/bin/env bash
-# بناء ورفع الويب من جهازك → السيرفر
+# بناء ورفع الويب من جهازك → السيرفر (يستخدم أحدث نسخة من build/web بعد flutter build ناجح)
 # الاستخدام: من جذر المشروع شغّل: ./scripts/deploy-web.sh
 #
 # لو بتصل السيرفر عبر Cloudflare tunnel: ثبّت cloudflared ثم شغّل السكربت:
 #   Mac: brew install cloudflared
-#   ثم سجّل دخول: cloudflared access login
+#   ثم: cloudflared access login
 #
-# لو عندك SSH مباشر (بدون tunnel): شغّل بدون cloudflared:
-#   USE_DIRECT_SSH=1 ./scripts/deploy-web.sh
-#   وضبط SSH_HOST لـ IP أو دومين السيرفر.
+# لو عندك SSH مباشر: USE_DIRECT_SSH=1 ./scripts/deploy-web.sh
 
 set -e
-cd "$(dirname "$0")/.."
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 
 DEPLOY_PATH="${WEB_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/app}"
 SSH_HOST="${SSH_DEPLOY_HOST:-ssh-deploy.easytecheg.net}"
 SSH_USER="${SSH_DEPLOY_USER:-root}"
 CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
+BASE_HREF="${WEB_BASE_HREF:-/app/}"
 
-echo "▶ Building web..."
+echo "▶ Building web (base-href=$BASE_HREF)..."
 flutter pub get
-flutter build web --release
+flutter build web --release --base-href="$BASE_HREF"
+
+if [ ! -f build/web/index.html ]; then
+  echo "❌ Build failed: build/web/index.html not found"
+  exit 1
+fi
+echo "▶ Build OK. Deploying latest build/web to $DEPLOY_PATH ..."
 
 if [ -n "${USE_DIRECT_SSH:-}" ] && [ "$USE_DIRECT_SSH" != "0" ]; then
   USE_TUNNEL=""
 else
   if ! command -v cloudflared >/dev/null 2>&1; then
     echo ""
-    echo "❌ cloudflared غير مثبّت. السكربت بيستخدمه للاتصال بالسيرفر."
-    echo "   ثبّته ثم جرّب تاني:"
-    echo "     Mac:   brew install cloudflared"
-    echo "     ثم:   cloudflared access login"
-    echo ""
-    echo "   لو بتصل السيرفر مباشرة (بدون tunnel) شغّل:"
-    echo "     USE_DIRECT_SSH=1 ./scripts/deploy-web.sh"
+    echo "❌ cloudflared غير مثبّت. ثبّته ثم: cloudflared access login"
+    echo "   أو شغّل: USE_DIRECT_SSH=1 ./scripts/deploy-web.sh"
     exit 1
   fi
   USE_TUNNEL=1
 fi
 
-echo "▶ Deploying to $DEPLOY_PATH ..."
 if [ -n "$USE_TUNNEL" ]; then
   (cd build && tar czf - web) | ssh -o StrictHostKeyChecking=no \
     -o "ProxyCommand=cloudflared access tcp --hostname $CF_HOST" \

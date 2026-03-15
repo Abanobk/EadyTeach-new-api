@@ -5,8 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   /// API is at the root: https://api.easytecheg.net (no trailing slash — avoids double slashes in URLs).
   static const String _apiOrigin = 'https://api.easytecheg.net';
-  /// Path to tRPC router. Backend accepts both 'api/trpc' and 'trpc'. Use the one your server routes to router.php.
-  static const String _apiTrpcPath = 'api/trpc';
+  /// Path to tRPC router. Backend accepts both 'api/trpc' and 'trpc'. Server must route this path to backend/router.php.
+  static const String _apiTrpcPath = 'trpc';
   static String get baseUrl => _apiOrigin;
   static String get trpcUrl {
     final origin = _apiOrigin.endsWith('/') ? _apiOrigin.substring(0, _apiOrigin.length - 1) : _apiOrigin;

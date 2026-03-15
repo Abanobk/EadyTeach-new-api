@@ -5,13 +5,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   /// API is at the root: https://api.easytecheg.net (no trailing slash — avoids double slashes in URLs).
   static const String _apiOrigin = 'https://api.easytecheg.net';
-  /// Path to tRPC router. Backend accepts both 'api/trpc' and 'trpc'. Server must route this path to backend/router.php.
+  /// tRPC path: التطبيق يجرب trpc أولاً، لو 404 يجرب api/trpc تلقائياً.
   static const String _apiTrpcPath = 'trpc';
+  static const String _apiTrpcPathAlt = 'api/trpc';
+  /// بعد أول طلب ناجح، نثبت المسار عشان نستخدمه في كل الطلبات.
+  static String? _resolvedTrpcPath;
+
   static String get baseUrl => _apiOrigin;
   static String get trpcUrl {
     final origin = _apiOrigin.endsWith('/') ? _apiOrigin.substring(0, _apiOrigin.length - 1) : _apiOrigin;
-    return '$origin/$_apiTrpcPath';
+    final path = _resolvedTrpcPath ?? _apiTrpcPath;
+    return '$origin/$path';
   }
+
+  static String _trpcPathForRequest() => _resolvedTrpcPath ?? _apiTrpcPath;
 
   /// Always return an absolute API URL (never relative), with a single slash between origin and path (no double slashes).
   static String _absoluteUrl(String path) {
@@ -130,9 +137,9 @@ class ApiService {
   }) async {
     final cookie = await _getCookie();
     final token = _extractToken(cookie);
-    String url = _absoluteUrl('$_apiTrpcPath/$procedure');
 
-    // tRPC v11 uses {"json": input} format
+    String pathSeg = _trpcPathForRequest();
+    String url = _absoluteUrl('$pathSeg/$procedure');
     if (input != null) {
       final wrappedInput = {'json': input};
       final encoded = Uri.encodeComponent(jsonEncode({'0': wrappedInput}));
@@ -156,14 +163,22 @@ class ApiService {
 
     print('QUERY: status=${response.statusCode}');
 
-    // Save cookie if returned in header
     final setCookie = response.headers['set-cookie'];
     if (setCookie != null && setCookie.isNotEmpty) {
       await _saveCookieFromHeader(setCookie);
     }
 
     if (response.statusCode == 404) {
-      throw Exception('الرابط غير موجود (404). السيرفر لازم يوجّه الطلبات لـ router.php. الرابط: $url — راجع docs/FIX-404-خطوة-بخطوة.md');
+      if (_resolvedTrpcPath == null) {
+        final otherPath = pathSeg == _apiTrpcPath ? _apiTrpcPathAlt : _apiTrpcPath;
+        _resolvedTrpcPath = otherPath;
+        print('QUERY: 404 with $pathSeg, retrying with $otherPath');
+        return query(procedure, input: input);
+      }
+      throw Exception('الرابط غير موجود (404). جرّب إعداد السيرفر حسب docs/FIX-404-خطوة-بخطوة.md — الرابط: $url');
+    }
+    if (response.statusCode == 200) {
+      _resolvedTrpcPath = pathSeg;
     }
     if (response.statusCode == 200) {
       List<dynamic> data;
@@ -223,10 +238,10 @@ class ApiService {
   }) async {
     final cookie = await _getCookie();
     final token = _extractToken(cookie);
-    var url = _absoluteUrl('$_apiTrpcPath/$procedure?batch=1');
+    final pathSeg = _trpcPathForRequest();
+    var url = _absoluteUrl('$pathSeg/$procedure?batch=1');
     if (token != null) url += '&_token=$token';
 
-    // tRPC v11 uses {"json": input} format
     final body = jsonEncode({'0': {'json': input ?? {}}});
 
     print('MUTATE: $procedure -> $url');
@@ -242,14 +257,22 @@ class ApiService {
       throw Exception(_networkErrorMessage(e));
     }
 
-    // Save cookie if returned in Set-Cookie header
     final setCookie = response.headers['set-cookie'];
     if (setCookie != null && setCookie.isNotEmpty) {
       await _saveCookieFromHeader(setCookie);
     }
 
     if (response.statusCode == 404) {
-      throw Exception('الرابط غير موجود (404). السيرفر لازم يوجّه الطلبات لـ router.php. الرابط: $url — راجع docs/FIX-404-خطوة-بخطوة.md');
+      if (_resolvedTrpcPath == null) {
+        final otherPath = pathSeg == _apiTrpcPath ? _apiTrpcPathAlt : _apiTrpcPath;
+        _resolvedTrpcPath = otherPath;
+        print('MUTATE: 404 with $pathSeg, retrying with $otherPath');
+        return mutate(procedure, input: input);
+      }
+      throw Exception('الرابط غير موجود (404). جرّب إعداد السيرفر حسب docs/FIX-404-خطوة-بخطوة.md — الرابط: $url');
+    }
+    if (response.statusCode == 200 || response.statusCode == 207) {
+      _resolvedTrpcPath = pathSeg;
     }
     // tRPC returns errors as 200 with error field, OR as 400/401/403/4xx
     final acceptedCodes = [200, 207, 400, 401, 403];

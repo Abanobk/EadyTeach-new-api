@@ -1,3 +1,6 @@
+# نشر الويب: بناء ثم رفع عبر Cloudflare Tunnel (مصادقة بـ Service Token)
+# Secrets المطلوبة: CF_SERVICE_TOKEN_ID, CF_SERVICE_TOKEN_SECRET, SERVER_SSH_KEY, WEB_DEPLOY_PATH
+# اختياري: CF_TUNNEL_HOST (افتراضي ssh-deploy.easytecheg.net)
 name: Remote Update
 on:
   push:
@@ -18,25 +21,54 @@ jobs:
         run: |
           flutter pub get
           flutter build web --base-href "/app/"
+          [ -f build/web/index.html ] || { echo "::error::Build failed"; exit 1; }
 
-      - name: Deploy to Server
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.DIRECT_SSH_HOST }}
-          username: root
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: 22
-          source: "build/web/"
-          target: "/mnt/marichia/files/easytech-new-api/app"
+      - name: Install Cloudflared
+        run: |
+          curl -LsSf -o cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb
+          cloudflared --version
 
-      - name: Flatten app dir (if scp created web/ inside app)
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.DIRECT_SSH_HOST }}
-          username: root
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: 22
-          script: |
-            cd /mnt/marichia/files/easytech-new-api/app
-            if [ -d web ]; then mv web/* . 2>/dev/null; rmdir web 2>/dev/null; true; fi
-            echo "Deployed."
+      - name: Deploy via Cloudflare Tunnel (SSH over tunnel)
+        env:
+          CF_TUNNEL_HOST: ${{ secrets.CF_TUNNEL_HOST }}
+          CF_SERVICE_TOKEN_ID: ${{ secrets.CF_SERVICE_TOKEN_ID }}
+          CF_SERVICE_TOKEN_SECRET: ${{ secrets.CF_SERVICE_TOKEN_SECRET }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          WEB_DEPLOY_PATH: ${{ secrets.WEB_DEPLOY_PATH }}
+        run: |
+          set -e
+          DEPLOY_PATH="${WEB_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/app}"
+          CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
+
+          if [ -z "$CF_SERVICE_TOKEN_ID" ] || [ -z "$CF_SERVICE_TOKEN_SECRET" ]; then
+            echo "::error::Add CF_SERVICE_TOKEN_ID and CF_SERVICE_TOKEN_SECRET in repo Secrets"
+            exit 1
+          fi
+          if [ -z "$SERVER_SSH_KEY" ]; then
+            echo "::error::Add SERVER_SSH_KEY in repo Secrets"
+            exit 1
+          fi
+
+          export TUNNEL_SERVICE_TOKEN_ID="$CF_SERVICE_TOKEN_ID"
+          export TUNNEL_SERVICE_TOKEN_SECRET="$CF_SERVICE_TOKEN_SECRET"
+
+          mkdir -p ~/.ssh
+          echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          echo "Creating archive..."
+          tar czf /tmp/deploy.tar -C build web
+
+          echo "Uploading via Cloudflare Tunnel ($CF_HOST)..."
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=90 -i ~/.ssh/id_rsa \
+            -o "ProxyCommand=cloudflared access tcp --hostname $CF_HOST" \
+            /tmp/deploy.tar root@$CF_HOST:/tmp/deploy.tar
+
+          echo "Extracting on server..."
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=90 -i ~/.ssh/id_rsa \
+            -o "ProxyCommand=cloudflared access tcp --hostname $CF_HOST" \
+            root@$CF_HOST "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed to $DEPLOY_PATH"
+
+      - name: Done
+        run: echo "✅ Deploy finished. Open https://api.easytecheg.net/app and hard refresh (Ctrl+F5)."

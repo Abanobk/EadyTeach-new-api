@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
 class AdminAccountingScreen extends StatefulWidget {
@@ -128,9 +129,9 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('الحسابات والعهد', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(icon: const Icon(Icons.refresh, color: AppColors.muted), onPressed: _loadAll),
@@ -266,7 +267,7 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.card,
+                color: AppThemeDecorations.cardColor(context),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: AppColors.border),
               ),
@@ -310,7 +311,7 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
@@ -355,7 +356,7 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.card,
+              color: AppThemeDecorations.cardColor(context),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.orange.withOpacity(0.4)),
             ),
@@ -378,7 +379,7 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: AppThemeDecorations.pageBackground(context), borderRadius: BorderRadius.circular(8)),
                   child: Text('📂 ${tx['category']}', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
                 ),
               ],
@@ -447,7 +448,7 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.card,
+              color: AppThemeDecorations.cardColor(context),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: balance > 0 ? Colors.orange.withOpacity(0.3) : Colors.green.withOpacity(0.3)),
             ),
@@ -571,7 +572,7 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppColors.card,
+                        color: AppThemeDecorations.cardColor(context),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: AppColors.border),
                       ),
@@ -634,7 +635,7 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
         margin: const EdgeInsets.only(left: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? c.withOpacity(0.15) : AppColors.card,
+          color: selected ? c.withOpacity(0.15) : AppThemeDecorations.cardColor(context),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: selected ? c : AppColors.border),
         ),
@@ -664,9 +665,9 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
         textDirection: TextDirection.rtl,
         child: StatefulBuilder(
           builder: (ctx, setS) => Container(
-            decoration: const BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            decoration: BoxDecoration(
+              color: AppThemeDecorations.cardColor(ctx),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
             child: SingleChildScrollView(child: Column(
@@ -688,7 +689,7 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
-                        color: sel ? _typeColor(e.key).withOpacity(0.15) : AppColors.bg,
+                        color: sel ? _typeColor(e.key).withOpacity(0.15) : AppThemeDecorations.pageBackground(context),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: sel ? _typeColor(e.key) : AppColors.border),
                       ),
@@ -708,7 +709,7 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
                 const SizedBox(height: 8),
                 DropdownButtonFormField<int>(
                   value: selectedTechId,
-                  dropdownColor: AppColors.card,
+                  dropdownColor: AppThemeDecorations.cardColor(context),
                   style: const TextStyle(color: AppColors.text),
                   decoration: _inputDec(hint: 'اختر الفني'),
                   items: _staff.map((s) => DropdownMenuItem(
@@ -739,7 +740,7 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: sel ? AppColors.primary.withOpacity(0.15) : AppColors.bg,
+                          color: sel ? AppColors.primary.withOpacity(0.15) : AppThemeDecorations.pageBackground(context),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: sel ? AppColors.primary : AppColors.border),
                         ),
@@ -834,7 +835,7 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           title: const Text('رفض المصروف', style: TextStyle(color: AppColors.text)),
           content: TextField(
             controller: noteCtrl,
@@ -876,7 +877,7 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           title: Text('تصفية عهدة ${b['technicianName']}', style: const TextStyle(color: AppColors.text, fontSize: 16)),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             Text('الرصيد الحالي: ${_formatAmount(b['balance'])}',
@@ -935,7 +936,7 @@ class _AdminAccountingScreenState extends State<AdminAccountingScreen> with Sing
       hintText: hint,
       hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
       filled: true,
-      fillColor: AppColors.bg,
+      fillColor: AppThemeDecorations.pageBackground(context),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),

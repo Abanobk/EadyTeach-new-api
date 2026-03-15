@@ -251,11 +251,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                Icon(icon, color: selected ? scheme.primary : scheme.onSurfaceVariant, size: 22),
+            child: ClipRect(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, color: selected ? scheme.primary : scheme.onSurfaceVariant, size: 22),
                 const SizedBox(width: 12),
-                Expanded(
+                Flexible(
                   child: Text(
                     title,
                     style: TextStyle(
@@ -264,10 +266,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
                     ),
                     overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ),
               ],
             ),
+          ),
           ),
         ),
       ),

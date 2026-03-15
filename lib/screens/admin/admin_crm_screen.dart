@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
 import 'crm_lead_detail_screen.dart';
@@ -82,9 +83,9 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('إدارة العملاء CRM', style: TextStyle(color: AppColors.text, fontSize: 17)),
         iconTheme: const IconThemeData(color: AppColors.text),
         actions: [
@@ -156,7 +157,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
+                decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
                 child: Row(children: [
                   Icon(s['icon'] as IconData, color: s['color'] as Color, size: 20),
                   const SizedBox(width: 10),
@@ -165,7 +166,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
                     const SizedBox(height: 4),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(value: pct, backgroundColor: AppColors.bg, color: s['color'] as Color, minHeight: 6),
+                      child: LinearProgressIndicator(value: pct, backgroundColor: AppThemeDecorations.pageBackground(context), color: s['color'] as Color, minHeight: 6),
                     ),
                   ])),
                   const SizedBox(width: 10),
@@ -184,7 +185,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
           ...byAssignee.map((a) => Container(
             margin: const EdgeInsets.only(bottom: 6),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
+            decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
             child: Row(children: [
               Container(
                 width: 36, height: 36,
@@ -217,7 +218,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
     return Container(
       width: MediaQuery.of(context).size.width > 500 ? 170 : (MediaQuery.of(context).size.width - 42) / 2,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.3))),
+      decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.3))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(icon, color: color, size: 22),
         const SizedBox(height: 8),
@@ -247,7 +248,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
       child: Container(
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border.withOpacity(0.5))),
+        decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border.withOpacity(0.5))),
         child: Row(children: [
           Container(
             width: 32, height: 32,
@@ -302,7 +303,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: AppColors.card.withOpacity(0.5),
+                      color: AppThemeDecorations.cardColor(context).withOpacity(0.5),
                       borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
                     ),
                     child: stageLeads.isEmpty
@@ -330,7 +331,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: AppThemeDecorations.cardColor(context),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppColors.border),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))],
@@ -369,7 +370,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
     return Column(children: [
       Container(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         child: Column(children: [
           TextField(
             controller: _searchCtrl,
@@ -381,7 +382,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(icon: const Icon(Icons.clear, size: 18, color: AppColors.muted), onPressed: () { _searchCtrl.clear(); setState(() => _searchQuery = ''); _loadLeads(); })
                   : null,
-              filled: true, fillColor: AppColors.bg,
+              filled: true, fillColor: AppThemeDecorations.pageBackground(context),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
@@ -435,7 +436,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: selected ? (color ?? AppColors.primary) : AppColors.bg,
+            color: selected ? (color ?? AppColors.primary) : AppThemeDecorations.pageBackground(context),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: selected ? (color ?? AppColors.primary) : AppColors.border),
           ),
@@ -454,7 +455,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: selected ? AppColors.primary.withOpacity(0.2) : AppColors.bg,
+            color: selected ? AppColors.primary.withOpacity(0.2) : AppThemeDecorations.pageBackground(context),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: selected ? AppColors.primary : AppColors.border),
           ),
@@ -480,7 +481,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: AppThemeDecorations.cardColor(context),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border),
         ),
@@ -538,7 +539,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
   void _showLeadActions(dynamic lead) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.card,
+      backgroundColor: AppThemeDecorations.cardColor(context),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
         const SizedBox(height: 8),
@@ -573,7 +574,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('توزيع على مندوب', style: TextStyle(color: AppColors.text, fontSize: 16)),
         content: SizedBox(
           width: 300,
@@ -621,7 +622,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
     showDialog(
       context: context,
       builder: (ctx) => SimpleDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('تغيير المرحلة', style: TextStyle(color: AppColors.text, fontSize: 16)),
         children: _stages.map((s) => SimpleDialogOption(
           onPressed: () async {
@@ -648,7 +649,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('حذف الليد', style: TextStyle(color: Colors.red)),
         content: Text('هل تريد حذف "${lead['name']}"؟', style: const TextStyle(color: AppColors.text)),
         actions: [
@@ -678,7 +679,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('إضافة ليد جديد', style: TextStyle(color: AppColors.text, fontSize: 16)),
         content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
           _inputField(nameCtrl, 'الاسم *', Icons.person),
@@ -699,7 +700,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: priority == p ? (_priorityColors[p] ?? Colors.grey).withOpacity(0.2) : AppColors.bg,
+                    color: priority == p ? (_priorityColors[p] ?? Colors.grey).withOpacity(0.2) : AppThemeDecorations.pageBackground(context),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: priority == p ? (_priorityColors[p] ?? Colors.grey) : AppColors.border),
                   ),
@@ -715,11 +716,11 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
               decoration: InputDecoration(
                 labelText: 'توزيع على',
                 labelStyle: const TextStyle(color: AppColors.muted, fontSize: 12),
-                filled: true, fillColor: AppColors.bg,
+                filled: true, fillColor: AppThemeDecorations.pageBackground(context),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               ),
-              dropdownColor: AppColors.card,
+              dropdownColor: AppThemeDecorations.cardColor(context),
               style: const TextStyle(color: AppColors.text, fontSize: 13),
               items: [
                 const DropdownMenuItem(value: null, child: Text('بدون توزيع')),
@@ -764,7 +765,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
       decoration: InputDecoration(
         hintText: hint, hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
         prefixIcon: Icon(icon, color: AppColors.muted, size: 18),
-        filled: true, fillColor: AppColors.bg,
+        filled: true, fillColor: AppThemeDecorations.pageBackground(context),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),

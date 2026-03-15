@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
 
@@ -66,9 +67,9 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           title: const Text('إدارة الصلاحيات', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
           iconTheme: const IconThemeData(color: AppColors.text),
           actions: [
@@ -142,7 +143,7 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
@@ -186,7 +187,7 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
               if (!isSystem)
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert, color: AppColors.muted, size: 20),
-                  color: AppColors.card,
+                  color: AppThemeDecorations.cardColor(context),
                   onSelected: (action) {
                     if (action == 'edit') _showEditRoleDialog(role);
                     if (action == 'delete') _confirmDeleteRole(role);
@@ -262,9 +263,9 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
         // Role selector
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(
-            color: AppColors.card,
-            border: Border(bottom: BorderSide(color: AppColors.border)),
+          decoration: BoxDecoration(
+            color: AppThemeDecorations.cardColor(context),
+            border: const Border(bottom: BorderSide(color: AppColors.border)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -285,7 +286,7 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
                         margin: const EdgeInsets.only(left: 8),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
-                          color: selected ? color.withOpacity(0.15) : AppColors.bg,
+                          color: selected ? color.withOpacity(0.15) : AppThemeDecorations.pageBackground(context),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: selected ? color : AppColors.border),
                         ),
@@ -382,7 +383,7 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: AppColors.card,
+              color: AppThemeDecorations.cardColor(context),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: someChecked ? AppColors.primary.withOpacity(0.3) : AppColors.border),
             ),
@@ -494,9 +495,9 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
         // Filter chips
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: const BoxDecoration(
-            color: AppColors.card,
-            border: Border(bottom: BorderSide(color: AppColors.border)),
+          decoration: BoxDecoration(
+            color: AppThemeDecorations.cardColor(context),
+            border: const Border(bottom: BorderSide(color: AppColors.border)),
           ),
           child: SizedBox(
             height: 36,
@@ -538,7 +539,7 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
         margin: const EdgeInsets.only(left: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? chipColor.withOpacity(0.15) : AppColors.bg,
+          color: selected ? chipColor.withOpacity(0.15) : AppThemeDecorations.pageBackground(context),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: selected ? chipColor : AppColors.border),
         ),
@@ -557,7 +558,7 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
@@ -620,7 +621,7 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
         textDirection: TextDirection.rtl,
         child: StatefulBuilder(
           builder: (ctx, setS) => AlertDialog(
-            backgroundColor: AppColors.card,
+            backgroundColor: AppThemeDecorations.cardColor(context),
             title: const Text('إضافة دور جديد', style: TextStyle(color: AppColors.text, fontSize: 18)),
             content: SingleChildScrollView(
               child: Column(
@@ -734,7 +735,7 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
         textDirection: TextDirection.rtl,
         child: StatefulBuilder(
           builder: (ctx, setS) => AlertDialog(
-            backgroundColor: AppColors.card,
+            backgroundColor: AppThemeDecorations.cardColor(context),
             title: Text('تعديل: ${role['nameAr']}', style: const TextStyle(color: AppColors.text, fontSize: 18)),
             content: SingleChildScrollView(
               child: Column(
@@ -804,7 +805,7 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           title: const Text('حذف الدور', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           content: Text('هل أنت متأكد من حذف "${role['nameAr']}"؟', style: const TextStyle(color: AppColors.text)),
           actions: [
@@ -839,7 +840,7 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
         textDirection: TextDirection.rtl,
         child: StatefulBuilder(
           builder: (ctx, setS) => AlertDialog(
-            backgroundColor: AppColors.card,
+            backgroundColor: AppThemeDecorations.cardColor(context),
             title: Text('تغيير دور: ${user['name']}', style: const TextStyle(color: AppColors.text, fontSize: 16)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -852,7 +853,7 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isSelected ? color.withOpacity(0.12) : AppColors.bg,
+                      color: isSelected ? color.withOpacity(0.12) : AppThemeDecorations.pageBackground(context),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: isSelected ? color : AppColors.border),
                     ),
@@ -920,7 +921,7 @@ class _AdminPermissionsScreenState extends State<AdminPermissionsScreen> with Si
       hintText: hint,
       hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
       filled: true,
-      fillColor: AppColors.bg,
+      fillColor: AppThemeDecorations.pageBackground(context),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),

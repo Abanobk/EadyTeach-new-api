@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import 'create_quotation_screen.dart';
 import 'quotation_detail_screen.dart';
@@ -86,10 +87,10 @@ class _AdminQuotationsScreenState extends State<AdminQuotationsScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
           title: const Text('عروض الأسعار'),
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           actions: [
             IconButton(
               icon: const Icon(Icons.refresh, color: AppColors.primary),
@@ -147,7 +148,7 @@ class _AdminQuotationsScreenState extends State<AdminQuotationsScreen> {
                                       label: Text(e.value),
                                       selected: selected,
                                       onSelected: (_) => setState(() => _filterStatus = e.key),
-                                      backgroundColor: AppColors.card,
+                                      backgroundColor: AppThemeDecorations.cardColor(context),
                                       selectedColor: AppColors.primary.withOpacity(0.2),
                                       checkmarkColor: AppColors.primary,
                                       labelStyle: TextStyle(
@@ -205,7 +206,7 @@ class _AdminQuotationsScreenState extends State<AdminQuotationsScreen> {
                                     child: Container(
                                       padding: const EdgeInsets.all(14),
                                       decoration: BoxDecoration(
-                                        color: AppColors.card,
+                                        color: AppThemeDecorations.cardColor(context),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(color: AppColors.border),
                                       ),

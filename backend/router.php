@@ -5,9 +5,26 @@
  */
 
 // ─── CORS ──────────────────────────────────────────────────────
-header('Access-Control-Allow-Origin: *');
+// عند استخدام Cookie يجب إرجاع Origin الفعلي وليس * (المتصفح يرفض * مع credentials)
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$allowedOrigins = [
+    'http://localhost',
+    'http://127.0.0.1',
+    'https://api.easytecheg.net',
+    'https://easytecheg.net',
+];
+$allowOrigin = '*';
+if ($origin !== '') {
+    foreach ($allowedOrigins as $allowed) {
+        if (strpos($origin, $allowed) === 0) {
+            $allowOrigin = $origin;
+            break;
+        }
+    }
+}
+header('Access-Control-Allow-Origin: ' . $allowOrigin);
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Accept, Cookie');
+header('Access-Control-Allow-Headers: Content-Type, Accept, Cookie, Authorization');
 header('Access-Control-Allow-Credentials: true');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {

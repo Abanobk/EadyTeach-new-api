@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/app_theme.dart';
+import '../../theme/app_theme.dart';
 import '../../services/api_service.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -78,91 +79,74 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.bg,
-      body: SafeArea(
-        child: Directionality(
-          textDirection: TextDirection.rtl,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 40),
-
-                  // Logo
-                  Container(
-                    width: 70,
-                    height: 70,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'ET',
+      body: Container(
+        decoration: AppThemeDecorations.gradientBackground(context),
+        child: SafeArea(
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: AppThemeDecorations.loginStyleCard(context, 24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      ThemeToggleLogo(size: 70),
+                      const SizedBox(height: 16),
+                      Text(
+                        'إنشاء حساب جديد',
                         style: TextStyle(
-                          color: Colors.black,
+                          color: c.onSurface,
                           fontSize: 24,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'إنشاء حساب جديد',
-                    style: TextStyle(
-                      color: AppColors.text,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'أنشئ حسابك للوصول إلى خدمات EASY TECH',
-                    style: TextStyle(color: AppColors.muted, fontSize: 13),
-                    textAlign: TextAlign.center,
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Error message
-                  if (_error != null) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                      const SizedBox(height: 6),
+                      Text(
+                        'أنشئ حسابك للوصول إلى خدمات EASY TECH',
+                        style: TextStyle(color: c.onSurfaceVariant, fontSize: 13),
+                        textAlign: TextAlign.center,
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.error_outline, color: AppColors.error, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _error!,
-                              style: const TextStyle(color: AppColors.error, fontSize: 13),
-                            ),
+                      const SizedBox(height: 32),
+                      if (_error != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: c.error.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: c.error.withOpacity(0.3)),
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
+                          child: Row(
+                            children: [
+                              Icon(Icons.error_outline, color: c.error, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _error!,
+                                  style: TextStyle(color: c.error, fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
 
                   // Name field
-                  _buildLabel('الاسم الكامل'),
+                  _buildLabel(context, 'الاسم الكامل'),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _nameController,
                     textDirection: TextDirection.rtl,
-                    style: const TextStyle(color: AppColors.text),
+                    style: TextStyle(color: c.onSurface),
                     decoration: _inputDecoration(
+                      context,
                       hint: 'أدخل اسمك الكامل',
                       icon: Icons.person_outline,
                     ),
@@ -176,14 +160,15 @@ class _SignupScreenState extends State<SignupScreen> {
                   const SizedBox(height: 16),
 
                   // Email field
-                  _buildLabel('البريد الإلكتروني'),
+                  _buildLabel(context, 'البريد الإلكتروني'),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     textDirection: TextDirection.ltr,
-                    style: const TextStyle(color: AppColors.text),
+                    style: TextStyle(color: c.onSurface),
                     decoration: _inputDecoration(
+                      context,
                       hint: 'example@email.com',
                       icon: Icons.email_outlined,
                     ),
@@ -197,14 +182,15 @@ class _SignupScreenState extends State<SignupScreen> {
                   const SizedBox(height: 16),
 
                   // Phone field
-                  _buildLabel('رقم الهاتف (اختياري)'),
+                  _buildLabel(context, 'رقم الهاتف (اختياري)'),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
                     textDirection: TextDirection.ltr,
-                    style: const TextStyle(color: AppColors.text),
+                    style: TextStyle(color: c.onSurface),
                     decoration: _inputDecoration(
+                      context,
                       hint: '01xxxxxxxxx',
                       icon: Icons.phone_outlined,
                     ),
@@ -213,21 +199,22 @@ class _SignupScreenState extends State<SignupScreen> {
                   const SizedBox(height: 16),
 
                   // Password field
-                  _buildLabel('كلمة المرور'),
+                  _buildLabel(context, 'كلمة المرور'),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
                     textDirection: TextDirection.ltr,
-                    style: const TextStyle(color: AppColors.text),
+                    style: TextStyle(color: c.onSurface),
                     decoration: _inputDecoration(
+                      context,
                       hint: '••••••••',
                       icon: Icons.lock_outline,
                       suffixIcon: GestureDetector(
                         onTap: () => setState(() => _obscurePassword = !_obscurePassword),
                         child: Icon(
                           _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          color: AppColors.muted,
+                          color: c.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -241,21 +228,22 @@ class _SignupScreenState extends State<SignupScreen> {
                   const SizedBox(height: 16),
 
                   // Confirm Password field
-                  _buildLabel('تأكيد كلمة المرور'),
+                  _buildLabel(context, 'تأكيد كلمة المرور'),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _confirmPasswordController,
                     obscureText: _obscureConfirm,
                     textDirection: TextDirection.ltr,
-                    style: const TextStyle(color: AppColors.text),
+                    style: TextStyle(color: c.onSurface),
                     decoration: _inputDecoration(
+                      context,
                       hint: '••••••••',
                       icon: Icons.lock_outline,
                       suffixIcon: GestureDetector(
                         onTap: () => setState(() => _obscureConfirm = !_obscureConfirm),
                         child: Icon(
                           _obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          color: AppColors.muted,
+                          color: c.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -305,16 +293,16 @@ class _SignupScreenState extends State<SignupScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text(
+                      Text(
                         'لديك حساب بالفعل؟ ',
-                        style: TextStyle(color: AppColors.muted, fontSize: 14),
+                        style: TextStyle(color: c.onSurfaceVariant, fontSize: 14),
                       ),
                       GestureDetector(
                         onTap: () => Navigator.pop(context),
-                        child: const Text(
+                        child: Text(
                           'تسجيل الدخول',
                           style: TextStyle(
-                            color: AppColors.primary,
+                            color: c.primary,
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                           ),
@@ -324,7 +312,9 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
 
                   const SizedBox(height: 30),
-                ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -333,13 +323,14 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  Widget _buildLabel(String text) {
+  Widget _buildLabel(BuildContext context, String text) {
+    final c = Theme.of(context).colorScheme;
     return Align(
       alignment: Alignment.centerRight,
       child: Text(
         text,
-        style: const TextStyle(
-          color: AppColors.text,
+        style: TextStyle(
+          color: c.onSurface,
           fontSize: 14,
           fontWeight: FontWeight.w600,
         ),
@@ -347,27 +338,18 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  InputDecoration _inputDecoration({
+  InputDecoration _inputDecoration(
+    BuildContext context, {
     required String hint,
     required IconData icon,
     Widget? suffixIcon,
   }) {
-    return InputDecoration(
+    final c = Theme.of(context).colorScheme;
+    return appThemeInputDecoration(
+      context,
       hintText: hint,
-      hintStyle: const TextStyle(color: AppColors.muted),
-      prefixIcon: Icon(icon, color: AppColors.muted),
+      prefixIcon: Icon(icon, color: c.onSurfaceVariant),
       suffixIcon: suffixIcon,
-      filled: true,
-      fillColor: AppColors.card,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 }

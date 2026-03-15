@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
 class MyTasksScreen extends StatefulWidget {
@@ -52,13 +53,13 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
         title: const Text(
           'منطقتي',
           style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
@@ -69,7 +70,7 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(44),
           child: Container(
-            color: AppColors.card,
+            color: AppThemeDecorations.cardColor(context),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
@@ -192,7 +193,7 @@ class _TaskCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: AppThemeDecorations.cardColor(context),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border),
         ),
@@ -350,7 +351,7 @@ class _TabChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppColors.card,
+          color: selected ? AppColors.primary : AppThemeDecorations.cardColor(context),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected ? AppColors.primary : AppColors.border,
@@ -399,7 +400,7 @@ class _SurveyCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
@@ -538,13 +539,13 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
           title: Text(
             task['title'] ?? 'تفاصيل المهمة',
             style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
           ),
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios, color: AppColors.text),
             onPressed: () => Navigator.pop(context),
@@ -564,7 +565,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.card,
+                    color: AppThemeDecorations.cardColor(context),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: AppColors.border),
                   ),
@@ -641,7 +642,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: AppColors.card,
+                      color: AppThemeDecorations.cardColor(context),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: AppColors.border),
                     ),
@@ -723,7 +724,7 @@ class _NoteCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.primary.withOpacity(0.3)),
       ),

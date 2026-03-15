@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
-import '../../utils/app_theme.dart';
+import '../../theme/app_theme.dart';
 import '../../modules/survey/screens/survey_entry_screen.dart';
 import '../admin/admin_notifications_screen.dart';
 import 'task_detail_screen.dart';
@@ -154,31 +154,43 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
-        appBar: AppBar(
-          backgroundColor: AppColors.card,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.primary, size: 20),
-            onPressed: () => Navigator.pushReplacementNamed(context, '/role-select'),
-          ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        body: Container(
+          decoration: AppThemeDecorations.gradientBackground(context),
+          child: Column(
             children: [
-              const Text('مهامي',
-                  style: TextStyle(
-                      color: AppColors.text,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18)),
-              Text(auth.userDisplayName,
-                  style:
-                      const TextStyle(color: AppColors.muted, fontSize: 12)),
-            ],
-          ),
-          actions: [
-            Stack(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.notifications_outlined, color: AppColors.primary),
+              AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                leading: IconButton(
+                  icon: Icon(Icons.arrow_back_ios_new, color: Theme.of(context).colorScheme.primary, size: 20),
+                  onPressed: () => Navigator.pushReplacementNamed(context, '/role-select'),
+                ),
+                title: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ThemeToggleLogo(size: 38),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('مهامي',
+                            style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18)),
+                        Text(auth.userDisplayName,
+                            style:
+                                TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
+                      ],
+                    ),
+                  ],
+                ),
+                actions: [
+                  Stack(
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.notifications_outlined, color: Theme.of(context).colorScheme.primary),
                   tooltip: 'الإشعارات',
                   onPressed: () async {
                     await Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminNotificationsScreen()));
@@ -197,7 +209,7 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
               ],
             ),
             IconButton(
-              icon: const Icon(Icons.account_balance_wallet_outlined, color: Colors.orange),
+              icon: Icon(Icons.account_balance_wallet_outlined, color: Theme.of(context).colorScheme.primary),
               tooltip: 'عهدتي',
               onPressed: () {
                 Navigator.push(
@@ -209,7 +221,7 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
               },
             ),
             IconButton(
-              icon: const Icon(Icons.home_work_outlined, color: AppColors.muted),
+              icon: Icon(Icons.home_work_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
               tooltip: 'Smart Survey',
               onPressed: () {
                 Navigator.push(
@@ -221,11 +233,11 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
               },
             ),
             IconButton(
-              icon: const Icon(Icons.refresh, color: AppColors.muted),
+              icon: Icon(Icons.refresh, color: Theme.of(context).colorScheme.onSurfaceVariant),
               onPressed: () => _loadTasks(context),
             ),
             IconButton(
-              icon: const Icon(Icons.logout, color: AppColors.muted),
+              icon: Icon(Icons.logout, color: Theme.of(context).colorScheme.onSurfaceVariant),
               onPressed: () async {
                 await auth.logout();
                 if (mounted) {
@@ -235,8 +247,6 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
             ),
           ],
         ),
-        body: Column(
-          children: [
             // Custody quick-access banner
             GestureDetector(
               onTap: () => Navigator.push(
@@ -247,13 +257,11 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
                 margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF9800), Color(0xFFF57C00)],
-                  ),
+                  gradient: AppThemeDecorations.primaryButtonGradient,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.orange.withOpacity(0.3),
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
@@ -310,19 +318,19 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
             // Tasks
             Expanded(
               child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(color: AppColors.primary))
+                  ? Center(
+                      child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary))
                   : _filteredTasks.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(Icons.task_outlined,
-                                  size: 64, color: AppColors.muted),
-                              SizedBox(height: 16),
+                                  size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              const SizedBox(height: 16),
                               Text('لا توجد مهام',
                                   style: TextStyle(
-                                      color: AppColors.muted, fontSize: 18)),
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 18)),
                             ],
                           ),
                         )
@@ -344,6 +352,7 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 }
@@ -365,24 +374,24 @@ class _FilterChipNew extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = activeColor ?? AppColors.primary;
+    final color = activeColor ?? Theme.of(context).colorScheme.primary;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(left: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.15) : AppColors.card,
+          color: selected ? color.withOpacity(0.15) : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? color : AppColors.border),
+          border: Border.all(color: selected ? color : Theme.of(context).colorScheme.outline),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 15, color: selected ? color : AppColors.muted),
+            Icon(icon, size: 15, color: selected ? color : Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(width: 6),
             Text(label, style: TextStyle(
-              color: selected ? color : AppColors.text,
+              color: selected ? color : Theme.of(context).colorScheme.onSurface,
               fontWeight: selected ? FontWeight.bold : FontWeight.normal,
               fontSize: 13,
             )),
@@ -412,11 +421,7 @@ class _TaskCard extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
+        decoration: AppThemeDecorations.card(context, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -426,8 +431,8 @@ class _TaskCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     task['title'] ?? '',
-                    style: const TextStyle(
-                        color: AppColors.text,
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
                         fontWeight: FontWeight.bold,
                         fontSize: 15),
                   ),
@@ -439,7 +444,7 @@ class _TaskCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 task['description'],
-                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -480,7 +485,7 @@ class _TaskCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
                           value: overallProgress / 100.0,
-                          backgroundColor: AppColors.border,
+                          backgroundColor: Theme.of(context).colorScheme.outline,
                           valueColor: AlwaysStoppedAnimation<Color>(pColor),
                           minHeight: 6,
                         ),
@@ -498,8 +503,8 @@ class _TaskCard extends StatelessWidget {
                 if (date != null)
                   Text(
                     '${date.day}/${date.month}/${date.year}',
-                    style: const TextStyle(
-                        color: AppColors.muted, fontSize: 11),
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11),
                   ),
               ],
             ),
@@ -528,15 +533,15 @@ class _StatusBadge extends StatelessWidget {
         label = 'جاري';
         break;
       case 'completed':
-        color = AppColors.success;
+        color = AppThemeColors.success;
         label = 'مكتملة';
         break;
       case 'cancelled':
-        color = AppColors.error;
+        color = AppThemeColors.error;
         label = 'ملغاة';
         break;
       default:
-        color = AppColors.muted;
+        color = Theme.of(context).colorScheme.onSurfaceVariant;
         label = status;
     }
 
@@ -563,7 +568,7 @@ class _PriorityBadge extends StatelessWidget {
     String label;
     switch (priority) {
       case 'high':
-        color = AppColors.error;
+        color = AppThemeColors.error;
         label = 'عاجل';
         break;
       case 'medium':
@@ -571,11 +576,11 @@ class _PriorityBadge extends StatelessWidget {
         label = 'متوسط';
         break;
       case 'low':
-        color = AppColors.success;
+        color = AppThemeColors.success;
         label = 'عادي';
         break;
       default:
-        color = AppColors.muted;
+        color = Theme.of(context).colorScheme.onSurfaceVariant;
         label = priority;
     }
 

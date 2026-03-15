@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
 
@@ -32,7 +33,7 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
     hintText: hint,
     hintStyle: const TextStyle(color: AppColors.muted),
     filled: true,
-    fillColor: AppColors.bg,
+    fillColor: AppThemeDecorations.pageBackground(context),
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -49,7 +50,7 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.card,
+      backgroundColor: AppThemeDecorations.cardColor(context),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Padding(
@@ -93,7 +94,7 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                     width: double.infinity,
                     height: 120,
                     decoration: BoxDecoration(
-                      color: AppColors.bg,
+                      color: AppThemeDecorations.pageBackground(context),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: AppColors.border, width: 1.5),
                     ),
@@ -211,9 +212,9 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('الفئات', style: TextStyle(color: AppColors.text)),
         iconTheme: const IconThemeData(color: AppColors.text),
         actions: [
@@ -263,7 +264,7 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                       onTap: () => _showCategoryDialog(category: cat),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: AppColors.card,
+                          color: AppThemeDecorations.cardColor(context),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: AppColors.border),
                         ),
@@ -312,7 +313,7 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                                     builder: (ctx) => Directionality(
                                       textDirection: TextDirection.rtl,
                                       child: AlertDialog(
-                                        backgroundColor: AppColors.card,
+                                        backgroundColor: AppThemeDecorations.cardColor(context),
                                         title: const Text('حذف الفئة', style: TextStyle(color: AppColors.text)),
                                         content: Text('هل تريد حذف فئة "$name"؟', style: const TextStyle(color: AppColors.muted)),
                                         actions: [

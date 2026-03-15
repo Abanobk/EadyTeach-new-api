@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../services/api_service.dart';
+import '../../../theme/app_theme.dart';
 import '../../../utils/app_theme.dart';
 import 'survey_detail_screen.dart';
 import 'survey_edit_screen.dart';
@@ -57,11 +58,11 @@ class _SavedSurveysScreenState extends State<SavedSurveysScreen> {
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          backgroundColor: AppColors.card,
-          title: const Text('حذف المعاينة', style: TextStyle(color: AppColors.text)),
+          backgroundColor: AppThemeDecorations.cardColor(context),
+          title: Text('حذف المعاينة', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurface)),
           content: Text(
             'هل أنت متأكد من حذف "$name"؟\nلا يمكن التراجع عن هذا الإجراء.',
-            style: const TextStyle(color: AppColors.muted),
+            style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant),
           ),
           actions: [
             TextButton(
@@ -120,11 +121,11 @@ class _SavedSurveysScreenState extends State<SavedSurveysScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
-          backgroundColor: AppColors.card,
-          title: const Text('المعاينات الحالية', style: TextStyle(color: AppColors.text)),
-          iconTheme: const IconThemeData(color: AppColors.primary),
+          backgroundColor: AppThemeDecorations.cardColor(context),
+          title: Text('المعاينات الحالية', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+          iconTheme: IconThemeData(color: Theme.of(context).colorScheme.primary),
           actions: [
             IconButton(icon: const Icon(Icons.refresh), onPressed: _loadSurveys),
           ],
@@ -140,18 +141,19 @@ class _SavedSurveysScreenState extends State<SavedSurveysScreen> {
     }
 
     if (_error != null) {
+      final scheme = Theme.of(context).colorScheme;
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: AppColors.muted, size: 48),
+              Icon(Icons.error_outline, color: scheme.onSurfaceVariant, size: 48),
               const SizedBox(height: 12),
-              const Text('حدث خطأ أثناء تحميل المعاينات',
-                  style: TextStyle(color: AppColors.text, fontSize: 16), textAlign: TextAlign.center),
+              Text('حدث خطأ أثناء تحميل المعاينات',
+                  style: TextStyle(color: scheme.onSurface, fontSize: 16), textAlign: TextAlign.center),
               const SizedBox(height: 8),
-              Text(_error!, style: const TextStyle(color: AppColors.muted, fontSize: 12), textAlign: TextAlign.center),
+              Text(_error!, style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12), textAlign: TextAlign.center),
               const SizedBox(height: 16),
               ElevatedButton.icon(onPressed: _loadSurveys, icon: const Icon(Icons.refresh), label: const Text('إعادة المحاولة')),
             ],
@@ -161,15 +163,16 @@ class _SavedSurveysScreenState extends State<SavedSurveysScreen> {
     }
 
     if (_surveys.isEmpty) {
+      final scheme = Theme.of(context).colorScheme;
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.assignment_outlined, color: AppColors.muted.withOpacity(0.5), size: 64),
+            Icon(Icons.assignment_outlined, color: scheme.onSurfaceVariant.withOpacity(0.7), size: 64),
             const SizedBox(height: 16),
-            const Text('لا توجد معاينات محفوظة بعد', style: TextStyle(color: AppColors.muted, fontSize: 16)),
+            Text('لا توجد معاينات محفوظة بعد', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 16)),
             const SizedBox(height: 8),
-            const Text('ابدأ معاينة جديدة واحفظها لتظهر هنا', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+            Text('ابدأ معاينة جديدة واحفظها لتظهر هنا', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
           ],
         ),
       );
@@ -254,7 +257,7 @@ class _SurveyCompactCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: AppThemeDecorations.cardColor(context),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border),
         ),
@@ -274,14 +277,14 @@ class _SurveyCompactCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 14)),
+                  Text(name, style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600, fontSize: 14)),
                   const SizedBox(height: 4),
                   Row(
                     children: [
                       if (dateStr.isNotEmpty) ...[
-                        Icon(Icons.calendar_today, color: AppColors.muted, size: 11),
+                        Icon(Icons.calendar_today, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 11),
                         const SizedBox(width: 3),
-                        Text(dateStr, style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+                        Text(dateStr, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11)),
                         const SizedBox(width: 10),
                       ],
                       _MiniStat(icon: Icons.lightbulb_outline, value: lightingLines, color: Colors.amber),

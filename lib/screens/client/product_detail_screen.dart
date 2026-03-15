@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -83,10 +84,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
           title: Text(p['name'] ?? '', style: const TextStyle(fontSize: 16)),
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           elevation: 0,
         ),
         body: SingleChildScrollView(
@@ -264,7 +265,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                               decoration: BoxDecoration(
-                                color: isSelected ? AppColors.primary : AppColors.card,
+                                color: isSelected ? AppColors.primary : AppThemeDecorations.cardColor(context),
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
                                   color: isSelected ? AppColors.primary : AppColors.border,
@@ -325,7 +326,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         const SizedBox(width: 12),
                         Container(
                           decoration: BoxDecoration(
-                            color: AppColors.card,
+                            color: AppThemeDecorations.cardColor(context),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: AppColors.border),
                           ),

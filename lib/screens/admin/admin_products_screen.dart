@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
 class AdminProductsScreen extends StatefulWidget {
@@ -126,7 +127,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
       hintText: hint,
       hintStyle: const TextStyle(color: AppColors.muted),
       filled: true,
-      fillColor: AppColors.bg,
+      fillColor: AppThemeDecorations.pageBackground(context),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -156,7 +157,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.card,
+      backgroundColor: AppThemeDecorations.cardColor(context),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Padding(
@@ -291,7 +292,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           child: Container(
                             width: 80, height: 80,
                             decoration: BoxDecoration(
-                              color: AppColors.bg,
+                              color: AppThemeDecorations.pageBackground(context),
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(color: AppColors.border, style: BorderStyle.solid, width: 1.5),
                             ),
@@ -314,7 +315,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.bg,
+                    color: AppThemeDecorations.pageBackground(context),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: AppColors.border),
                   ),
@@ -322,7 +323,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                     child: DropdownButton<int?>(
                       value: selectedCategoryId,
                       hint: const Text('اختر الفئة (اختياري)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
-                      dropdownColor: AppColors.card,
+                      dropdownColor: AppThemeDecorations.cardColor(context),
                       isExpanded: true,
                       items: [
                         const DropdownMenuItem<int?>(value: null, child: Text('بدون فئة', style: TextStyle(color: AppColors.muted))),
@@ -394,7 +395,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           title: const Text('حذف المنتج', style: TextStyle(color: AppColors.text)),
           content: Text('هل تريد حذف "${product['name']}"؟', style: const TextStyle(color: AppColors.muted)),
           actions: [
@@ -424,7 +425,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _showProductDialog(null),
           backgroundColor: AppColors.primary,
@@ -436,9 +437,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
             // ─── Header ───
             Container(
               padding: EdgeInsets.fromLTRB(isWide ? 24 : 16, 12, isWide ? 24 : 16, 12),
-              decoration: const BoxDecoration(
-                color: AppColors.card,
-                border: Border(bottom: BorderSide(color: AppColors.border)),
+              decoration: BoxDecoration(
+                color: AppThemeDecorations.cardColor(context),
+                border: const Border(bottom: BorderSide(color: AppColors.border)),
               ),
               child: Column(
                 children: [
@@ -457,7 +458,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                       // View toggle
                       Container(
                         decoration: BoxDecoration(
-                          color: AppColors.bg,
+                          color: AppThemeDecorations.pageBackground(context),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: AppColors.border),
                         ),
@@ -494,7 +495,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                             hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
                             prefixIcon: const Icon(Icons.search, color: AppColors.muted, size: 20),
                             filled: true,
-                            fillColor: AppColors.bg,
+                            fillColor: AppThemeDecorations.pageBackground(context),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
                             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
@@ -507,7 +508,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         height: 40,
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         decoration: BoxDecoration(
-                          color: AppColors.bg,
+                          color: AppThemeDecorations.pageBackground(context),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: AppColors.border),
                         ),
@@ -515,7 +516,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           child: DropdownButton<int?>(
                             value: _selectedCategoryFilter,
                             hint: const Text('كل الفئات', style: TextStyle(color: AppColors.muted, fontSize: 13)),
-                            dropdownColor: AppColors.card,
+                            dropdownColor: AppThemeDecorations.cardColor(context),
                             icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.muted, size: 20),
                             items: [
                               const DropdownMenuItem<int?>(value: null, child: Text('كل الفئات', style: TextStyle(color: AppColors.text, fontSize: 13))),
@@ -590,7 +591,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 14),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isActive ? (color ?? AppColors.primary).withOpacity(0.15) : AppColors.bg,
+          color: isActive ? (color ?? AppColors.primary).withOpacity(0.15) : AppThemeDecorations.pageBackground(context),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: isActive ? (color ?? AppColors.primary) : AppColors.border),
         ),
@@ -646,7 +647,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
@@ -772,7 +773,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
 
   Widget _gridPlaceholder() {
     return Container(
-      color: AppColors.bg,
+      color: AppThemeDecorations.pageBackground(context),
       child: const Center(child: Icon(Icons.image_outlined, color: AppColors.muted, size: 40)),
     );
   }
@@ -797,7 +798,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: EdgeInsets.all(isWide ? 14 : 10),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.border),
       ),
@@ -888,7 +889,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     return Container(
       width: size,
       height: size,
-      color: AppColors.bg,
+      color: AppThemeDecorations.pageBackground(context),
       child: const Icon(Icons.image_outlined, color: AppColors.muted, size: 24),
     );
   }

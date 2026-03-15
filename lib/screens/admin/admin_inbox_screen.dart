@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
 
@@ -119,7 +120,7 @@ class _AdminInboxScreenState extends State<AdminInboxScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('تعديل اسم المرسل', style: TextStyle(color: AppColors.text, fontSize: 16)),
         content: TextField(
           controller: controller,
@@ -129,7 +130,7 @@ class _AdminInboxScreenState extends State<AdminInboxScreen> {
             hintText: 'اكتب الاسم...',
             hintStyle: const TextStyle(color: AppColors.muted),
             filled: true,
-            fillColor: AppColors.bg,
+            fillColor: AppThemeDecorations.pageBackground(context),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           ),
         ),
@@ -163,7 +164,7 @@ class _AdminInboxScreenState extends State<AdminInboxScreen> {
     final selected = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('تغيير حالة المحادثة', style: TextStyle(color: AppColors.text, fontSize: 16)),
         children: statuses.entries.map((e) => SimpleDialogOption(
           onPressed: () => Navigator.pop(ctx, e.key),
@@ -198,7 +199,7 @@ class _AdminInboxScreenState extends State<AdminInboxScreen> {
     final isWide = MediaQuery.of(context).size.width > 700;
     if (isWide) {
       return Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         body: Row(children: [
           SizedBox(width: 340, child: _buildConversationList()),
           const VerticalDivider(width: 1, color: AppColors.border),
@@ -208,11 +209,11 @@ class _AdminInboxScreenState extends State<AdminInboxScreen> {
     }
     if (_selectedConversation != null) {
       return Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         resizeToAvoidBottomInset: true,
         // resizeToAvoidBottomInset يجعل الـ scaffold يتقلص عند ظهور الكيبورد
         appBar: AppBar(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           leading: IconButton(icon: const Icon(Icons.arrow_back, color: AppColors.text), onPressed: () => setState(() => _selectedConversation = null)),
           title: GestureDetector(
             onTap: () => _editConversationName(_selectedConversation),
@@ -229,14 +230,14 @@ class _AdminInboxScreenState extends State<AdminInboxScreen> {
         body: _buildChatPanel(),
       );
     }
-    return Scaffold(backgroundColor: AppColors.bg, body: _buildConversationList());
+    return Scaffold(backgroundColor: AppThemeDecorations.pageBackground(context), body: _buildConversationList());
   }
 
   Widget _buildConversationList() {
     return Column(children: [
       Container(
         padding: const EdgeInsets.fromLTRB(16, 48, 16, 12),
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             const Expanded(child: Text('صندوق الرسائل', style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.bold))),
@@ -342,7 +343,7 @@ class _AdminInboxScreenState extends State<AdminInboxScreen> {
       if (MediaQuery.of(context).size.width > 700)
         Container(
           padding: const EdgeInsets.fromLTRB(16, 48, 16, 12),
-          color: AppColors.card,
+          color: AppThemeDecorations.cardColor(context),
           child: Row(children: [
             Container(width: 40, height: 40, decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(20)), child: Center(child: Text(senderName.isNotEmpty ? senderName[0].toUpperCase() : 'M', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)))),
             const SizedBox(width: 12),
@@ -386,7 +387,7 @@ class _AdminInboxScreenState extends State<AdminInboxScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
                           decoration: BoxDecoration(
-                            color: isFromPage ? AppColors.card : AppColors.primary.withOpacity(0.2),
+                            color: isFromPage ? AppThemeDecorations.cardColor(context) : AppColors.primary.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: isFromPage ? AppColors.border : AppColors.primary.withOpacity(0.3)),
                           ),
@@ -404,7 +405,7 @@ class _AdminInboxScreenState extends State<AdminInboxScreen> {
         top: false,
         child: Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-        decoration: BoxDecoration(color: AppColors.card, border: Border(top: BorderSide(color: AppColors.border))),
+        decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), border: Border(top: BorderSide(color: AppColors.border))),
         child: Row(children: [
           Expanded(
             child: TextField(
@@ -413,7 +414,7 @@ class _AdminInboxScreenState extends State<AdminInboxScreen> {
               decoration: InputDecoration(
                 hintText: 'اكتب ردك...',
                 hintStyle: const TextStyle(color: AppColors.muted),
-                filled: true, fillColor: AppColors.bg,
+                filled: true, fillColor: AppThemeDecorations.pageBackground(context),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
@@ -447,7 +448,7 @@ class _AdminInboxScreenState extends State<AdminInboxScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : AppColors.bg,
+          color: isSelected ? AppColors.primary : AppThemeDecorations.pageBackground(context),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: isSelected ? AppColors.primary : AppColors.border),
         ),
@@ -459,7 +460,7 @@ class _AdminInboxScreenState extends State<AdminInboxScreen> {
   void _showConversationOptions(dynamic conv) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.card,
+      backgroundColor: AppThemeDecorations.cardColor(context),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [

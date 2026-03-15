@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
 class AdminOrdersScreen extends StatefulWidget {
@@ -62,10 +63,10 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
         title: const Text('إدارة الطلبات'),
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
@@ -112,7 +113,7 @@ class _AdminOrderCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
@@ -271,7 +272,7 @@ class _StatusChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppColors.bg,
+          color: selected ? AppColors.primary : AppThemeDecorations.pageBackground(context),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
               color: selected ? AppColors.primary : AppColors.border),

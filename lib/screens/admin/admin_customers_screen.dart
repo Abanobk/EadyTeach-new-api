@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
 class AdminCustomersScreen extends StatefulWidget {
@@ -50,7 +51,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
       hintText: hint,
       hintStyle: const TextStyle(color: AppColors.muted),
       filled: true,
-      fillColor: AppColors.bg,
+      fillColor: AppThemeDecorations.pageBackground(context),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -70,7 +71,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.card,
+      backgroundColor: AppThemeDecorations.cardColor(context),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Padding(
@@ -156,7 +157,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String>(
                   value: selectedRole,
-                  dropdownColor: AppColors.card,
+                  dropdownColor: AppThemeDecorations.cardColor(context),
                   style: const TextStyle(color: AppColors.text),
                   decoration: _inputDecoration(),
                   items: const [
@@ -232,7 +233,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           title: const Text('حذف المستخدم', style: TextStyle(color: AppColors.text)),
           content: Text('هل تريد حذف "${user['name']}"؟', style: const TextStyle(color: AppColors.muted)),
           actions: [
@@ -257,10 +258,10 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
   Widget build(BuildContext context) {
     final filtered = _filtered;
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
         title: const Text('إدارة المستخدمين'),
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         automaticallyImplyLeading: false,
         actions: [IconButton(icon: const Icon(Icons.refresh, color: AppColors.muted), onPressed: _loadUsers)],
       ),
@@ -281,7 +282,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                 hintStyle: const TextStyle(color: AppColors.muted),
                 prefixIcon: const Icon(Icons.search, color: AppColors.muted),
                 filled: true,
-                fillColor: AppColors.card,
+                fillColor: AppThemeDecorations.cardColor(context),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

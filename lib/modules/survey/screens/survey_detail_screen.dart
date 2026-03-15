@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../services/api_service.dart';
+import '../../../theme/app_theme.dart';
 import '../../../utils/app_theme.dart';
 import 'survey_edit_screen.dart';
 
@@ -30,7 +31,7 @@ class _SurveyDetailScreenState extends State<SurveyDetailScreen> {
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           title: const Text('حذف المعاينة', style: TextStyle(color: AppColors.text)),
           content: Text(
             'هل أنت متأكد من حذف "$name"؟\nلا يمكن التراجع عن هذا الإجراء.',
@@ -105,9 +106,9 @@ class _SurveyDetailScreenState extends State<SurveyDetailScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           title: Text(name, style: const TextStyle(color: AppColors.text, fontSize: 16)),
           iconTheme: const IconThemeData(color: AppColors.primary),
           actions: [
@@ -245,7 +246,7 @@ class _Section extends StatelessWidget {
     if (children.isEmpty) return const SizedBox.shrink();
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
@@ -315,7 +316,7 @@ class _FloorTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: AppColors.bg,
+        color: AppThemeDecorations.pageBackground(context),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border.withOpacity(0.5)),
       ),

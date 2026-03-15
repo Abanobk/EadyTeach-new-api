@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
 class ServiceRequestScreen extends StatefulWidget {
@@ -67,11 +68,11 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen>
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
           title: const Text('طلب خدمة',
               style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           automaticallyImplyLeading: false,
           bottom: TabBar(
             controller: _tabController,
@@ -190,7 +191,7 @@ class _MaintenanceRequestFormState extends State<_MaintenanceRequestForm> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -268,7 +269,7 @@ class _MaintenanceRequestFormState extends State<_MaintenanceRequestForm> {
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
               value: _selectedIssue,
-              dropdownColor: AppColors.card,
+              dropdownColor: AppThemeDecorations.cardColor(context),
               style: const TextStyle(color: AppColors.text),
               decoration: _inputDecoration('اختر...'),
               items: widget.serviceTypes
@@ -332,7 +333,7 @@ class _MaintenanceRequestFormState extends State<_MaintenanceRequestForm> {
     hintText: hint,
     hintStyle: const TextStyle(color: AppColors.muted),
     filled: true,
-    fillColor: AppColors.card,
+    fillColor: AppThemeDecorations.cardColor(context),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
       borderSide: BorderSide(color: AppColors.primary.withOpacity(0.3)),
@@ -421,7 +422,7 @@ class _InstallationRequestFormState extends State<_InstallationRequestForm> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -488,7 +489,7 @@ class _InstallationRequestFormState extends State<_InstallationRequestForm> {
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
               value: _selectedService,
-              dropdownColor: AppColors.card,
+              dropdownColor: AppThemeDecorations.cardColor(context),
               style: const TextStyle(color: AppColors.text),
               decoration: _inputDecoration('اختر نوع الخدمة...'),
               items: widget.serviceTypes
@@ -574,7 +575,7 @@ class _InstallationRequestFormState extends State<_InstallationRequestForm> {
     hintText: hint,
     hintStyle: const TextStyle(color: AppColors.muted),
     filled: true,
-    fillColor: AppColors.card,
+    fillColor: AppThemeDecorations.cardColor(context),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
       borderSide: BorderSide(color: AppColors.primary.withOpacity(0.3)),

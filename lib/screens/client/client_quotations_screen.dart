@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
 class ClientQuotationsScreen extends StatefulWidget {
@@ -63,10 +64,10 @@ class _ClientQuotationsScreenState extends State<ClientQuotationsScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
           title: const Text('عروض الأسعار'),
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           actions: [
             IconButton(
               icon: const Icon(Icons.refresh, color: AppColors.primary),
@@ -118,7 +119,7 @@ class _ClientQuotationsScreenState extends State<ClientQuotationsScreen> {
                               child: Container(
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
-                                  color: AppColors.card,
+                                  color: AppThemeDecorations.cardColor(context),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: status == 'sent' ? AppColors.primary.withOpacity(0.4) : AppColors.border,
@@ -293,10 +294,10 @@ class _ClientQuotationDetailScreenState extends State<ClientQuotationDetailScree
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
           title: Text(_quotation?['refNumber'] ?? 'عرض السعر'),
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios, color: AppColors.text),
             onPressed: () => Navigator.pop(context),
@@ -315,7 +316,7 @@ class _ClientQuotationDetailScreenState extends State<ClientQuotationDetailScree
                         const Text('📦 تفاصيل العرض', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 15)),
                         const SizedBox(height: 8),
                         Container(
-                          decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+                          decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
                           child: Column(
                             children: [
                               Padding(

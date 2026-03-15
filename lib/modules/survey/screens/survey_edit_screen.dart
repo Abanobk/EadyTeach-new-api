@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/api_service.dart';
+import '../../../theme/app_theme.dart';
 import '../../../utils/app_theme.dart';
 
 class SurveyEditScreen extends StatefulWidget {
@@ -147,9 +148,9 @@ class _SurveyEditScreenState extends State<SurveyEditScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           title: const Text('تعديل المعاينة', style: TextStyle(color: AppColors.text, fontSize: 16)),
           iconTheme: const IconThemeData(color: AppColors.primary),
           actions: [
@@ -297,7 +298,7 @@ class _SurveyEditScreenState extends State<SurveyEditScreen> {
       labelText: label,
       labelStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
       filled: true,
-      fillColor: AppColors.bg,
+      fillColor: AppThemeDecorations.pageBackground(context),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppColors.border)),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppColors.border)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary)),
@@ -317,7 +318,7 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),

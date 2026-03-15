@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
 class CartScreen extends StatefulWidget {
@@ -20,10 +21,10 @@ class _CartScreenState extends State<CartScreen> {
     final cart = context.watch<CartProvider>();
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
         title: const Text('السلة'),
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         automaticallyImplyLeading: false,
       ),
       body: cart.items.isEmpty
@@ -51,7 +52,7 @@ class _CartScreenState extends State<CartScreen> {
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.card,
+                          color: AppThemeDecorations.cardColor(context),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: AppColors.border),
                         ),
@@ -118,9 +119,9 @@ class _CartScreenState extends State<CartScreen> {
                 // Payment + Summary
                 Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: const BoxDecoration(
-                    color: AppColors.card,
-                    border: Border(top: BorderSide(color: AppColors.border)),
+                  decoration: BoxDecoration(
+                    color: AppThemeDecorations.cardColor(context),
+                    border: const Border(top: BorderSide(color: AppColors.border)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -220,7 +221,7 @@ class _CartScreenState extends State<CartScreen> {
         showDialog(
           context: context,
           builder: (_) => AlertDialog(
-            backgroundColor: AppColors.card,
+            backgroundColor: AppThemeDecorations.cardColor(context),
             title: const Row(
               children: [
                 Icon(Icons.check_circle, color: AppColors.success),
@@ -286,7 +287,7 @@ class _PaymentBtn extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppColors.bg,
+          color: selected ? AppColors.primary : AppThemeDecorations.pageBackground(context),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
               color: selected ? AppColors.primary : AppColors.border),

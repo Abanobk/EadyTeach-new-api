@@ -1,12 +1,25 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // رابط السيرفر الرسمي الثابت
+  // رابط السيرفر الرسمي الثابت — لا تغيير في Base URL أو Headers
   static const String baseUrl = 'https://api.easytecheg.net';
   static const String trpcUrl = '$baseUrl/api/trpc';
+
+  /// رسالة موحدة عند فشل الاتصال (شبكة، CORS، انقطاع)
+  static String _networkErrorMessage(Object e) {
+    final msg = e.toString().toLowerCase();
+    if (msg.contains('failed to fetch') ||
+        msg.contains('socketexception') ||
+        msg.contains('connection') ||
+        msg.contains('network') ||
+        msg.contains('timeout') ||
+        msg.contains('connection refused')) {
+      return 'فشل الاتصال بالسيرفر. تحقق من الإنترنت وحاول مرة أخرى.';
+    }
+    return 'خطأ في الاتصال: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e}';
+  }
 
   static String proxyImageUrl(String? url) {
     if (url == null || url.isEmpty) return '';
@@ -115,16 +128,19 @@ class ApiService {
     }
     if (token != null) url += '&_token=$token';
 
-    print('QUERY: $procedure url=$url');
-    print('QUERY: cookie=$cookie token=$token');
-
-    final response = await http.get(
-      Uri.parse(url),
-      headers: _headers(cookie: cookie),
-    ).timeout(const Duration(seconds: 15));
+    print('QUERY: $procedure');
+    http.Response response;
+    try {
+      response = await http.get(
+        Uri.parse(url),
+        headers: _headers(cookie: cookie),
+      ).timeout(const Duration(seconds: 20));
+    } catch (e) {
+      print('QUERY: network error $e');
+      throw Exception(_networkErrorMessage(e));
+    }
 
     print('QUERY: status=${response.statusCode}');
-    print('QUERY: body=${response.body.length > 500 ? response.body.substring(0, 500) : response.body}');
 
     // Save cookie if returned in header
     final setCookie = response.headers['set-cookie'];
@@ -133,7 +149,13 @@ class ApiService {
     }
 
     if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
+      List<dynamic> data;
+      try {
+        data = jsonDecode(response.body) as List<dynamic>? ?? [];
+      } catch (_) {
+        print('QUERY: invalid JSON body length=${response.body.length}');
+        throw Exception('استجابة غير صالحة من السيرفر. حاول مرة أخرى.');
+      }
       if (data.isNotEmpty && data[0]['result'] != null) {
         final rawData = data[0]['result']['data'];
         return {'data': _extractData(rawData), 'success': true};
@@ -190,11 +212,17 @@ class ApiService {
     // tRPC v11 uses {"json": input} format
     final body = jsonEncode({'0': {'json': input ?? {}}});
 
-    final response = await http.post(
-      Uri.parse(url),
-      headers: _headers(cookie: cookie),
-      body: body,
-    ).timeout(const Duration(seconds: 15));
+    http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse(url),
+        headers: _headers(cookie: cookie),
+        body: body,
+      ).timeout(const Duration(seconds: 20));
+    } catch (e) {
+      print('MUTATE: network error $e');
+      throw Exception(_networkErrorMessage(e));
+    }
 
     // Save cookie if returned in Set-Cookie header
     final setCookie = response.headers['set-cookie'];
@@ -206,7 +234,7 @@ class ApiService {
     final acceptedCodes = [200, 207, 400, 401, 403];
     if (acceptedCodes.contains(response.statusCode)) {
       try {
-        final List<dynamic> data = jsonDecode(response.body);
+        final List<dynamic> data = jsonDecode(response.body) as List<dynamic>? ?? [];
         if (data.isNotEmpty && data[0]['result'] != null) {
           final rawData = data[0]['result']['data'];
           final extractedData = _extractData(rawData);

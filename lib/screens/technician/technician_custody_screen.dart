@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
 class TechnicianCustodyScreen extends StatefulWidget {
@@ -127,9 +128,9 @@ class _TechnicianCustodyScreenState extends State<TechnicianCustodyScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.primary, size: 18),
             onPressed: () => Navigator.pop(context),
@@ -227,7 +228,7 @@ class _TechnicianCustodyScreenState extends State<TechnicianCustodyScreen> {
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: AppColors.card,
+                            color: AppThemeDecorations.cardColor(context),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                               color: status == 'rejected'
@@ -302,7 +303,7 @@ class _TechnicianCustodyScreenState extends State<TechnicianCustodyScreen> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: AppThemeDecorations.cardColor(context),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: color.withOpacity(0.3)),
         ),
@@ -339,9 +340,9 @@ class _TechnicianCustodyScreenState extends State<TechnicianCustodyScreen> {
         textDirection: TextDirection.rtl,
         child: StatefulBuilder(
           builder: (ctx, setS) => Container(
-            decoration: const BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            decoration: BoxDecoration(
+              color: AppThemeDecorations.cardColor(ctx),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
             child: SingleChildScrollView(child: Column(
@@ -375,7 +376,7 @@ class _TechnicianCustodyScreenState extends State<TechnicianCustodyScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
-                        color: sel ? Colors.red.withOpacity(0.15) : AppColors.bg,
+                        color: sel ? Colors.red.withOpacity(0.15) : AppThemeDecorations.pageBackground(context),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: sel ? Colors.red : AppColors.border),
                       ),
@@ -488,7 +489,7 @@ class _TechnicianCustodyScreenState extends State<TechnicianCustodyScreen> {
       hintText: hint,
       hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
       filled: true,
-      fillColor: AppColors.bg,
+      fillColor: AppThemeDecorations.pageBackground(context),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
@@ -548,7 +549,7 @@ class _ReceiptPicker extends StatelessWidget {
         height: 100,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: AppColors.bg,
+          color: AppThemeDecorations.pageBackground(context),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border),
         ),

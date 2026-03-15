@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
 
@@ -75,7 +76,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppThemeDecorations.pageBackground(context),
       body: SafeArea(
         child: Directionality(
           textDirection: TextDirection.rtl,
@@ -94,7 +95,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.card,
+                        color: AppThemeDecorations.cardColor(context),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(Icons.arrow_back_ios_new,
@@ -189,7 +190,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                       prefixIcon: const Icon(Icons.email_outlined,
                           color: AppColors.muted),
                       filled: true,
-                      fillColor: AppColors.card,
+                      fillColor: AppThemeDecorations.cardColor(context),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -241,7 +242,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         ),
                       ),
                       filled: true,
-                      fillColor: AppColors.card,
+                      fillColor: AppThemeDecorations.cardColor(context),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,

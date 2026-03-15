@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
 class CreateQuotationScreen extends StatefulWidget {
@@ -293,10 +294,10 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
       child: Stack(
         children: [
           Scaffold(
-            backgroundColor: AppColors.bg,
+            backgroundColor: AppThemeDecorations.pageBackground(context),
             appBar: AppBar(
               title: Text(_step == 1 ? 'اختيار المنتجات' : 'بيانات العميل'),
-              backgroundColor: AppColors.card,
+              backgroundColor: AppThemeDecorations.cardColor(context),
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back_ios, color: AppColors.text),
                 onPressed: () {
@@ -370,7 +371,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                     label: Text(cat['name'] ?? ''),
                     selected: selected,
                     onSelected: (_) => _onCategoryTap(cat),
-                    backgroundColor: AppColors.card,
+                    backgroundColor: AppThemeDecorations.cardColor(context),
                     selectedColor: AppColors.primary.withOpacity(0.2),
                     checkmarkColor: AppColors.primary,
                     labelStyle: TextStyle(
@@ -418,7 +419,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                               padding: const EdgeInsets.only(bottom: 8),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: AppColors.card,
+                                  color: AppThemeDecorations.cardColor(context),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: inCart > 0 ? AppColors.primary.withOpacity(0.5) : AppColors.border,
@@ -507,7 +508,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.card,
+              color: AppThemeDecorations.cardColor(context),
               border: Border(top: BorderSide(color: AppColors.border)),
             ),
             child: Row(
@@ -544,7 +545,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
           const Text('📋 ملخص المنتجات', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 8),
           Container(
-            decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+            decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
             child: Column(
               children: [
                 ..._cartItems.asMap().entries.map((entry) {
@@ -661,7 +662,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: _discountIsPercent ? AppColors.error.withOpacity(0.15) : AppColors.bg,
+                                    color: _discountIsPercent ? AppColors.error.withOpacity(0.15) : AppThemeDecorations.pageBackground(context),
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(color: _discountIsPercent ? AppColors.error : AppColors.border),
                                   ),
@@ -676,7 +677,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: !_discountIsPercent ? AppColors.error.withOpacity(0.15) : AppColors.bg,
+                                    color: !_discountIsPercent ? AppColors.error.withOpacity(0.15) : AppThemeDecorations.pageBackground(context),
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(color: !_discountIsPercent ? AppColors.error : AppColors.border),
                                   ),
@@ -743,7 +744,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
           const Text('👤 بيانات العميل', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 8),
           Container(
-            decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+            decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
             padding: const EdgeInsets.all(12),
             child: Column(
               children: [
@@ -771,7 +772,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                   if (_clients.isEmpty)
                     Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
+                      decoration: BoxDecoration(color: AppThemeDecorations.pageBackground(context), borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
                       child: const Row(children: [SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)), SizedBox(width: 10), Text('جاري تحميل العملاء...', style: TextStyle(color: AppColors.muted, fontSize: 13))]),
                     )
                   else ...[
@@ -803,7 +804,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                               margin: const EdgeInsets.only(bottom: 6),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               decoration: BoxDecoration(
-                                color: selected ? AppColors.primary.withOpacity(0.15) : AppColors.bg,
+                                color: selected ? AppColors.primary.withOpacity(0.15) : AppThemeDecorations.pageBackground(context),
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(color: selected ? AppColors.primary : AppColors.border, width: selected ? 1.5 : 1),
                               ),
@@ -907,7 +908,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
               padding: const EdgeInsets.all(20),
               constraints: const BoxConstraints(maxWidth: 480),
               decoration: BoxDecoration(
-                color: AppColors.card,
+                color: AppThemeDecorations.cardColor(context),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: AppColors.border),
               ),
@@ -954,7 +955,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
-                                color: selected ? AppColors.primary.withOpacity(0.2) : AppColors.bg,
+                                color: selected ? AppColors.primary.withOpacity(0.2) : AppThemeDecorations.pageBackground(context),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(color: selected ? AppColors.primary : AppColors.border, width: selected ? 2 : 1),
                               ),
@@ -1004,7 +1005,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
-                                color: selected ? AppColors.primary.withOpacity(0.2) : AppColors.bg,
+                                color: selected ? AppColors.primary.withOpacity(0.2) : AppThemeDecorations.pageBackground(context),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(color: selected ? AppColors.primary : AppColors.border, width: selected ? 2 : 1),
                               ),
@@ -1068,7 +1069,7 @@ class _TypeBtn extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary.withOpacity(0.15) : AppColors.bg,
+          color: selected ? AppColors.primary.withOpacity(0.15) : AppThemeDecorations.pageBackground(context),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: selected ? AppColors.primary : AppColors.border, width: selected ? 2 : 1),
         ),

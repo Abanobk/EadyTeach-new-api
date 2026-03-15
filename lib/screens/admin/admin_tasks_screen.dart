@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../technician/task_detail_screen.dart';
 
@@ -96,13 +97,13 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
     }
   }
 
-  Color _statusColor(String? status) {
+  Color _statusColor(BuildContext context, String? status) {
     switch (status) {
       case 'completed': return Colors.green;
       case 'in_progress': return Colors.blue;
       case 'cancelled': return Colors.red;
       case 'assigned': return AppColors.primary;
-      default: return AppColors.muted;
+      default: return AppThemeDecorations.mutedColor(context);
     }
   }
 
@@ -149,26 +150,30 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
   Widget _buildFilterChip(String label, String value, IconData icon, {Color? activeColor}) {
     final isSelected = _filter == value;
     final color = activeColor ?? AppColors.primary;
+    final scheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () => setState(() => _filter = value),
       child: Container(
         margin: const EdgeInsets.only(left: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.15) : AppColors.card,
+          color: isSelected ? color.withOpacity(0.15) : AppThemeDecorations.cardColor(context),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: isSelected ? color : AppColors.border),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 15, color: isSelected ? color : AppColors.muted),
+            Icon(icon, size: 15, color: isSelected ? color : scheme.onSurfaceVariant),
             const SizedBox(width: 6),
-            Text(label, style: TextStyle(
-              color: isSelected ? color : AppColors.text,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              fontSize: 13,
-            )),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? color : scheme.onSurface,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 13,
+              ),
+            ),
           ],
         ),
       ),
@@ -180,13 +185,13 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
     final filteredTasks = _filteredTasks;
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
-        backgroundColor: AppColors.card,
-        title: const Text('إدارة المهام', style: TextStyle(color: AppColors.text)),
+        backgroundColor: AppThemeDecorations.cardColor(context),
+        title: Text('إدارة المهام', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: AppColors.muted),
+            icon: Icon(Icons.refresh, color: AppThemeDecorations.mutedColor(context)),
             onPressed: _loadAll,
           ),
         ],
@@ -224,9 +229,20 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.assignment_outlined, size: 64, color: AppColors.muted.withOpacity(0.4)),
+                            Icon(
+                              Icons.assignment_outlined,
+                              size: 64,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                             const SizedBox(height: 16),
-                            const Text('لا توجد مهام', style: TextStyle(color: AppColors.muted, fontSize: 16)),
+                            Text(
+                              'لا توجد مهام',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
                         ),
                       )
@@ -239,7 +255,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
-                        color: AppColors.card,
+                        color: AppThemeDecorations.cardColor(context),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: AppColors.border),
                       ),
@@ -249,7 +265,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                             contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
                             title: Text(
                               task['title'] ?? '',
-                              style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold),
                             ),
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,23 +273,23 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                                 const SizedBox(height: 4),
                                 if (task['customerName'] != null)
                                   Row(children: [
-                                    const Icon(Icons.person_outline, size: 13, color: AppColors.muted),
+                                    Icon(Icons.person_outline, size: 13, color: AppThemeDecorations.mutedColor(context)),
                                     const SizedBox(width: 4),
-                                    Text(task['customerName'], style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                                    Text(task['customerName'], style: TextStyle(color: AppThemeDecorations.mutedColor(context), fontSize: 12)),
                                   ]),
                                 if (task['technicianName'] != null)
                                   Row(children: [
-                                    const Icon(Icons.engineering_outlined, size: 13, color: AppColors.muted),
+                                    Icon(Icons.engineering_outlined, size: 13, color: AppThemeDecorations.mutedColor(context)),
                                     const SizedBox(width: 4),
-                                    Text(task['technicianName'], style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                                    Text(task['technicianName'], style: TextStyle(color: AppThemeDecorations.mutedColor(context), fontSize: 12)),
                                   ]),
                                 if (task['scheduledAt'] != null)
                                   Row(children: [
-                                    const Icon(Icons.calendar_today_outlined, size: 13, color: AppColors.muted),
+                                    Icon(Icons.calendar_today_outlined, size: 13, color: AppThemeDecorations.mutedColor(context)),
                                     const SizedBox(width: 4),
                                     Text(
                                       task['scheduledAt'].toString().substring(0, 10),
-                                      style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                                      style: TextStyle(color: AppThemeDecorations.mutedColor(context), fontSize: 12),
                                     ),
                                   ]),
                                 if (task['estimatedArrivalAt'] != null)
@@ -287,22 +303,22 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                                   ]),
                                 if (task['amount'] != null)
                                   Row(children: [
-                                    const Icon(Icons.attach_money, size: 13, color: AppColors.muted),
+                                    Icon(Icons.attach_money, size: 13, color: AppThemeDecorations.mutedColor(context)),
                                     const SizedBox(width: 4),
-                                    Text('${task['amount']} ج.م', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                                    Text('${task['amount']} ج.م', style: TextStyle(color: AppThemeDecorations.mutedColor(context), fontSize: 12)),
                                   ]),
                               ],
                             ),
                             trailing: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: _statusColor(status).withOpacity(0.15),
+                                color: _statusColor(context, status).withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: _statusColor(status).withOpacity(0.4)),
+                                border: Border.all(color: _statusColor(context, status).withOpacity(0.4)),
                               ),
                               child: Text(
                                 _statusLabel(status),
-                                style: TextStyle(color: _statusColor(status), fontSize: 11, fontWeight: FontWeight.bold),
+                                style: TextStyle(color: _statusColor(context, status), fontSize: 11, fontWeight: FontWeight.bold),
                               ),
                             ),
                           ),
@@ -338,7 +354,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                               child: Column(
                                 children: [
                                   Row(children: [
-                                    Text('الإنجاز', style: TextStyle(color: AppColors.muted, fontSize: 11)),
+                                    Text('الإنجاز', style: TextStyle(color: AppThemeDecorations.mutedColor(context), fontSize: 11)),
                                     const Spacer(),
                                     Text(
                                       '$completedCount/${items.length} بنود  •  $overallProgress%',
@@ -380,9 +396,9 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                                       final confirm = await showDialog<bool>(
                                         context: context,
                                         builder: (c) => AlertDialog(
-                                          backgroundColor: AppColors.card,
+                                          backgroundColor: AppThemeDecorations.cardColor(context),
                                           title: const Text('تأكيد الإلغاء', style: TextStyle(color: AppColors.text)),
-                                          content: const Text('هل تريد إلغاء هذه المهمة؟', style: TextStyle(color: AppColors.muted)),
+                                          content: Text('هل تريد إلغاء هذه المهمة؟', style: TextStyle(color: AppThemeDecorations.mutedColor(c))),
                                           actions: [
                                             TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('لا')),
                                             TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('نعم', style: TextStyle(color: Colors.red))),
@@ -502,7 +518,7 @@ class _TaskWizardState extends State<_TaskWizard> {
       hintStyle: const TextStyle(color: AppColors.muted),
       suffixIcon: suffix,
       filled: true,
-      fillColor: AppColors.bg,
+      fillColor: AppThemeDecorations.pageBackground(context),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
@@ -601,9 +617,9 @@ class _TaskWizardState extends State<_TaskWizard> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: AppThemeDecorations.cardColor(context),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: DraggableScrollableSheet(
           initialChildSize: 0.92,
@@ -669,9 +685,9 @@ class _TaskWizardState extends State<_TaskWizard> {
               // Bottom buttons
               Container(
                 padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-                decoration: const BoxDecoration(
-                  color: AppColors.card,
-                  border: Border(top: BorderSide(color: AppColors.border)),
+                decoration: BoxDecoration(
+                  color: AppThemeDecorations.cardColor(context),
+                  border: const Border(top: BorderSide(color: AppColors.border)),
                 ),
                 child: Row(
                   children: [
@@ -749,7 +765,7 @@ class _TaskWizardState extends State<_TaskWizard> {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: selected ? AppColors.primary.withOpacity(0.1) : AppColors.bg,
+                color: selected ? AppColors.primary.withOpacity(0.1) : AppThemeDecorations.pageBackground(context),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: selected ? AppColors.primary : AppColors.border,
@@ -791,7 +807,7 @@ class _TaskWizardState extends State<_TaskWizard> {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: _customerId == null ? AppColors.primary.withOpacity(0.1) : AppColors.bg,
+              color: _customerId == null ? AppColors.primary.withOpacity(0.1) : AppThemeDecorations.pageBackground(context),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: _customerId == null ? AppColors.primary : AppColors.border,
@@ -828,7 +844,7 @@ class _TaskWizardState extends State<_TaskWizard> {
         const SizedBox(height: 8),
         DropdownButtonFormField<int>(
           value: _technicianId,
-          dropdownColor: AppColors.card,
+          dropdownColor: AppThemeDecorations.cardColor(context),
           style: const TextStyle(color: AppColors.text),
           decoration: _dec(hint: 'اختر الفني'),
           items: [
@@ -868,7 +884,7 @@ class _TaskWizardState extends State<_TaskWizard> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                       decoration: BoxDecoration(
-                        color: AppColors.bg,
+                        color: AppThemeDecorations.pageBackground(context),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: AppColors.border),
                       ),
@@ -911,7 +927,7 @@ class _TaskWizardState extends State<_TaskWizard> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                       decoration: BoxDecoration(
-                        color: AppColors.bg,
+                        color: AppThemeDecorations.pageBackground(context),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: AppColors.border),
                       ),
@@ -963,7 +979,7 @@ class _TaskWizardState extends State<_TaskWizard> {
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     value: _collectionType,
-                    dropdownColor: AppColors.card,
+                    dropdownColor: AppThemeDecorations.cardColor(context),
                     style: const TextStyle(color: AppColors.text),
                     decoration: _dec(),
                     items: const [
@@ -985,7 +1001,7 @@ class _TaskWizardState extends State<_TaskWizard> {
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
             value: _status,
-            dropdownColor: AppColors.card,
+            dropdownColor: AppThemeDecorations.cardColor(context),
             style: const TextStyle(color: AppColors.text),
             decoration: _dec(),
             items: const [
@@ -1023,7 +1039,7 @@ class _TaskWizardState extends State<_TaskWizard> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.bg,
+              color: AppThemeDecorations.pageBackground(context),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.border),
             ),

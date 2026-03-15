@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../services/api_service.dart';
+import '../../../theme/app_theme.dart';
 import '../../../utils/app_theme.dart';
 import '../controllers/survey_controller.dart';
 import '../models/survey_models.dart';
@@ -92,9 +93,9 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           title: const Text(
             'إعداد المعاينة - Smart Survey',
             style: TextStyle(color: AppColors.text),
@@ -138,9 +139,9 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
   Widget _buildBottomBar(SurveyController controller) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: const BoxDecoration(
-        color: AppColors.card,
-        border: Border(
+      decoration: BoxDecoration(
+        color: AppThemeDecorations.cardColor(context),
+        border: const Border(
           top: BorderSide(color: AppColors.border),
         ),
       ),
@@ -440,7 +441,7 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
           ),
           const SizedBox(height: 8),
           Card(
-            color: AppColors.card,
+            color: AppThemeDecorations.cardColor(context),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -499,7 +500,7 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
           const SizedBox(height: 12),
           // Lighting section
           Card(
-            color: AppColors.card,
+            color: AppThemeDecorations.cardColor(context),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: ExpansionTile(
               initiallyExpanded: true,
@@ -592,7 +593,7 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
           const SizedBox(height: 8),
           // IR Devices section
           Card(
-            color: AppColors.card,
+            color: AppThemeDecorations.cardColor(context),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -647,7 +648,7 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
           const SizedBox(height: 8),
           // Curtains section
           Card(
-            color: AppColors.card,
+            color: AppThemeDecorations.cardColor(context),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: ExpansionTile(
               leading: const Icon(Icons.curtains, color: AppColors.primary),
@@ -736,7 +737,7 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
           const SizedBox(height: 8),
           // Sensors section
           Card(
-            color: AppColors.card,
+            color: AppThemeDecorations.cardColor(context),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -831,7 +832,7 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
           const SizedBox(height: 8),
           // Notes + Add button
           Card(
-            color: AppColors.card,
+            color: AppThemeDecorations.cardColor(context),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -1058,7 +1059,7 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
           (f) => Container(
             margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
-              color: AppColors.card,
+              color: AppThemeDecorations.cardColor(context),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.border),
             ),
@@ -1148,7 +1149,7 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
@@ -1182,7 +1183,7 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.card,
+            color: AppThemeDecorations.cardColor(context),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.border),
           ),
@@ -1270,7 +1271,7 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.card,
+            color: AppThemeDecorations.cardColor(context),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.border),
           ),
@@ -1304,7 +1305,7 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.card,
+            color: AppThemeDecorations.cardColor(context),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.border),
           ),
@@ -1425,7 +1426,7 @@ class _SurveyWizardScreenState extends State<SurveyWizardScreen> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.card,
+            color: AppThemeDecorations.cardColor(context),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.border),
           ),

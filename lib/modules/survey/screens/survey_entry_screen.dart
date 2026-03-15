@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../theme/app_theme.dart';
 import '../../../utils/app_theme.dart';
 import '../controllers/survey_controller.dart';
 import '../models/survey_models.dart';
@@ -32,14 +33,14 @@ class _SurveyEntryBody extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
-          backgroundColor: AppColors.card,
-          title: const Text(
+          backgroundColor: AppThemeDecorations.cardColor(context),
+          title: Text(
             'Smart Survey - المعاينة الذكية',
-            style: TextStyle(color: AppColors.text),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
           ),
-          iconTheme: const IconThemeData(color: AppColors.primary),
+          iconTheme: IconThemeData(color: Theme.of(context).colorScheme.primary),
         ),
         floatingActionButton: FloatingActionButton.extended(
           backgroundColor: AppColors.primary,
@@ -93,22 +94,22 @@ class _SurveyEntryBody extends StatelessWidget {
                           child: const Icon(Icons.folder_open, color: AppColors.primary, size: 24),
                         ),
                         const SizedBox(width: 14),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 'المعاينات الحالية',
                                 style: TextStyle(
-                                  color: AppColors.text,
+                                  color: Theme.of(context).colorScheme.onSurface,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
                                 ),
                               ),
-                              SizedBox(height: 4),
+                              const SizedBox(height: 4),
                               Text(
                                 'عرض جميع المعاينات المحفوظة سابقاً',
-                                style: TextStyle(color: AppColors.muted, fontSize: 12),
+                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                               ),
                             ],
                           ),
@@ -119,10 +120,10 @@ class _SurveyEntryBody extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text(
+                Text(
                   'ملخص سريع للمشروع الحالي',
                   style: TextStyle(
-                    color: AppColors.text,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                   ),
@@ -130,7 +131,7 @@ class _SurveyEntryBody extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   'يمكن للمشرف أو الفني استخدام هذه الأداة لتجميع كل تفاصيل المشروع (غرف، أدوار، ستائر، تكييف، إضاءة) ثم تحويلها لاحقاً إلى عرض سعر PDF.',
-                  style: const TextStyle(color: AppColors.muted, fontSize: 13),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
                 ),
                 const SizedBox(height: 16),
                 _ProjectHeaderCard(project: project),
@@ -158,7 +159,7 @@ class _ProjectHeaderCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
@@ -180,8 +181,8 @@ class _ProjectHeaderCard extends StatelessWidget {
               children: [
                 Text(
                   project.name,
-                  style: const TextStyle(
-                    color: AppColors.text,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
@@ -189,18 +190,18 @@ class _ProjectHeaderCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   _projectTypeToLabel(project.type),
-                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   _techLabel(project),
-                  style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11),
                 ),
                 if (project.customerName != null || project.customerEmail != null) ...[
                   const SizedBox(height: 2),
                   Text(
                     'العميل: ${project.customerName ?? ''}${project.customerEmail != null ? ' (${project.customerEmail})' : ''}',
-                    style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11),
                   ),
                 ],
               ],
@@ -241,17 +242,17 @@ class _TotalsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'إجمالي الأجهزة التقديرية',
             style: TextStyle(
-              color: AppColors.text,
+              color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w600,
               fontSize: 14,
             ),
@@ -260,6 +261,7 @@ class _TotalsCard extends StatelessWidget {
           Row(
             children: [
               _totalItem(
+                context,
                 icon: Icons.lightbulb_outline,
                 label: 'خطوط إضاءة (Magic Box)',
                 value: totals.magicBoxLines,
@@ -271,6 +273,7 @@ class _TotalsCard extends StatelessWidget {
           Row(
             children: [
               _totalItem(
+                context,
                 icon: Icons.curtains_outlined,
                 label: 'مواتير ستائر',
                 value: totals.curtainMotors,
@@ -278,6 +281,7 @@ class _TotalsCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               _totalItem(
+                context,
                 icon: Icons.view_agenda_outlined,
                 label: 'ضلف ستائر',
                 value: totals.curtainPanels,
@@ -289,6 +293,7 @@ class _TotalsCard extends StatelessWidget {
           Row(
             children: [
               _totalItem(
+                context,
                 icon: Icons.settings_remote,
                 label: 'وحدات تحكم IR (تكييف/تلفزيون)',
                 value: totals.irControllers,
@@ -300,6 +305,7 @@ class _TotalsCard extends StatelessWidget {
           Row(
             children: [
               _totalItem(
+                context,
                 icon: Icons.toggle_on,
                 label: 'مفاتيح 1 خط',
                 value: totals.switches1Line,
@@ -307,6 +313,7 @@ class _TotalsCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               _totalItem(
+                context,
                 icon: Icons.toggle_on,
                 label: 'مفاتيح 2 خط',
                 value: totals.switches2Line,
@@ -318,6 +325,7 @@ class _TotalsCard extends StatelessWidget {
           Row(
             children: [
               _totalItem(
+                context,
                 icon: Icons.toggle_on,
                 label: 'مفاتيح 3 خطوط',
                 value: totals.switches3Line,
@@ -325,6 +333,7 @@ class _TotalsCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               _totalItem(
+                context,
                 icon: Icons.toggle_on,
                 label: 'مفاتيح 4 خطوط',
                 value: totals.switches4Line,
@@ -337,12 +346,14 @@ class _TotalsCard extends StatelessWidget {
     );
   }
 
-  Widget _totalItem({
+  Widget _totalItem(
+    BuildContext context, {
     required IconData icon,
     required String label,
     required int value,
     required Color color,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return Expanded(
       child: Row(
         children: [
@@ -362,15 +373,12 @@ class _TotalsCard extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
-                    color: AppColors.muted,
-                    fontSize: 11,
-                  ),
+                  style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11),
                 ),
                 Text(
                   '$value',
-                  style: const TextStyle(
-                    color: AppColors.text,
+                  style: TextStyle(
+                    color: scheme.onSurface,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -395,24 +403,25 @@ class _FloorsList extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: AppThemeDecorations.cardColor(context),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border),
         ),
-        child: const Text(
+        child: Text(
           'لا توجد أدوار أو غرف مضافة بعد.\nاضغط على زر "بدء معاينة جديدة" لإضافة الأدوار والغرف وتكوين المشروع.',
-          style: TextStyle(color: AppColors.muted, fontSize: 13),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
         ),
       );
     }
 
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'الأدوار والغرف',
           style: TextStyle(
-            color: AppColors.text,
+            color: scheme.onSurface,
             fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
@@ -422,33 +431,33 @@ class _FloorsList extends StatelessWidget {
           (f) => Container(
             margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
-              color: AppColors.card,
+              color: AppThemeDecorations.cardColor(context),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.border),
             ),
             child: ExpansionTile(
               title: Text(
                 f.name,
-                style: const TextStyle(
-                  color: AppColors.text,
+                style: TextStyle(
+                  color: scheme.onSurface,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),
               ),
               subtitle: Text(
                 '${f.rooms.length} غرفة',
-                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
               ),
               children: f.rooms
                   .map(
                     (r) => ListTile(
                       title: Text(
                         r.name,
-                        style: const TextStyle(color: AppColors.text),
+                        style: TextStyle(color: scheme.onSurface),
                       ),
                       subtitle: Text(
                         _roomSubtitle(r),
-                        style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                        style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
                       ),
                     ),
                   )

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
 
@@ -102,9 +103,9 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   Widget build(BuildContext context) {
     final unread = _notifications.where((n) => n['isRead'] != true).length;
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         iconTheme: const IconThemeData(color: AppColors.text),
         title: Row(children: [
           const Text('الإشعارات', style: TextStyle(color: AppColors.text)),
@@ -133,7 +134,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.card,
+              color: AppThemeDecorations.cardColor(context),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.border),
             ),
@@ -148,7 +149,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                 decoration: InputDecoration(
                   hintText: 'عنوان الإشعار',
                   hintStyle: const TextStyle(color: AppColors.muted),
-                  filled: true, fillColor: AppColors.bg,
+                  filled: true, fillColor: AppThemeDecorations.pageBackground(context),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 ),
               ),
@@ -162,7 +163,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                 decoration: InputDecoration(
                   hintText: 'نص الإشعار...',
                   hintStyle: const TextStyle(color: AppColors.muted),
-                  filled: true, fillColor: AppColors.bg,
+                  filled: true, fillColor: AppThemeDecorations.pageBackground(context),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 ),
               ),
@@ -171,10 +172,10 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
                 value: _target,
-                dropdownColor: AppColors.card,
+                dropdownColor: AppThemeDecorations.cardColor(context),
                 style: const TextStyle(color: AppColors.text),
                 decoration: InputDecoration(
-                  filled: true, fillColor: AppColors.bg,
+                  filled: true, fillColor: AppThemeDecorations.pageBackground(context),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 ),
                 items: const [
@@ -230,7 +231,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: isRead ? AppColors.card : AppColors.primary.withOpacity(0.08),
+                    color: isRead ? AppThemeDecorations.cardColor(context) : AppColors.primary.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: isRead ? AppColors.border : AppColors.primary.withOpacity(0.4)),
                   ),

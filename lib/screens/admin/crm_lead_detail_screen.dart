@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
 
@@ -70,9 +71,9 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
     return WillPopScope(
       onWillPop: () async { Navigator.pop(context, _changed); return false; },
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: AppColors.text),
             onPressed: () => Navigator.pop(context, _changed),
@@ -82,7 +83,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
             IconButton(icon: const Icon(Icons.edit, size: 20), color: AppColors.text, onPressed: _showEditLead),
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert, color: AppColors.text),
-              color: AppColors.card,
+              color: AppThemeDecorations.cardColor(context),
               onSelected: (v) {
                 if (v == 'assign') _showAssignDialog();
                 if (v == 'stage') _showStageDialog();
@@ -130,7 +131,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+      decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
@@ -193,7 +194,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
 
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+      decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('مراحل البيع', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14)),
         const SizedBox(height: 12),
@@ -210,7 +211,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
                   Container(
                     width: 36, height: 36,
                     decoration: BoxDecoration(
-                      color: isCurrent ? (s['color'] as Color) : isActive ? (s['color'] as Color).withOpacity(0.3) : AppColors.bg,
+                      color: isCurrent ? (s['color'] as Color) : isActive ? (s['color'] as Color).withOpacity(0.3) : AppThemeDecorations.pageBackground(context),
                       shape: BoxShape.circle,
                       border: Border.all(color: isActive ? (s['color'] as Color) : AppColors.border, width: isCurrent ? 2 : 1),
                     ),
@@ -237,12 +238,12 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
       onTap: _showAssignDialog,
       child: Container(
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+        decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
         child: Row(children: [
           Container(
             width: 40, height: 40,
             decoration: BoxDecoration(
-              color: hasAssignee ? AppColors.primary.withOpacity(0.15) : AppColors.bg,
+              color: hasAssignee ? AppColors.primary.withOpacity(0.15) : AppThemeDecorations.pageBackground(context),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(hasAssignee ? Icons.person : Icons.person_add, color: hasAssignee ? AppColors.primary : AppColors.muted, size: 20),
@@ -302,7 +303,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.card,
+            color: AppThemeDecorations.cardColor(context),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: AppColors.border.withOpacity(0.5)),
           ),
@@ -342,7 +343,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.card,
+      backgroundColor: AppThemeDecorations.cardColor(context),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => Padding(
         padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
@@ -360,7 +361,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: type == t ? (_actTypeColors[t] ?? Colors.grey).withOpacity(0.2) : AppColors.bg,
+                    color: type == t ? (_actTypeColors[t] ?? Colors.grey).withOpacity(0.2) : AppThemeDecorations.pageBackground(context),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: type == t ? (_actTypeColors[t] ?? Colors.grey) : AppColors.border),
                   ),
@@ -382,7 +383,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
             decoration: InputDecoration(
               hintText: 'اكتب تفاصيل النشاط...',
               hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
-              filled: true, fillColor: AppColors.bg,
+              filled: true, fillColor: AppThemeDecorations.pageBackground(context),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             ),
           ),
@@ -437,7 +438,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('توزيع على مندوب', style: TextStyle(color: AppColors.text, fontSize: 16)),
         content: SizedBox(
           width: 300,
@@ -480,7 +481,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
     showDialog(
       context: context,
       builder: (ctx) => SimpleDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('تغيير المرحلة', style: TextStyle(color: AppColors.text, fontSize: 16)),
         children: _stages.map((s) => SimpleDialogOption(
           onPressed: () { Navigator.pop(ctx); _updateStage(s['key'] as String); },
@@ -510,7 +511,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('تعديل بيانات الليد', style: TextStyle(color: AppColors.text, fontSize: 16)),
         content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
           _field(nameCtrl, 'الاسم', Icons.person),
@@ -535,7 +536,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: priority == p ? (_priorityColors[p] ?? Colors.grey).withOpacity(0.2) : AppColors.bg,
+                    color: priority == p ? (_priorityColors[p] ?? Colors.grey).withOpacity(0.2) : AppThemeDecorations.pageBackground(context),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: priority == p ? (_priorityColors[p] ?? Colors.grey) : AppColors.border),
                   ),
@@ -578,7 +579,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('حذف الليد', style: TextStyle(color: Colors.red)),
         content: const Text('هل تريد حذف هذا الليد وكل نشاطاته؟', style: TextStyle(color: AppColors.text)),
         actions: [
@@ -606,7 +607,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
       decoration: InputDecoration(
         hintText: hint, hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
         prefixIcon: Icon(icon, color: AppColors.muted, size: 18),
-        filled: true, fillColor: AppColors.bg,
+        filled: true, fillColor: AppThemeDecorations.pageBackground(context),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),

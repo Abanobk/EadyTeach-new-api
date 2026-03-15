@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/pdf_saver_stub.dart'
     if (dart.library.html) '../../utils/pdf_saver_web.dart' as pdf_saver;
@@ -350,7 +351,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       builder: (_) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           title: const Text('حذف عرض السعر', style: TextStyle(color: AppColors.text)),
           content: const Text('هل أنت متأكد من حذف هذا العرض؟', style: TextStyle(color: AppColors.muted)),
           actions: [
@@ -399,10 +400,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
           title: Text(_quotation?['refNumber'] ?? 'تفاصيل عرض السعر'),
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios, color: AppColors.text),
             onPressed: () => Navigator.pop(context),
@@ -434,7 +435,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: AppColors.card,
+                              color: AppThemeDecorations.cardColor(context),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: AppColors.border),
                             ),
@@ -480,7 +481,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                           const Text('📦 المنتجات', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 15)),
                           const SizedBox(height: 8),
                           Container(
-                            decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+                            decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
                             child: Column(
                               children: [
                                 // Table header

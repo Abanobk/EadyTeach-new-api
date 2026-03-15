@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../utils/app_theme.dart';
+import '../../theme/app_theme.dart';
 
 class RoleSelectScreen extends StatelessWidget {
   const RoleSelectScreen({super.key});
@@ -9,93 +9,89 @@ class RoleSelectScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final user = auth.user;
+    final c = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
-      body: SafeArea(
-        child: Directionality(
-          textDirection: TextDirection.rtl,
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(16),
+      body: Container(
+        decoration: AppThemeDecorations.gradientBackground(context),
+        child: SafeArea(
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ThemeToggleLogo(size: 70),
+                  const SizedBox(height: 20),
+                  Text(
+                    'مرحباً، ${auth.userDisplayName}',
+                    style: TextStyle(
+                      color: c.onSurface,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                  child: const Center(
-                    child: Text('ET',
-                        style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  Text(
+                    'اختر كيف تريد الدخول إلى المنصة',
+                    style: TextStyle(
+                      color: c.onSurfaceVariant,
+                      fontSize: 14,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'مرحباً، ${auth.userDisplayName}',
-                  style: const TextStyle(
-                    color: AppColors.text,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
+                  const SizedBox(height: 36),
+                  _UnifiedCard(
+                    padding: const EdgeInsets.all(24),
+                    child: _RoleCardContent(
+                      icon: Icons.shopping_bag_outlined,
+                      title: 'عميل',
+                      subtitle: 'تصفح المنتجات، اطلب الخدمات، وتابع طلباتك',
+                      color: c.primary,
+                      onTap: () => Navigator.pushReplacementNamed(context, '/client'),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'اختر كيف تريد الدخول إلى المنصة',
-                  style: TextStyle(color: AppColors.muted, fontSize: 14),
-                ),
-                const SizedBox(height: 40),
-
-                // Client
-                _RoleCard(
-                  icon: Icons.shopping_bag_outlined,
-                  title: 'عميل',
-                  subtitle: 'تصفح المنتجات، اطلب الخدمات، وتابع طلباتك',
-                  color: const Color(0xFFD4920A),
-                  onTap: () => Navigator.pushReplacementNamed(context, '/client'),
-                ),
-                const SizedBox(height: 12),
-
-                // Technician
-                _RoleCard(
-                  icon: Icons.build_outlined,
-                  title: 'فني',
-                  subtitle: 'عرض المهام المعيّنة وتحديث حالتها',
-                  color: const Color(0xFF2E7D32),
-                  onTap: () => Navigator.pushReplacementNamed(context, '/technician'),
-                ),
-                if (auth.canAccessAdmin) ...[
                   const SizedBox(height: 12),
-                  // Admin - shown ONLY to admin users
-                  _RoleCard(
-                    icon: Icons.dashboard_outlined,
-                    title: 'مسؤول',
-                    subtitle: 'لوحة التحكم الكاملة — المنتجات، العملاء، المهام',
-                    color: const Color(0xFF7B4F1A),
-                    badge: 'دورك الحالي',
-                    onTap: () => Navigator.pushReplacementNamed(context, '/admin'),
+                  _UnifiedCard(
+                    padding: const EdgeInsets.all(24),
+                    child: _RoleCardContent(
+                      icon: Icons.build_outlined,
+                      title: 'فني',
+                      subtitle: 'عرض المهام المعيّنة وتحديث حالتها',
+                      color: c.primary,
+                      onTap: () => Navigator.pushReplacementNamed(context, '/technician'),
+                    ),
+                  ),
+                  if (auth.canAccessAdmin) ...[
+                    const SizedBox(height: 12),
+                    _UnifiedCard(
+                      padding: const EdgeInsets.all(24),
+                      child: _RoleCardContent(
+                        icon: Icons.dashboard_outlined,
+                        title: 'مسؤول',
+                        subtitle: 'لوحة التحكم الكاملة — المنتجات، العملاء، المهام',
+                        color: c.primary,
+                        badge: 'دورك الحالي',
+                        onTap: () => Navigator.pushReplacementNamed(context, '/admin'),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 28),
+                  TextButton.icon(
+                    onPressed: () async {
+                      await auth.logout();
+                      if (context.mounted) {
+                        Navigator.pushReplacementNamed(context, '/login');
+                      }
+                    },
+                    icon: Icon(Icons.logout, color: c.onSurfaceVariant, size: 18),
+                    label: Text(
+                      'تسجيل الخروج',
+                      style: TextStyle(color: c.onSurfaceVariant),
+                    ),
                   ),
                 ],
-
-                const SizedBox(height: 24),
-                TextButton.icon(
-                  onPressed: () async {
-                    await auth.logout();
-                    if (context.mounted) {
-                      Navigator.pushReplacementNamed(context, '/login');
-                    }
-                  },
-                  icon: const Icon(Icons.logout, color: AppColors.muted, size: 16),
-                  label: const Text('تسجيل الخروج',
-                      style: TextStyle(color: AppColors.muted)),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -104,7 +100,23 @@ class RoleSelectScreen extends StatelessWidget {
   }
 }
 
-class _RoleCard extends StatelessWidget {
+class _UnifiedCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  const _UnifiedCard({required this.child, this.padding});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding,
+      decoration: AppThemeDecorations.loginStyleCard(context, 24),
+      child: child,
+    );
+  }
+}
+
+class _RoleCardContent extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
@@ -112,7 +124,7 @@ class _RoleCard extends StatelessWidget {
   final String? badge;
   final VoidCallback onTap;
 
-  const _RoleCard({
+  const _RoleCardContent({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -123,65 +135,69 @@ class _RoleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
         child: Row(
           children: [
             Container(
-              width: 52,
-              height: 52,
+              width: 54,
+              height: 54,
               decoration: BoxDecoration(
                 color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: color, size: 26),
+              child: Icon(icon, color: color, size: 28),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Text(title,
-                          style: const TextStyle(
-                              color: AppColors.text,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16)),
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
                       if (badge != null) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: color.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text(badge!,
-                              style: TextStyle(
-                                  color: color,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600)),
+                          child: Text(
+                            badge!,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ],
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(subtitle,
-                      style: const TextStyle(
-                          color: AppColors.muted, fontSize: 12)),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_back_ios, color: AppColors.muted, size: 16),
+            Icon(Icons.arrow_back_ios_new, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 16),
           ],
         ),
       ),

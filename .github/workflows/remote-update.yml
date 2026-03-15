@@ -8,34 +8,58 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      # ─── 1. تجهيز الكود على GitHub ───
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ─── 2. تثبيت Flutter والبناء (على GitHub مش على السيرفر) ───
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Build web
+        run: |
+          flutter pub get
+          flutter build web --release
+
+      # ─── 3. تثبيت Cloudflared للاتصال بالسيرفر ───
       - name: Install Cloudflared
         run: |
           curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared.deb
 
-      - name: Deploy via Tunnel
+      # ─── 4. رفع بناء الويب + تحديث الكود على السيرفر ───
+      - name: Deploy to server
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          
+
+          DEPLOY_PATH="${{ secrets.WEB_DEPLOY_PATH }}"
+          if [ -z "$DEPLOY_PATH" ]; then
+            echo "::error::مضبوطش WEB_DEPLOY_PATH في GitHub Secrets. روح Settings > Secrets > Actions وضيف WEB_DEPLOY_PATH وقيمته مسار مجلد app (مثلاً /mnt/marichia/files/easytech-new-api/app)"
+            exit 1
+          fi
+
+          # رفع ملفات البناء من GitHub إلى مجلد app على السيرفر
+          rsync -avz --delete \
+            -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -o ProxyCommand=\"cloudflared access tcp --hostname ssh-deploy.easytecheg.net\"" \
+            build/web/ \
+            "root@ssh-deploy.easytecheg.net:$DEPLOY_PATH/"
+
+          # تحديث كود المشروع على السيرفر (git)
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
-          -o ProxyCommand="cloudflared access tcp --hostname ssh-deploy.easytecheg.net" \
-          root@ssh-deploy.easytecheg.net << 'EOF'
-            TARGET="/mnt/marichia/files/easytech-new-api"
-            git config --global --add safe.directory "$TARGET"
-            cd "$TARGET"
+            -o ProxyCommand="cloudflared access tcp --hostname ssh-deploy.easytecheg.net" \
+            root@ssh-deploy.easytecheg.net << 'REMOTE'
+          TARGET="/mnt/marichia/files/easytech-new-api"
+          git config --global --add safe.directory "$TARGET"
+          cd "$TARGET"
+          git fetch origin main
+          git checkout origin/main -- .
+          echo "Code updated."
+          REMOTE
 
-            # 1. لو فيه أي عملية قديمة معطلة السيرفر نلغيها
-            git rebase --abort || true
-            git merge --abort || true
-
-            # 2. جلب البيانات الجديدة من جيت هب في "مخزن" مؤقت
-            git fetch origin main
-
-            # 3. تحديث ملفات الكود فقط (بدون مسح أي ملفات تانية في السيرفر)
-            # الأمر ده معناه: "حدث اللي موجود في جيت هب بس، وسيب الباقي في حاله"
-            git checkout origin/main -- .
-            
-            echo "Deployment completed safely."
-          EOF
+      - name: Done
+        run: echo "Done. Open api.easytecheg.net/app and refresh (Ctrl+F5)."

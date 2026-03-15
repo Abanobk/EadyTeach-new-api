@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
 
@@ -30,9 +31,9 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('التقارير', style: TextStyle(color: AppColors.text)),
         iconTheme: const IconThemeData(color: AppColors.text),
         actions: [IconButton(icon: const Icon(Icons.refresh, color: AppColors.muted), onPressed: _load)],
@@ -68,7 +69,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   Widget _statCard(String title, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+      decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Container(width: 32, height: 32, decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: color, size: 18)),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -82,7 +83,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   Widget _reportItem(IconData icon, String title, String subtitle, Color color) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+      decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
       child: Row(children: [
         Container(width: 40, height: 40, decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: color, size: 20)),
         const SizedBox(width: 12),

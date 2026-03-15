@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
 
@@ -439,7 +440,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.card,
+      backgroundColor: AppThemeDecorations.cardColor(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -518,7 +519,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       decoration: BoxDecoration(
                         color: sliderVal.round() == v
                             ? _progressColor(v).withOpacity(0.2)
-                            : AppColors.bg,
+                            : AppThemeDecorations.pageBackground(context),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: sliderVal.round() == v
@@ -550,7 +551,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     hintText: 'اكتب ايه الي اتعمل في البند ده...',
                     hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
                     filled: true,
-                    fillColor: AppColors.bg,
+                    fillColor: AppThemeDecorations.pageBackground(context),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(color: AppColors.border),
@@ -613,7 +614,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   void _showMediaPicker(int itemId) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.card,
+      backgroundColor: AppThemeDecorations.cardColor(context),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
@@ -686,7 +687,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           title: const Text('حذف الملف', style: TextStyle(color: AppColors.text)),
           content: const Text('هل تريد حذف هذا الملف؟', style: TextStyle(color: AppColors.muted)),
           actions: [
@@ -800,8 +801,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   Widget build(BuildContext context) {
     if (_loadingTask) {
       return Scaffold(
-        backgroundColor: AppColors.bg,
-        appBar: AppBar(backgroundColor: AppColors.card, title: const Text('تفاصيل المهمة')),
+        backgroundColor: AppThemeDecorations.pageBackground(context),
+        appBar: AppBar(backgroundColor: AppThemeDecorations.cardColor(context), title: const Text('تفاصيل المهمة')),
         body: const Center(child: CircularProgressIndicator(color: AppColors.primary)),
       );
     }
@@ -854,9 +855,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
-          backgroundColor: AppColors.card,
+          backgroundColor: AppThemeDecorations.cardColor(context),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.primary, size: 18),
             onPressed: () => Navigator.pop(context),
@@ -1074,7 +1075,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                   margin: const EdgeInsets.only(bottom: 16),
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.card,
+                    color: AppThemeDecorations.cardColor(context),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: oColor.withOpacity(0.3)),
                   ),
@@ -1146,7 +1147,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: done ? Colors.green.withOpacity(0.08) : AppColors.bg,
+                          color: done ? Colors.green.withOpacity(0.08) : AppThemeDecorations.pageBackground(context),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: done ? Colors.green.withOpacity(0.3) : AppColors.border,
@@ -1228,7 +1229,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: AppColors.card,
+                                  color: AppThemeDecorations.cardColor(context),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(color: AppColors.border.withOpacity(0.5)),
                                 ),
@@ -1298,7 +1299,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                                   decoration: BoxDecoration(
                                                     color: Colors.red,
                                                     shape: BoxShape.circle,
-                                                    border: Border.all(color: AppColors.card, width: 2),
+                                                    border: Border.all(color: AppThemeDecorations.cardColor(context), width: 2),
                                                   ),
                                                   child: const Icon(Icons.close, color: Colors.white, size: 16),
                                                 ),
@@ -1347,7 +1348,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         hintText: amount ?? '0',
                         hintStyle: const TextStyle(color: AppColors.muted),
                         filled: true,
-                        fillColor: AppColors.bg,
+                        fillColor: AppThemeDecorations.pageBackground(context),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
                         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
@@ -1405,7 +1406,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(vertical: 20),
                           decoration: BoxDecoration(
-                            color: AppColors.bg,
+                            color: AppThemeDecorations.pageBackground(context),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: AppColors.border, width: 2, style: BorderStyle.solid),
                           ),
@@ -1514,7 +1515,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       hintText: 'اكتب ملاحظة...',
                       hintStyle: const TextStyle(color: AppColors.muted),
                       filled: true,
-                      fillColor: AppColors.bg,
+                      fillColor: AppThemeDecorations.pageBackground(context),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: const BorderSide(color: AppColors.border),
@@ -1598,7 +1599,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.bg,
+                          color: AppThemeDecorations.pageBackground(context),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: AppColors.border),
                         ),
@@ -1661,7 +1662,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppThemeDecorations.cardColor(context),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
       ),
@@ -1720,7 +1721,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppColors.bg,
+          color: selected ? AppColors.primary : AppThemeDecorations.pageBackground(context),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: selected ? AppColors.primary : AppColors.border,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
 class AdminSecretaryScreen extends StatefulWidget {
@@ -143,9 +144,9 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
           padding: EdgeInsets.only(bottom: MediaQuery.of(ctx2).viewInsets.bottom),
           child: Container(
             constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx2).size.height * 0.85),
-            decoration: const BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: BoxDecoration(
+              color: AppThemeDecorations.cardColor(ctx2),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
@@ -176,7 +177,7 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                             margin: const EdgeInsets.only(left: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
-                              color: isSel ? (qa['color'] as Color).withOpacity(0.2) : AppColors.bg,
+                              color: isSel ? (qa['color'] as Color).withOpacity(0.2) : AppThemeDecorations.pageBackground(context),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: isSel ? qa['color'] as Color : AppColors.border, width: isSel ? 1.5 : 1),
                             ),
@@ -202,7 +203,7 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                     decoration: InputDecoration(
                       labelText: 'عنوان الموعد',
                       labelStyle: const TextStyle(color: AppColors.muted),
-                      filled: true, fillColor: AppColors.bg,
+                      filled: true, fillColor: AppThemeDecorations.pageBackground(context),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary)),
                     ),
@@ -215,14 +216,14 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      color: AppColors.bg,
+                      color: AppThemeDecorations.pageBackground(context),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<int?>(
                         value: selectedStaffId,
                         isExpanded: true,
-                        dropdownColor: AppColors.card,
+                        dropdownColor: AppThemeDecorations.cardColor(context),
                         hint: const Text('اختر موظف (اختياري)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
                         icon: const Icon(Icons.person_add_outlined, color: AppColors.primary, size: 20),
                         items: [
@@ -269,7 +270,7 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                           },
                           child: Container(
                             padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(10)),
+                            decoration: BoxDecoration(color: AppThemeDecorations.pageBackground(context), borderRadius: BorderRadius.circular(10)),
                             child: Row(children: [
                               const Icon(Icons.calendar_today_outlined, color: AppColors.primary, size: 18),
                               const SizedBox(width: 8),
@@ -291,7 +292,7 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                           },
                           child: Container(
                             padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(10)),
+                            decoration: BoxDecoration(color: AppThemeDecorations.pageBackground(context), borderRadius: BorderRadius.circular(10)),
                             child: Row(children: [
                               const Icon(Icons.access_time, color: AppColors.primary, size: 18),
                               const SizedBox(width: 8),
@@ -312,7 +313,7 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                     decoration: InputDecoration(
                       labelText: 'ملاحظات (اختياري)',
                       labelStyle: const TextStyle(color: AppColors.muted),
-                      filled: true, fillColor: AppColors.bg,
+                      filled: true, fillColor: AppThemeDecorations.pageBackground(context),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary)),
                     ),
@@ -376,9 +377,9 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppThemeDecorations.cardColor(context),
         title: const Text('السكرتارية', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
         iconTheme: const IconThemeData(color: AppColors.text),
         actions: [
@@ -389,7 +390,7 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
         children: [
           // ── الكالندر ──
           Container(
-            color: AppColors.card,
+            color: AppThemeDecorations.cardColor(context),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
               children: [
@@ -419,7 +420,7 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
           ),
           // ── الإجراءات السريعة ──
           Container(
-            color: AppColors.bg,
+            color: AppThemeDecorations.pageBackground(context),
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -439,7 +440,7 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                       child: Container(
                         width: 72,
                         margin: const EdgeInsets.symmetric(horizontal: 4),
-                        decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+                        decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -515,7 +516,7 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                                       return await showDialog<bool>(
                                         context: context,
                                         builder: (c) => AlertDialog(
-                                          backgroundColor: AppColors.card,
+                                          backgroundColor: AppThemeDecorations.cardColor(context),
                                           title: const Text('حذف الموعد؟', style: TextStyle(color: AppColors.text)),
                                           content: const Text('هل أنت متأكد من حذف هذا الموعد؟', style: TextStyle(color: AppColors.muted)),
                                           actions: [
@@ -530,7 +531,7 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                                       margin: const EdgeInsets.only(bottom: 10),
                                       padding: const EdgeInsets.all(14),
                                       decoration: BoxDecoration(
-                                        color: AppColors.card,
+                                        color: AppThemeDecorations.cardColor(context),
                                         borderRadius: BorderRadius.circular(14),
                                         border: Border.all(color: AppColors.border),
                                       ),

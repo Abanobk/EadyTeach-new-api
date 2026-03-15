@@ -30,7 +30,7 @@ jobs:
           curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared.deb
 
-      # ─── 4. رفع بناء الويب + تحديث الكود على السيرفر ───
+      # ─── 4. رفع بناء الويب عبر SSH (tar يمر عبر الأنبوب) ───
       - name: Deploy to server
         run: |
           mkdir -p ~/.ssh
@@ -39,19 +39,17 @@ jobs:
 
           DEPLOY_PATH="${{ secrets.WEB_DEPLOY_PATH }}"
           if [ -z "$DEPLOY_PATH" ]; then
-            echo "::error::مضبوطش WEB_DEPLOY_PATH في GitHub Secrets. روح Settings > Secrets > Actions وضيف WEB_DEPLOY_PATH وقيمته مسار مجلد app (مثلاً /mnt/marichia/files/easytech-new-api/app)"
+            echo "::error::Add WEB_DEPLOY_PATH in GitHub Secrets (e.g. /mnt/marichia/files/easytech-new-api/app)"
             exit 1
           fi
 
-          # رفع ملفات البناء من GitHub إلى مجلد app على السيرفر
-          rsync -avz --delete \
-            -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -o ProxyCommand=\"cloudflared access tcp --hostname ssh-deploy.easytecheg.net\"" \
-            build/web/ \
-            "root@ssh-deploy.easytecheg.net:$DEPLOY_PATH/"
+          # ضغط build/web وإرساله للسيرفر ثم فك الضغط في مجلد app
+          cd build && tar czf - web | ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ssh-deploy.easytecheg.net" root@ssh-deploy.easytecheg.net "mkdir -p $DEPLOY_PATH && cd $DEPLOY_PATH && tar xzf - --strip-components=1 && echo Deployed to $DEPLOY_PATH"
+          cd ..
 
           # تحديث كود المشروع على السيرفر (git)
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
-            -o ProxyCommand="cloudflared access tcp --hostname ssh-deploy.easytecheg.net" \
+            -o "ProxyCommand=cloudflared access tcp --hostname ssh-deploy.easytecheg.net" \
             root@ssh-deploy.easytecheg.net << 'REMOTE'
           TARGET="/mnt/marichia/files/easytech-new-api"
           git config --global --add safe.directory "$TARGET"
@@ -62,4 +60,4 @@ jobs:
           REMOTE
 
       - name: Done
-        run: echo "Done. Open api.easytecheg.net/app and refresh (Ctrl+F5)."
+        run: echo "Deploy finished. Open https://api.easytecheg.net/app and hard refresh (Ctrl+F5)."

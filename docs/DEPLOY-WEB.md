@@ -51,3 +51,14 @@ rsync -avz --delete build/web/ user@server:/mnt/marichia/files/easytech-new-api/
 4. احذف محتويات مجلد **app** القديمة (أو امسحهم) ثم الصق المحتوى الجديد من **build/web**
 
 بعدها حدّث الموقع (Ctrl+F5).
+
+---
+
+## لو التعديلات لسه مش ظاهرة
+
+1. **تأكد من Actions:** روح GitHub → تبويب **Actions** → شغّل **Remote Update** الأخير. لو فشل (علامة حمراء)، افتح الـ run واقرأ الخطوة اللي فشلت.
+2. **نشر يدوي (مضمون):**
+   - على جهازك: من مجلد المشروع شغّل `flutter build web --release`.
+   - افتح المجلد **build/web** (فيه index.html و main.dart.js و assets).
+   - من **File Browser** على السيرفر: ادخل مجلد **app** (تحت easytech-new-api)، **احذف كل الملفات** من جوه app، ثم **ارفع كل محتويات build/web** (السحب والإفلات أو Upload).
+   - افتح `https://api.easytecheg.net/app` واعمل **Ctrl+F5** (تحديث قوي).

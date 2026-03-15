@@ -1,0 +1,8 @@
+# توجيه /trpc/ و /api/trpc/ إلى router.php (عشان الـ API يشتغل بدون 404)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(api/)?trpc/.* router.php [L,QSA]
+</IfModule>

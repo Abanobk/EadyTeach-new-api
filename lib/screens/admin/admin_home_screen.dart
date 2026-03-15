@@ -251,25 +251,31 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: ClipRect(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, color: selected ? scheme.primary : scheme.onSurfaceVariant, size: 22),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
-                      fontSize: 14,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 40) {
+                  return Icon(icon, color: selected ? scheme.primary : scheme.onSurfaceVariant, size: 22);
+                }
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: selected ? scheme.primary : scheme.onSurfaceVariant, size: 22),
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+                          fontSize: 14,
+                          fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             ),
           ),
           ),

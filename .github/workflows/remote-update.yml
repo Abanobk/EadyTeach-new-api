@@ -8,46 +8,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.24.0'
-          channel: 'stable'
-
-      - name: Build web
-        run: |
-          flutter pub get
-          flutter build web --release
-
       - name: Install Cloudflared
         run: |
           curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared.deb
 
-      - name: Deploy web to server
-        env:
-          DEPLOY_PATH: ${{ secrets.WEB_DEPLOY_PATH }}
-        run: |
-          if [ -z "$DEPLOY_PATH" ]; then
-            echo "::error::Add WEB_DEPLOY_PATH in GitHub → Settings → Secrets (e.g. /mnt/marichia/files/easytech-new-api/app)"
-            exit 1
-          fi
-
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SERVER_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-
-          (cd build && tar czf - web) | ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ssh-deploy.easytecheg.net" root@ssh-deploy.easytecheg.net "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf - --strip-components=1 && echo Deployed to $DEPLOY_PATH"
-
-      - name: Update repo on server
+      - name: Deploy via Tunnel
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SERVER_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ssh-deploy.easytecheg.net" root@ssh-deploy.easytecheg.net "TARGET=/mnt/marichia/files/easytech-new-api; git config --global --add safe.directory \$TARGET; cd \$TARGET; git fetch origin main; git checkout origin/main -- .; echo Repo updated."
-
-      - name: Done
-        run: echo "✅ Deploy finished. Open https://api.easytecheg.net/app and hard refresh (Ctrl+F5)."
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ssh-deploy.easytecheg.net" root@ssh-deploy.easytecheg.net "TARGET=/mnt/marichia/files/easytech-new-api; git config --global --add safe.directory \$TARGET; cd \$TARGET; git rebase --abort || true; git merge --abort || true; git fetch origin main; git checkout origin/main -- .; echo Deployment completed safely."

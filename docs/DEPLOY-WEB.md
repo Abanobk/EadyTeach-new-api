@@ -1,30 +1,23 @@
 # نشر تحديثات الويب (عشان التعديلات تظهر على الموقع)
 
-## الطريقة 1: GitHub يعمل كل حاجة (مفضّلة)
+## الطريقة 1: سكربت من جهازك (مضمونة)
 
-### خطوة واحدة في GitHub (مرة واحدة فقط)
+من جذر المشروع شغّل:
 
-1. افتح الريبو على GitHub: **EadyTeach-new-api**
-2. من فوق: **Settings** ← **Secrets and variables** ← **Actions**
-3. اضغط **New repository secret**
-4. **Name:** `WEB_DEPLOY_PATH`  
-   **Value:** مسار مجلد الـ app على السيرفر، مثلاً:
-   ```text
-   /mnt/marichia/files/easytech-new-api/app
-   ```
-5. اضغط **Add secret**
+```bash
+chmod +x scripts/deploy-web.sh
+./scripts/deploy-web.sh
+```
 
-### بعد كده
+السكربت يعمل: بناء الويب ثم رفعها للسيرفر عبر SSH (Cloudflare tunnel).  
+مطلوب: `cloudflared` و SSH مضبوطين (نفس الاتصال اللي بتستخدمه للسيرفر).  
+لو المسار مختلف، قبل التشغيل: `export WEB_DEPLOY_PATH=/مسار/مجلد/app`
 
-- أي مرة تعمل **push** لفرع `main`، GitHub هيعمل:
-  - بناء الويب (Flutter)
-  - رفع الملفات على مجلد الـ app
-  - تحديث الكود على السيرفر
-- افتح الموقع وحدّث الصفحة (Ctrl+F5): `https://api.easytecheg.net/app`
+بعدها افتح **https://api.easytecheg.net/app** واعمل Ctrl+F5.
 
 ---
 
-## الطريقة 2: أوامر يدوية من جهازك (بدون GitHub)
+## الطريقة 2: أوامر يدوية من جهازك (بدون سكربت)
 
 ### على جهازك (في مجلد المشروع)
 

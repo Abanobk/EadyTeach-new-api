@@ -154,7 +154,8 @@ class AuthProvider extends ChangeNotifier {
     _loadPermissions();
   }
 
+  /// OAuth login URL. returnTo must point to app path (not API). API stays at root.
   String getLoginUrl() {
-    return '${ApiService.baseUrl}/api/oauth/login?returnTo=/';
+    return '${ApiService.baseUrl}/api/oauth/login?returnTo=${Uri.encodeComponent('/app/')}';
   }
 }

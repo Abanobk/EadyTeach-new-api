@@ -3,9 +3,20 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // رابط السيرفر الرسمي الثابت — لا تغيير في Base URL أو Headers
-  static const String baseUrl = 'https://api.easytecheg.net';
-  static const String trpcUrl = '$baseUrl/api/trpc';
+  /// API origin only — never include /app.
+  static const String _apiOrigin = 'https://api.easytecheg.net';
+  /// Path to tRPC router. If you get 404, try 'api/trpc' instead of 'trpc' — depends on your backend.
+  static const String _apiTrpcPath = 'trpc';
+  static String get baseUrl => _apiOrigin;
+  static String get trpcUrl => '$_apiOrigin/$_apiTrpcPath';
+
+  /// Always return an absolute API URL (never relative, so /app/ never gets prepended by the browser).
+  static String _absoluteUrl(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    final base = _apiOrigin.endsWith('/') ? _apiOrigin : '$_apiOrigin/';
+    final p = path.startsWith('/') ? path.substring(1) : path;
+    return '$base$p';
+  }
 
   /// رسالة موحدة عند فشل الاتصال (شبكة، CORS، انقطاع)
   static String _networkErrorMessage(Object e) {
@@ -24,7 +35,7 @@ class ApiService {
   static String proxyImageUrl(String? url) {
     if (url == null || url.isEmpty) return '';
     if (url.contains('firebasestorage.googleapis.com')) {
-      return '$baseUrl/api/image-proxy?url=${Uri.encodeComponent(url)}';
+      return _absoluteUrl('api/image-proxy?url=${Uri.encodeComponent(url)}');
     }
     return url;
   }
@@ -116,7 +127,7 @@ class ApiService {
   }) async {
     final cookie = await _getCookie();
     final token = _extractToken(cookie);
-    String url = '$trpcUrl/$procedure';
+    String url = _absoluteUrl('$_apiTrpcPath/$procedure');
 
     // tRPC v11 uses {"json": input} format
     if (input != null) {
@@ -128,7 +139,7 @@ class ApiService {
     }
     if (token != null) url += '&_token=$token';
 
-    print('QUERY: $procedure');
+    print('QUERY: $procedure -> $url');
     http.Response response;
     try {
       response = await http.get(
@@ -148,6 +159,9 @@ class ApiService {
       await _saveCookieFromHeader(setCookie);
     }
 
+    if (response.statusCode == 404) {
+      throw Exception('الرابط غير موجود (404). جرّب تغيير _apiTrpcPath في api_service.dart إلى api/trpc أو trpc حسب السيرفر.');
+    }
     if (response.statusCode == 200) {
       List<dynamic> data;
       try {
@@ -180,7 +194,7 @@ class ApiService {
   /// Upload a file via standalone upload.php endpoint.
   /// Uses bytes for web compatibility, falls back to file path on mobile.
   static Future<String> uploadFile(String filePath, {List<int>? bytes, String? filename}) async {
-    final url = '$baseUrl/upload.php';
+    final url = _absoluteUrl('upload.php');
     final request = http.MultipartRequest('POST', Uri.parse(url));
     if (bytes != null) {
       request.files.add(http.MultipartFile.fromBytes(
@@ -206,12 +220,13 @@ class ApiService {
   }) async {
     final cookie = await _getCookie();
     final token = _extractToken(cookie);
-    var url = '$trpcUrl/$procedure?batch=1';
+    var url = _absoluteUrl('$_apiTrpcPath/$procedure?batch=1');
     if (token != null) url += '&_token=$token';
 
     // tRPC v11 uses {"json": input} format
     final body = jsonEncode({'0': {'json': input ?? {}}});
 
+    print('MUTATE: $procedure -> $url');
     http.Response response;
     try {
       response = await http.post(
@@ -230,6 +245,9 @@ class ApiService {
       await _saveCookieFromHeader(setCookie);
     }
 
+    if (response.statusCode == 404) {
+      throw Exception('الرابط غير موجود (404). جرّب تغيير _apiTrpcPath في api_service.dart إلى api/trpc أو trpc حسب السيرفر.');
+    }
     // tRPC returns errors as 200 with error field, OR as 400/401/403/4xx
     final acceptedCodes = [200, 207, 400, 401, 403];
     if (acceptedCodes.contains(response.statusCode)) {

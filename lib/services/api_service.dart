@@ -163,7 +163,7 @@ class ApiService {
     }
 
     if (response.statusCode == 404) {
-      throw Exception('الرابط غير موجود (404). جرّب تغيير _apiTrpcPath في api_service.dart إلى api/trpc أو trpc حسب السيرفر.');
+      throw Exception('الرابط غير موجود (404). السيرفر لازم يوجّه الطلبات لـ router.php. الرابط: $url — راجع docs/FIX-404-خطوة-بخطوة.md');
     }
     if (response.statusCode == 200) {
       List<dynamic> data;
@@ -249,7 +249,7 @@ class ApiService {
     }
 
     if (response.statusCode == 404) {
-      throw Exception('الرابط غير موجود (404). جرّب تغيير _apiTrpcPath في api_service.dart إلى api/trpc أو trpc حسب السيرفر.');
+      throw Exception('الرابط غير موجود (404). السيرفر لازم يوجّه الطلبات لـ router.php. الرابط: $url — راجع docs/FIX-404-خطوة-بخطوة.md');
     }
     // tRPC returns errors as 200 with error field, OR as 400/401/403/4xx
     final acceptedCodes = [200, 207, 400, 401, 403];

@@ -13,8 +13,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 DEPLOY_PATH="${WEB_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/app}"
-SSH_HOST="${SSH_DEPLOY_HOST:-ssh-deploy.easytecheg.net}"
-SSH_USER="${SSH_DEPLOY_USER:-root}"
+# SSH_HOST أو SSH_DEPLOY_HOST (الأول له الأولوية)
+SSH_HOST="${SSH_HOST:-${SSH_DEPLOY_HOST:-ssh-deploy.easytecheg.net}}"
+SSH_USER="${SSH_USER:-${SSH_DEPLOY_USER:-root}}"
 CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
 BASE_HREF="${WEB_BASE_HREF:-/app/}"
 

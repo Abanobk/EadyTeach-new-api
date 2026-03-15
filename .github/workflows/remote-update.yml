@@ -1,4 +1,9 @@
-# التعديلات الجديدة تظهر على السيرفر: بناء الويب ثم رفع build/web (مع المسارات والأصول الصحيحة)
+# نشر الويب تلقائياً عند الدفع إلى main
+# الطريقة 1: SSH مباشر من GitHub → السيرفر (لو البورت 22 مفتوح من النت)
+#   أضف في Secrets: DIRECT_SSH_HOST (مثلاً easytecheg.net أو IP السيرفر)، WEB_DEPLOY_PATH، SERVER_SSH_KEY
+# الطريقة 2: عبر Cloudflare Tunnel
+#   أضف في Zero Trust: Service Token واسمح بـ Service Auth في سياسة الـ Application
+#   أضف في Secrets: CF_SERVICE_TOKEN_ID، CF_SERVICE_TOKEN_SECRET، WEB_DEPLOY_PATH، SERVER_SSH_KEY
 name: Remote Update
 on:
   push:
@@ -20,7 +25,7 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
 
-      - name: Build web (with base href and assets)
+      - name: Build web (base-href=/app/)
         run: |
           cd "$GITHUB_WORKSPACE"
           flutter pub get
@@ -31,39 +36,72 @@ jobs:
           fi
           echo "Build OK: $(ls -la build/web/ | head -20)"
 
-      - name: Install Cloudflared
+      - name: Prepare deploy archive
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          tar czf /tmp/deploy.tar -C build web
+          echo "Archive size: $(du -h /tmp/deploy.tar | cut -f1)"
+
+      - name: Install Cloudflared (for tunnel mode)
+        if: secrets.DIRECT_SSH_HOST == ''
         run: |
           curl -LsSf --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared.deb
           which cloudflared || true
 
-      - name: Setup SSH and deploy
+      - name: Deploy via direct SSH
+        if: secrets.DIRECT_SSH_HOST != ''
         env:
           DEPLOY_PATH: ${{ secrets.WEB_DEPLOY_PATH }}
+          SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_DEPLOY_USER }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
         run: |
-          if [ -z "$DEPLOY_PATH" ]; then
-            echo "::error::WEB_DEPLOY_PATH not set in Secrets"
+          if [ -z "$DEPLOY_PATH" ] || [ -z "$SSH_HOST" ] || [ -z "$SERVER_SSH_KEY" ]; then
+            echo "::error::Secrets required: WEB_DEPLOY_PATH, DIRECT_SSH_HOST, SERVER_SSH_KEY"
             exit 1
           fi
+          SSH_USER="${SSH_USER:-root}"
           mkdir -p ~/.ssh
-          echo "${{ secrets.SERVER_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
+          echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "Deploying to $SSH_USER@$SSH_HOST:$DEPLOY_PATH"
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_rsa \
+            /tmp/deploy.tar "$SSH_USER@$SSH_HOST:/tmp/deploy.tar"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/id_rsa \
+            "$SSH_USER@$SSH_HOST" "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed."
+
+      - name: Deploy via Cloudflare Tunnel
+        if: secrets.DIRECT_SSH_HOST == ''
+        env:
+          DEPLOY_PATH: ${{ secrets.WEB_DEPLOY_PATH }}
+          CF_HOST: ${{ secrets.CF_TUNNEL_HOST }}
+          CF_SERVICE_TOKEN_ID: ${{ secrets.CF_SERVICE_TOKEN_ID }}
+          CF_SERVICE_TOKEN_SECRET: ${{ secrets.CF_SERVICE_TOKEN_SECRET }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          if [ -z "$DEPLOY_PATH" ] || [ -z "$SERVER_SSH_KEY" ]; then
+            echo "::error::Secrets required: WEB_DEPLOY_PATH, SERVER_SSH_KEY"
+            exit 1
+          fi
+          if [ -z "$CF_SERVICE_TOKEN_ID" ] || [ -z "$CF_SERVICE_TOKEN_SECRET" ]; then
+            echo "::error::For tunnel: add CF_SERVICE_TOKEN_ID and CF_SERVICE_TOKEN_SECRET (Cloudflare Zero Trust → Service Auth)"
+            exit 1
+          fi
+          CF_HOST="${CF_HOST:-ssh-deploy.easytecheg.net}"
+          mkdir -p ~/.ssh
+          echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           CF=$(which cloudflared || echo "/usr/bin/cloudflared")
-          cd "$GITHUB_WORKSPACE"
-          tar czf /tmp/deploy.tar -C build web
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
-            -o "ProxyCommand=$CF access tcp --hostname ssh-deploy.easytecheg.net" \
-            /tmp/deploy.tar root@ssh-deploy.easytecheg.net:/tmp/deploy.tar
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
-            -o "ProxyCommand=$CF access tcp --hostname ssh-deploy.easytecheg.net" \
-            root@ssh-deploy.easytecheg.net "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed to $DEPLOY_PATH"
-
-      - name: Update repo on server
-        run: |
-          CF=$(which cloudflared || echo "/usr/bin/cloudflared")
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
-            -o "ProxyCommand=$CF access tcp --hostname ssh-deploy.easytecheg.net" \
-            root@ssh-deploy.easytecheg.net "TARGET=/mnt/marichia/files/easytech-new-api; git config --global --add safe.directory \$TARGET; cd \$TARGET; git fetch origin main; git checkout origin/main -- .; echo Repo updated."
+          export TUNNEL_SERVICE_TOKEN_ID="$CF_SERVICE_TOKEN_ID"
+          export TUNNEL_SERVICE_TOKEN_SECRET="$CF_SERVICE_TOKEN_SECRET"
+          echo "Deploying via tunnel $CF_HOST -> $DEPLOY_PATH"
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i ~/.ssh/id_rsa \
+            -o "ProxyCommand=$CF access tcp --hostname $CF_HOST" \
+            /tmp/deploy.tar root@$CF_HOST:/tmp/deploy.tar
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i ~/.ssh/id_rsa \
+            -o "ProxyCommand=$CF access tcp --hostname $CF_HOST" \
+            root@$CF_HOST "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed."
 
       - name: Done
         run: echo "✅ Deploy finished. Open https://api.easytecheg.net/app and hard refresh (Ctrl+F5)."

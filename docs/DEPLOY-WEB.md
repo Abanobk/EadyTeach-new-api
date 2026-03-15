@@ -1,14 +1,38 @@
 # نشر تحديثات الويب (عشان التعديلات تظهر على الموقع)
 
-## عشان التحديث يوصّل السيرفر ويشغّل من الدومين
+## نشر تلقائي من GitHub (بعد الإعداد مرة واحدة)
 
-1. **في GitHub:** Settings → Secrets and variables → Actions → تأكد إن عندك:
-   - `WEB_DEPLOY_PATH` = المسار اللي السيرفر بيخدم منه صفحة الـ app (مثلاً `/mnt/marichia/files/easytech-new-api/app`).
-   - `SERVER_SSH_KEY` و `SERVER_IP` لو محتاجهم الـ workflow.
-2. **اعمل push لفرع `main`** → الـ workflow هيعمل: بناء الويب → رفع الملفات على `WEB_DEPLOY_PATH` → تحديث الكود.
-3. **افتح الدومين بتاعك** (مثلاً **https://api.easytecheg.net/app**) واعمل تحديث قوي (Ctrl+F5 أو Cmd+Shift+R).
+الـ workflow **Remote Update** يبني الويب ويرفعه على السيرفر مع كل **push إلى main**. تحتاج تضبط الـ Secrets مرة واحدة حسب الطريقة اللي عندك:
 
-لو الـ workflow فشل، روح Actions وافتح آخر run وشوف أي خطوة وقفت.
+### خيار أ: SSH مباشر (لو السيرفر يسمح بـ SSH من النت على بورت 22)
+
+من **GitHub → Repo → Settings → Secrets and variables → Actions** أضف:
+
+| Secret | القيمة |
+|--------|--------|
+| `WEB_DEPLOY_PATH` | مسار مجلد الـ app على السيرفر، مثلاً `/mnt/marichia/files/easytech-new-api/app` |
+| `DIRECT_SSH_HOST` | عنوان السيرفر (دومين مثل `easytecheg.net` أو IP) |
+| `SERVER_SSH_KEY` | المفتاح الخاص (Private Key) اللي بتتصل بيه بالسيرفر عبر SSH |
+
+لو مستخدمش `root`: أضف `SSH_DEPLOY_USER` (مثلاً `deploy`).  
+تأكد إن المفتاح **العام** (Public Key) اللي مقابل `SERVER_SSH_KEY` مضاف في السيرفر في `~/.ssh/authorized_keys` لليوزر اللي بتتصل بيه.
+
+بعدها أي **push إلى main** هيبني ويرفع تلقائياً (بدون رفع يدوي للملف الكبير).
+
+### خيار ب: عبر Cloudflare Tunnel (لو السيرفر وراء Tunnel فقط)
+
+1. في **Cloudflare Zero Trust** أنشئ **Service Token** (Access → Service Auth → Create Service Token) واسمح له في سياسة الـ Application الخاصة بـ `ssh-deploy.easytecheg.net`.
+2. في **GitHub → Secrets** أضف:
+   - `WEB_DEPLOY_PATH` = مسار الـ app (مثلاً `/mnt/marichia/files/easytech-new-api/app`)
+   - `SERVER_SSH_KEY` = المفتاح الخاص لـ SSH
+   - `CF_SERVICE_TOKEN_ID` = من الـ Service Token
+   - `CF_SERVICE_TOKEN_SECRET` = من الـ Service Token
+3. **لا تضف** `DIRECT_SSH_HOST` — لو موجود الـ workflow يستخدم SSH المباشر فقط.
+
+بعد ضبط الـ Secrets: **push إلى main** → الـ workflow يبني ويرفع تلقائياً.
+افتح **https://api.easytecheg.net/app** واعمل Ctrl+F5.
+
+لو الـ workflow فشل، روح **Actions** → آخر run → شوف أي خطوة وقفت ورسالة الخطأ.
 
 ---
 
@@ -58,14 +82,16 @@ chmod +x scripts/deploy-web.sh
 
 ---
 
-## الطريقة 2: أوامر يدوية من جهازك (بدون سكربت)
+## الطريقة 2: رفع يدوي (لو SSH أو cloudflared مش شغال)
+
+لو السكربت فشل (cloudflared غير مثبّت أو `Operation timed out`)، اعمل البناء ثم ارفع من **File Browser**:
 
 ### على جهازك (في مجلد المشروع)
 
 ```bash
-# 1. بناء الويب
+# 1. بناء الويب (مهم: --base-href=/app/ عشان الروابط على الدومين)
 flutter pub get
-flutter build web --release
+flutter build web --release --base-href=/app/
 ```
 
 بعدها محتاج ترفع محتويات مجلد **build/web** على السيرفر لمجلد الـ app. حسب طريقة الاتصال:
@@ -92,7 +118,7 @@ rsync -avz --delete build/web/ user@server:/mnt/marichia/files/easytech-new-api/
 
 1. **تأكد من Actions:** روح GitHub → تبويب **Actions** → شغّل **Remote Update** الأخير. لو فشل (علامة حمراء)، افتح الـ run واقرأ الخطوة اللي فشلت.
 2. **نشر يدوي (مضمون):**
-   - على جهازك: من مجلد المشروع شغّل `flutter build web --release`.
+   - على جهازك: من مجلد المشروع شغّل `flutter build web --release --base-href=/app/`.
    - افتح المجلد **build/web** (فيه index.html و main.dart.js و assets).
    - من **File Browser** على السيرفر: ادخل مجلد **app** (تحت easytech-new-api)، **احذف كل الملفات** من جوه app، ثم **ارفع كل محتويات build/web** (السحب والإفلات أو Upload).
    - افتح `https://api.easytecheg.net/app` واعمل **Ctrl+F5** (تحديث قوي).

@@ -5,10 +5,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   /// API is at the root: https://api.easytecheg.net (no trailing slash — avoids double slashes in URLs).
   static const String _apiOrigin = 'https://api.easytecheg.net';
-  /// المسارات المحتملة: trpc.php يعمل بدون rewrite، ثم trpc و api/trpc.
-  static const String _apiTrpcPath = 'trpc.php';
-  static const String _apiTrpcPathAlt = 'trpc';
-  static const String _apiTrpcPathAlt2 = 'api/trpc';
+  /// الـ container document root = المشروع كله، فالـ API تحت /backend/ — نستخدم backend/trpc.php أولاً.
+  static const String _apiTrpcPath = 'backend/trpc.php';
+  static const String _apiTrpcPathAlt = 'trpc.php';
+  static const String _apiTrpcPathAlt2 = 'trpc';
+  static const String _apiTrpcPathAlt3 = 'api/trpc';
   static String? _resolvedTrpcPath;
 
   static String get baseUrl => _apiOrigin;
@@ -171,7 +172,9 @@ class ApiService {
     if (response.statusCode == 404) {
       final nextPath = pathSeg == _apiTrpcPath
           ? _apiTrpcPathAlt
-          : (pathSeg == _apiTrpcPathAlt ? _apiTrpcPathAlt2 : null);
+          : (pathSeg == _apiTrpcPathAlt
+              ? _apiTrpcPathAlt2
+              : (pathSeg == _apiTrpcPathAlt2 ? _apiTrpcPathAlt3 : null));
       if (nextPath != null && _resolvedTrpcPath == null) {
         _resolvedTrpcPath = nextPath;
         print('QUERY: 404 with $pathSeg, retrying with $nextPath');
@@ -267,7 +270,9 @@ class ApiService {
     if (response.statusCode == 404) {
       final nextPath = pathSeg == _apiTrpcPath
           ? _apiTrpcPathAlt
-          : (pathSeg == _apiTrpcPathAlt ? _apiTrpcPathAlt2 : null);
+          : (pathSeg == _apiTrpcPathAlt
+              ? _apiTrpcPathAlt2
+              : (pathSeg == _apiTrpcPathAlt2 ? _apiTrpcPathAlt3 : null));
       if (nextPath != null && _resolvedTrpcPath == null) {
         _resolvedTrpcPath = nextPath;
         print('MUTATE: 404 with $pathSeg, retrying with $nextPath');

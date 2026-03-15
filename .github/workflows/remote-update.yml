@@ -1,6 +1,6 @@
-# نشر الويب: بناء ثم رفع عبر Cloudflare Tunnel (مصادقة بـ Service Token)
-# Secrets المطلوبة: CF_SERVICE_TOKEN_ID, CF_SERVICE_TOKEN_SECRET, SERVER_SSH_KEY, WEB_DEPLOY_PATH
-# اختياري: CF_TUNNEL_HOST (افتراضي ssh-deploy.easytecheg.net)
+# نشر الويب + اختياري Backend (عشان يروح router.php للسيرفر ويختفي 404)
+# Secrets: CF_SERVICE_TOKEN_ID, CF_SERVICE_TOKEN_SECRET, SERVER_SSH_KEY, WEB_DEPLOY_PATH
+# اختياري: CF_TUNNEL_HOST. لرفع الـ API: BACKEND_DEPLOY_PATH = المسار على السيرفر اللي فيه router.php (مثلاً مجلد الـ API)
 name: Remote Update
 on:
   push:
@@ -69,6 +69,33 @@ jobs:
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=90 -i ~/.ssh/id_rsa \
             -o "ProxyCommand=cloudflared access tcp --hostname $CF_HOST" \
             root@$CF_HOST "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed to $DEPLOY_PATH"
+
+      - name: Deploy Backend (if BACKEND_DEPLOY_PATH is set)
+        env:
+          CF_TUNNEL_HOST: ${{ secrets.CF_TUNNEL_HOST }}
+          CF_SERVICE_TOKEN_ID: ${{ secrets.CF_SERVICE_TOKEN_ID }}
+          CF_SERVICE_TOKEN_SECRET: ${{ secrets.CF_SERVICE_TOKEN_SECRET }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          BACKEND_DEPLOY_PATH: ${{ secrets.BACKEND_DEPLOY_PATH }}
+        run: |
+          if [ -z "$BACKEND_DEPLOY_PATH" ]; then
+            echo "Skipping backend deploy (BACKEND_DEPLOY_PATH not set). To fix 404: upload backend/ (especially router.php) to your API server or set this secret."
+            exit 0
+          fi
+          set -e
+          CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
+          export TUNNEL_SERVICE_TOKEN_ID="$CF_SERVICE_TOKEN_ID"
+          export TUNNEL_SERVICE_TOKEN_SECRET="$CF_SERVICE_TOKEN_SECRET"
+          echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          tar czf /tmp/backend.tar -C "$GITHUB_WORKSPACE" backend
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=90 -i ~/.ssh/id_rsa \
+            -o "ProxyCommand=cloudflared access tcp --hostname $CF_HOST" \
+            /tmp/backend.tar root@$CF_HOST:/tmp/backend.tar
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=90 -i ~/.ssh/id_rsa \
+            -o "ProxyCommand=cloudflared access tcp --hostname $CF_HOST" \
+            root@$CF_HOST "mkdir -p '$BACKEND_DEPLOY_PATH' && cd '$BACKEND_DEPLOY_PATH' && tar xzf /tmp/backend.tar --strip-components=1 && rm -f /tmp/backend.tar && echo Backend deployed"
+          echo "Backend (router.php etc.) deployed to $BACKEND_DEPLOY_PATH"
 
       - name: Done
         run: echo "✅ Deploy finished. Open https://api.easytecheg.net/app and hard refresh (Ctrl+F5)."

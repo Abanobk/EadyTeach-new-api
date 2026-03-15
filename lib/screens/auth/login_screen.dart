@@ -265,6 +265,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         letterSpacing: 1,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'v2 • Light/Dark',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white38,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                     const SizedBox(height: 30),
                     if (_error != null) ...[
                       _buildErrorBanner(context, _error!),

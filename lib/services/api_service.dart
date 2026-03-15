@@ -3,14 +3,14 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  /// API origin only — never include /app.
+  /// API is at the root: https://api.easytecheg.net — no /app or other suffix (app is served at /app/ separately).
   static const String _apiOrigin = 'https://api.easytecheg.net';
   /// Path to tRPC router. If you get 404, try 'api/trpc' instead of 'trpc' — depends on your backend.
   static const String _apiTrpcPath = 'trpc';
   static String get baseUrl => _apiOrigin;
   static String get trpcUrl => '$_apiOrigin/$_apiTrpcPath';
 
-  /// Always return an absolute API URL (never relative, so /app/ never gets prepended by the browser).
+  /// Always return an absolute API URL (never relative), so the browser never prepends /app/ and causes 404.
   static String _absoluteUrl(String path) {
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
     final base = _apiOrigin.endsWith('/') ? _apiOrigin : '$_apiOrigin/';

@@ -153,9 +153,13 @@ if ($sessionId) {
 }
 
 // ─── Parse tRPC request ────────────────────────────────────────
+// Accept both /api/trpc/procedure and /trpc/procedure (server may route either way).
 $uri = $_SERVER['REQUEST_URI'] ?? '';
 $path = parse_url($uri, PHP_URL_PATH);
 $procedure = preg_replace('#^.*/api/trpc/(.*)$#', '$1', $path);
+if ($procedure === $path) {
+    $procedure = preg_replace('#^.*/trpc/(.*)$#', '$1', $path);
+}
 
 $input = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

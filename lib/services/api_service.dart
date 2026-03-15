@@ -3,19 +3,22 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  /// API is at the root: https://api.easytecheg.net — no /app or other suffix (app is served at /app/ separately).
+  /// API is at the root: https://api.easytecheg.net (no trailing slash — avoids double slashes in URLs).
   static const String _apiOrigin = 'https://api.easytecheg.net';
-  /// Path to tRPC router. If you get 404, try 'api/trpc' instead of 'trpc' — depends on your backend.
-  static const String _apiTrpcPath = 'trpc';
+  /// Path to tRPC router. If you get 404, try switching to 'trpc' (backend may serve at /trpc instead of /api/trpc).
+  static const String _apiTrpcPath = 'api/trpc';
   static String get baseUrl => _apiOrigin;
-  static String get trpcUrl => '$_apiOrigin/$_apiTrpcPath';
+  static String get trpcUrl {
+    final origin = _apiOrigin.endsWith('/') ? _apiOrigin.substring(0, _apiOrigin.length - 1) : _apiOrigin;
+    return '$origin/$_apiTrpcPath';
+  }
 
-  /// Always return an absolute API URL (never relative), so the browser never prepends /app/ and causes 404.
+  /// Always return an absolute API URL (never relative), with a single slash between origin and path (no double slashes).
   static String _absoluteUrl(String path) {
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    final base = _apiOrigin.endsWith('/') ? _apiOrigin : '$_apiOrigin/';
+    final origin = _apiOrigin.endsWith('/') ? _apiOrigin.substring(0, _apiOrigin.length - 1) : _apiOrigin;
     final p = path.startsWith('/') ? path.substring(1) : path;
-    return '$base$p';
+    return '$origin/$p';
   }
 
   /// رسالة موحدة عند فشل الاتصال (شبكة، CORS، انقطاع)

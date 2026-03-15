@@ -5,8 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   /// API is at the root: https://api.easytecheg.net (no trailing slash — avoids double slashes in URLs).
   static const String _apiOrigin = 'https://api.easytecheg.net';
-  /// Path to tRPC router. If you get 404, try switching to 'trpc' (backend may serve at /trpc instead of /api/trpc).
-  static const String _apiTrpcPath = 'api/trpc';
+  /// Path to tRPC router (no leading/trailing slashes). Results in https://api.easytecheg.net/trpc/...
+  static const String _apiTrpcPath = 'trpc';
   static String get baseUrl => _apiOrigin;
   static String get trpcUrl {
     final origin = _apiOrigin.endsWith('/') ? _apiOrigin.substring(0, _apiOrigin.length - 1) : _apiOrigin;

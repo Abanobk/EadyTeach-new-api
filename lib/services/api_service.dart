@@ -5,10 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   /// API is at the root: https://api.easytecheg.net (no trailing slash — avoids double slashes in URLs).
   static const String _apiOrigin = 'https://api.easytecheg.net';
-  /// tRPC path: التطبيق يجرب trpc أولاً، لو 404 يجرب api/trpc تلقائياً.
-  static const String _apiTrpcPath = 'trpc';
-  static const String _apiTrpcPathAlt = 'api/trpc';
-  /// بعد أول طلب ناجح، نثبت المسار عشان نستخدمه في كل الطلبات.
+  /// المسارات المحتملة: trpc.php يعمل بدون rewrite، ثم trpc و api/trpc.
+  static const String _apiTrpcPath = 'trpc.php';
+  static const String _apiTrpcPathAlt = 'trpc';
+  static const String _apiTrpcPathAlt2 = 'api/trpc';
   static String? _resolvedTrpcPath;
 
   static String get baseUrl => _apiOrigin;
@@ -169,10 +169,12 @@ class ApiService {
     }
 
     if (response.statusCode == 404) {
-      if (_resolvedTrpcPath == null) {
-        final otherPath = pathSeg == _apiTrpcPath ? _apiTrpcPathAlt : _apiTrpcPath;
-        _resolvedTrpcPath = otherPath;
-        print('QUERY: 404 with $pathSeg, retrying with $otherPath');
+      final nextPath = pathSeg == _apiTrpcPath
+          ? _apiTrpcPathAlt
+          : (pathSeg == _apiTrpcPathAlt ? _apiTrpcPathAlt2 : null);
+      if (nextPath != null && _resolvedTrpcPath == null) {
+        _resolvedTrpcPath = nextPath;
+        print('QUERY: 404 with $pathSeg, retrying with $nextPath');
         return query(procedure, input: input);
       }
       throw Exception('الرابط غير موجود (404). جرّب إعداد السيرفر حسب docs/FIX-404-خطوة-بخطوة.md — الرابط: $url');
@@ -263,10 +265,12 @@ class ApiService {
     }
 
     if (response.statusCode == 404) {
-      if (_resolvedTrpcPath == null) {
-        final otherPath = pathSeg == _apiTrpcPath ? _apiTrpcPathAlt : _apiTrpcPath;
-        _resolvedTrpcPath = otherPath;
-        print('MUTATE: 404 with $pathSeg, retrying with $otherPath');
+      final nextPath = pathSeg == _apiTrpcPath
+          ? _apiTrpcPathAlt
+          : (pathSeg == _apiTrpcPathAlt ? _apiTrpcPathAlt2 : null);
+      if (nextPath != null && _resolvedTrpcPath == null) {
+        _resolvedTrpcPath = nextPath;
+        print('MUTATE: 404 with $pathSeg, retrying with $nextPath');
         return mutate(procedure, input: input);
       }
       throw Exception('الرابط غير موجود (404). جرّب إعداد السيرفر حسب docs/FIX-404-خطوة-بخطوة.md — الرابط: $url');

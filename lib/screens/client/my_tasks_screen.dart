@@ -13,9 +13,11 @@ class MyTasksScreen extends StatefulWidget {
 class _MyTasksScreenState extends State<MyTasksScreen> {
   List<dynamic> _tasks = [];
   List<dynamic> _surveys = [];
+  List<dynamic> _quotations = [];
   bool _loading = true;
   bool _loadingSurveys = false;
-  String _tab = 'tasks'; // tasks | surveys
+  bool _loadingQuotations = false;
+  String _tab = 'tasks'; // tasks | surveys | quotations
 
   @override
   void initState() {
@@ -34,6 +36,19 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
       });
     } catch (e) {
       setState(() => _loadingSurveys = false);
+    }
+  }
+
+  Future<void> _loadQuotations() async {
+    setState(() => _loadingQuotations = true);
+    try {
+      final res = await ApiService.query('quotations.myQuotations');
+      setState(() {
+        _quotations = res['data'] ?? [];
+        _loadingQuotations = false;
+      });
+    } catch (e) {
+      setState(() => _loadingQuotations = false);
     }
   }
 
@@ -90,47 +105,67 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
                     _loadSurveys();
                   },
                 ),
+                const SizedBox(width: 8),
+                _TabChip(
+                  label: 'عروض الأسعار',
+                  icon: Icons.request_quote_outlined,
+                  selected: _tab == 'quotations',
+                  onTap: () {
+                    setState(() => _tab = 'quotations');
+                    _loadQuotations();
+                  },
+                ),
               ],
             ),
           ),
         ),
       ),
-      body: _tab == 'tasks'
-          ? (_loading
-              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-              : _tasks.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.assignment_outlined, size: 64, color: AppColors.muted),
-                          const SizedBox(height: 16),
-                          const Text('لا توجد مهام بعد',
-                              style: TextStyle(color: AppColors.muted, fontSize: 18)),
-                          const SizedBox(height: 8),
-                          const Text('يمكنك طلب خدمة من قسم \"طلب خدمة\"',
-                              style: TextStyle(color: AppColors.muted, fontSize: 13)),
-                        ],
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _loadTasks,
-                      color: AppColors.primary,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _tasks.length,
-                        itemBuilder: (ctx, i) => _TaskCard(
-                          task: _tasks[i],
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => TaskDetailScreen(task: _tasks[i]),
-                            ),
-                          ).then((_) => _loadTasks()),
-                        ),
-                      ),
-                    ))
-          : _buildSurveysTab(),
+      body: _buildCurrentTab(context),
+    );
+  }
+
+  Widget _buildCurrentTab(BuildContext context) {
+    if (_tab == 'surveys') {
+      return _buildSurveysTab();
+    }
+    if (_tab == 'quotations') {
+      return _buildQuotationsTab();
+    }
+
+    // مهامي
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
+    if (_tasks.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.assignment_outlined, size: 64, color: AppColors.muted),
+            const SizedBox(height: 16),
+            const Text('لا توجد مهام بعد', style: TextStyle(color: AppColors.muted, fontSize: 18)),
+            const SizedBox(height: 8),
+            const Text('يمكنك طلب خدمة من قسم \"طلب خدمة\"', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _loadTasks,
+      color: AppColors.primary,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _tasks.length,
+        itemBuilder: (ctx, i) => _TaskCard(
+          task: _tasks[i],
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TaskDetailScreen(task: _tasks[i]),
+            ),
+          ).then((_) => _loadTasks()),
+        ),
+      ),
     );
   }
 
@@ -169,6 +204,38 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
         padding: const EdgeInsets.all(16),
         itemCount: _surveys.length,
         itemBuilder: (ctx, i) => _SurveyCard(survey: _surveys[i]),
+      ),
+    );
+  }
+
+  Widget _buildQuotationsTab() {
+    if (_loadingQuotations && _quotations.isEmpty) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
+    if (_quotations.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Icon(Icons.request_quote_outlined, size: 64, color: AppColors.muted),
+              SizedBox(height: 16),
+              Text('لا توجد عروض أسعار بعد', style: TextStyle(color: AppColors.muted, fontSize: 18)),
+              SizedBox(height: 8),
+              Text('أي عرض سعر يتم إرساله لك سيظهر هنا.', style: TextStyle(color: AppColors.muted, fontSize: 13), textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _loadQuotations,
+      color: AppColors.primary,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _quotations.length,
+        itemBuilder: (ctx, i) => _QuotationCard(quotation: _quotations[i]),
       ),
     );
   }
@@ -375,6 +442,104 @@ class _TabChip extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _QuotationCard extends StatelessWidget {
+  final Map<String, dynamic> quotation;
+
+  const _QuotationCard({required this.quotation});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = quotation['status'] as String? ?? 'sent';
+    final total = double.tryParse(quotation['totalAmount']?.toString() ?? '0') ?? 0;
+    final createdAt = quotation['createdAt'];
+    DateTime? dt;
+    if (createdAt != null) {
+      try {
+        dt = DateTime.fromMillisecondsSinceEpoch(createdAt is int ? createdAt : int.parse(createdAt.toString()));
+      } catch (_) {}
+    }
+    Color statusColor;
+    String statusLabel;
+    switch (status) {
+      case 'accepted':
+        statusColor = AppColors.success;
+        statusLabel = 'مقبول';
+        break;
+      case 'rejected':
+        statusColor = AppColors.error;
+        statusLabel = 'مرفوض';
+        break;
+      case 'expired':
+        statusColor = Colors.orange;
+        statusLabel = 'منتهي';
+        break;
+      case 'draft':
+        statusColor = Colors.grey;
+        statusLabel = 'مسودة';
+        break;
+      default:
+        statusColor = Colors.blue;
+        statusLabel = 'في الانتظار';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppThemeDecorations.cardColor(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                quotation['refNumber'] ?? 'عرض سعر #${quotation['id']}',
+                style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: statusColor.withOpacity(0.4)),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.attach_money, size: 16, color: AppColors.muted),
+              const SizedBox(width: 4),
+              Text(
+                '${total.toStringAsFixed(0)} ج.م',
+                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              const Spacer(),
+              if (dt != null) ...[
+                const Icon(Icons.calendar_today_outlined, size: 12, color: AppColors.muted),
+                const SizedBox(width: 4),
+                Text(
+                  '${dt.day}/${dt.month}/${dt.year}',
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }

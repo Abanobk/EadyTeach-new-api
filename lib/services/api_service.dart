@@ -45,9 +45,20 @@ class ApiService {
 
   static String proxyImageUrl(String? url) {
     if (url == null || url.isEmpty) return '';
-    if (url.contains('firebasestorage.googleapis.com')) {
-      return _absoluteUrl('api/image-proxy?url=${Uri.encodeComponent(url)}');
+
+    // بعض الصور القديمة مخزّنة كرابط للـ image-proxy:
+    // /api/image-proxy?url=<ENCODED_FIREBASE_URL>
+    // أو https://api.easytecheg.net/api/image-proxy?url=...
+    // نفكّها ونرجّع رابط الصورة الأصلي.
+    if (url.contains('image-proxy') && url.contains('url=')) {
+      final uri = Uri.tryParse(url);
+      final inner = uri?.queryParameters['url'];
+      if (inner != null && inner.isNotEmpty) {
+        return Uri.decodeComponent(inner);
+      }
     }
+
+    // غير كده نرجّع الرابط كما هو (Firebase Storage أو غيره).
     return url;
   }
 

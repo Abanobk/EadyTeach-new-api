@@ -23,13 +23,64 @@ jobs:
           flutter build web --base-href "/app/"
           [ -f build/web/index.html ] || { echo "::error::Build failed"; exit 1; }
 
+      # لو فيه DIRECT_SSH_HOST هنستخدم SSH مباشر (أسهل وأسرع) ونسيب Cloudflare للاحتياط.
+      - name: Deploy via Direct SSH (if DIRECT_SSH_HOST is set)
+        if: ${{ secrets.DIRECT_SSH_HOST != '' }}
+        env:
+          DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          WEB_DEPLOY_PATH: ${{ secrets.WEB_DEPLOY_PATH }}
+          BACKEND_DEPLOY_PATH: ${{ secrets.BACKEND_DEPLOY_PATH }}
+        run: |
+          set -e
+          DEPLOY_PATH="${WEB_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/app}"
+          HOST="$DIRECT_SSH_HOST"
+
+          if [ -z "$HOST" ]; then
+            echo "::error::DIRECT_SSH_HOST is empty"
+            exit 1
+          fi
+          if [ -z "$SERVER_SSH_KEY" ]; then
+            echo "::error::Add SERVER_SSH_KEY in repo Secrets"
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          echo "Creating archive..."
+          tar czf /tmp/deploy.tar -C build web
+
+          echo "Uploading to $HOST..."
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i ~/.ssh/id_rsa \
+            /tmp/deploy.tar root@"$HOST":/tmp/deploy.tar
+
+          echo "Extracting on server..."
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i ~/.ssh/id_rsa \
+            root@"$HOST" "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed to $DEPLOY_PATH"
+
+          # اختيارى: لو BACKEND_DEPLOY_PATH متضبط نرفع backend/ كمان
+          if [ -n \"$BACKEND_DEPLOY_PATH\" ]; then
+            echo \"Deploying backend to $BACKEND_DEPLOY_PATH...\"
+            tar czf /tmp/backend.tar -C \"$GITHUB_WORKSPACE\" backend
+            scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i ~/.ssh/id_rsa \
+              /tmp/backend.tar root@\"$HOST\":/tmp/backend.tar
+            ssh -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i ~/.ssh/id_rsa \
+              root@\"$HOST\" \"mkdir -p '$BACKEND_DEPLOY_PATH' && cd '$BACKEND_DEPLOY_PATH' && tar xzf /tmp/backend.tar --strip-components=1 && rm -f /tmp/backend.tar && echo Backend deployed\"
+          else
+            echo \"Skipping backend deploy (BACKEND_DEPLOY_PATH not set)\"
+          fi
+
       - name: Install Cloudflared
+        if: ${{ secrets.DIRECT_SSH_HOST == '' }}
         run: |
           curl -LsSf -o cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared.deb
           cloudflared --version
 
       - name: Deploy via Cloudflare Tunnel (SSH over tunnel)
+        if: ${{ secrets.DIRECT_SSH_HOST == '' }}
         env:
           CF_TUNNEL_HOST: ${{ secrets.CF_TUNNEL_HOST }}
           CF_SERVICE_TOKEN_ID: ${{ secrets.CF_SERVICE_TOKEN_ID }}
@@ -71,6 +122,7 @@ jobs:
             root@$CF_HOST "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed to $DEPLOY_PATH"
 
       - name: Deploy Backend (if BACKEND_DEPLOY_PATH is set)
+        if: ${{ secrets.DIRECT_SSH_HOST == '' }}
         env:
           CF_TUNNEL_HOST: ${{ secrets.CF_TUNNEL_HOST }}
           CF_SERVICE_TOKEN_ID: ${{ secrets.CF_SERVICE_TOKEN_ID }}

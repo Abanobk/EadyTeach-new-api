@@ -97,16 +97,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               // ─── صور المنتج ───
               Stack(
                 children: [
-                  SizedBox(
-                    height: 300,
-                    width: double.infinity,
-                    child: images.isNotEmpty
-                        ? Image.network(
-                            images[_selectedImageIndex],
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _placeholder(),
-                          )
-                        : _placeholder(),
+                  GestureDetector(
+                    onTap: () {
+                      if (images.isEmpty) return;
+                      _openImageViewer(images, _selectedImageIndex);
+                    },
+                    child: SizedBox(
+                      height: 300,
+                      width: double.infinity,
+                      child: images.isNotEmpty
+                          ? Image.network(
+                              images[_selectedImageIndex],
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => _placeholder(),
+                            )
+                          : _placeholder(),
+                    ),
                   ),
                   if (hasDiscount)
                     Positioned(
@@ -408,6 +414,65 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       color: AppColors.border,
       child: const Center(
           child: Icon(Icons.image_outlined, color: AppColors.muted, size: 64)),
+    );
+  }
+
+  void _openImageViewer(List<String> images, int initialIndex) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (_) {
+        int currentIndex = initialIndex;
+        final controller = PageController(initialPage: initialIndex);
+        return StatefulBuilder(
+          builder: (ctx, setStateDialog) {
+            return GestureDetector(
+              onTap: () => Navigator.of(ctx).pop(),
+              child: Stack(
+                children: [
+                  Container(
+                    color: Colors.black,
+                    child: PageView.builder(
+                      controller: controller,
+                      onPageChanged: (i) => setStateDialog(() => currentIndex = i),
+                      itemCount: images.length,
+                      itemBuilder: (_, i) => Center(
+                        child: InteractiveViewer(
+                          child: Image.network(
+                            images[i],
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) =>
+                                const Icon(Icons.broken_image, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 40,
+                    right: 20,
+                    child: IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 30,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Text(
+                        '${currentIndex + 1} / ${images.length}',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

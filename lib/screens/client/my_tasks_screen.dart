@@ -72,13 +72,23 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final canViewQuotations = auth.hasPermission('quotations.view');
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
     return Scaffold(
       backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'منطقتي',
-          style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
+          style: theme.textTheme.titleMedium?.copyWith(
+                color: colors.onSurface,
+                fontWeight: FontWeight.w700,
+              ) ??
+              const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+              ),
         ),
         backgroundColor: AppThemeDecorations.cardColor(context),
         automaticallyImplyLeading: false,
@@ -149,11 +159,24 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.assignment_outlined, size: 64, color: AppColors.muted),
+            Icon(Icons.assignment_outlined, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 16),
-            const Text('لا توجد مهام بعد', style: TextStyle(color: AppColors.muted, fontSize: 18)),
+            Text(
+              'لا توجد مهام بعد',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 8),
-            const Text('يمكنك طلب خدمة من قسم \"طلب خدمة\"', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+            Text(
+              'يمكنك طلب خدمة من قسم "طلب خدمة"',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 13,
+              ),
+            ),
           ],
         ),
       );
@@ -269,6 +292,7 @@ class _TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final status = task['status'] as String? ?? 'pending';
     final scheduledAt = task['scheduledAt'] != null
         ? DateTime.fromMillisecondsSinceEpoch(task['scheduledAt'])
@@ -293,9 +317,9 @@ class _TaskCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     task['title'] ?? 'مهمة #${task['id']}',
-                    style: const TextStyle(
-                      color: AppColors.text,
-                      fontWeight: FontWeight.bold,
+                    style: TextStyle(
+                      color: colors.onSurface,
+                      fontWeight: FontWeight.w700,
                       fontSize: 15,
                     ),
                     maxLines: 1,
@@ -313,7 +337,7 @@ class _TaskCard extends StatelessWidget {
                   const SizedBox(width: 4),
                   Text(
                     'الفني: ${task['technicianName']}',
-                    style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                    style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
                   ),
                 ],
               ),
@@ -326,7 +350,7 @@ class _TaskCard extends StatelessWidget {
                   const SizedBox(width: 4),
                   Text(
                     'الموعد: ${scheduledAt.day}/${scheduledAt.month}/${scheduledAt.year}',
-                    style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                    style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
                   ),
                 ],
               ),

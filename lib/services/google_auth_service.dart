@@ -31,6 +31,9 @@ class GoogleAuthService {
 
       return result;
     } catch (e) {
+      // نطبع الخطأ ليسهل تشخيص المشكلة على الويب/الموبايل
+      // ignore: avoid_print
+      print('GOOGLE_SIGNIN_ERROR: $e');
       rethrow;
     }
   }

@@ -120,7 +120,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: AppColors.bg,
-        body: screens[_selectedIndex],
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: screens[_selectedIndex],
+          ),
+        ),
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _selectedIndex,
           onTap: (i) => setState(() => _selectedIndex = i),

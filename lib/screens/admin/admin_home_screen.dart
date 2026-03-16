@@ -97,11 +97,16 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             Expanded(
               child: Container(
                 decoration: AppThemeDecorations.gradientBackground(context),
-                child: Column(
-                  children: [
-                    Expanded(child: screens[_selectedIndex]),
-                    _buildBottomNav(context),
-                  ],
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1200),
+                    child: Column(
+                      children: [
+                        Expanded(child: screens[_selectedIndex]),
+                        _buildBottomNav(context),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),

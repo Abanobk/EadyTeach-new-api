@@ -190,13 +190,16 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   }
 
   Widget _buildStore(CartProvider cart) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return CustomScrollView(
       slivers: [
         // AppBar
         SliverAppBar(
           floating: true,
           snap: true,
-          backgroundColor: AppColors.card,
+          backgroundColor: colorScheme.surface,
           elevation: 1,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.primary, size: 20),
@@ -252,11 +255,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                 onChanged: (v) => setState(() => _search = v),
                 decoration: InputDecoration(
                   hintText: 'ابحث عن منتج...',
-                  prefixIcon: const Icon(Icons.search, color: AppColors.muted),
+                  prefixIcon: Icon(Icons.search, color: colorScheme.onSurfaceVariant),
                   contentPadding:
                       const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                   filled: true,
-                  fillColor: AppColors.bg,
+                  fillColor: colorScheme.surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(25),
                     borderSide: BorderSide.none,
@@ -698,11 +701,11 @@ class _ProductCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.25 : 0.06),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),

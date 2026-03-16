@@ -211,17 +211,17 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.home_work_outlined, size: 64, color: AppColors.muted),
+              Icon(Icons.home_work_outlined, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'معايناتي',
-                style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'لا توجد معاينات مسجلة بعد.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.muted, fontSize: 13),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
               ),
             ],
           ),
@@ -249,12 +249,12 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.request_quote_outlined, size: 64, color: AppColors.muted),
-              SizedBox(height: 16),
-              Text('لا توجد عروض أسعار بعد', style: TextStyle(color: AppColors.muted, fontSize: 18)),
-              SizedBox(height: 8),
-              Text('أي عرض سعر يتم إرساله لك سيظهر هنا.', style: TextStyle(color: AppColors.muted, fontSize: 13), textAlign: TextAlign.center),
+            children: [
+              Icon(Icons.request_quote_outlined, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              const SizedBox(height: 16),
+              Text('لا توجد عروض أسعار بعد', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 18)),
+              const SizedBox(height: 8),
+              Text('أي عرض سعر يتم إرساله لك سيظهر هنا.', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13), textAlign: TextAlign.center),
             ],
           ),
         ),
@@ -499,6 +499,7 @@ class _QuotationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final status = quotation['status'] as String? ?? 'sent';
     final total = double.tryParse(quotation['totalAmount']?.toString() ?? '0') ?? 0;
     final createdAt = quotation['createdAt'];
@@ -536,9 +537,9 @@ class _QuotationCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppThemeDecorations.cardColor(context),
+        color: colors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: colors.outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -547,7 +548,7 @@ class _QuotationCard extends StatelessWidget {
             children: [
               Text(
                 quotation['refNumber'] ?? 'عرض سعر #${quotation['id']}',
-                style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14),
+                style: TextStyle(color: colors.onSurface, fontWeight: FontWeight.bold, fontSize: 14),
               ),
               const Spacer(),
               Container(
@@ -567,7 +568,7 @@ class _QuotationCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.attach_money, size: 16, color: AppColors.muted),
+              Icon(Icons.attach_money, size: 16, color: colors.onSurfaceVariant),
               const SizedBox(width: 4),
               Text(
                 '${total.toStringAsFixed(0)} ج.م',
@@ -575,11 +576,11 @@ class _QuotationCard extends StatelessWidget {
               ),
               const Spacer(),
               if (dt != null) ...[
-                const Icon(Icons.calendar_today_outlined, size: 12, color: AppColors.muted),
+                Icon(Icons.calendar_today_outlined, size: 12, color: colors.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Text(
                   '${dt.day}/${dt.month}/${dt.year}',
-                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                  style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
                 ),
               ],
             ],
@@ -597,6 +598,7 @@ class _SurveyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final projectName = survey['projectName'] ?? 'معاينة بدون اسم';
     final createdAt = survey['createdAt'] != null
         ? DateTime.fromMillisecondsSinceEpoch(survey['createdAt'])
@@ -610,17 +612,17 @@ class _SurveyCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppThemeDecorations.cardColor(context),
+        color: colors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: colors.outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             projectName,
-            style: const TextStyle(
-              color: AppColors.text,
+            style: TextStyle(
+              color: colors.onSurface,
               fontWeight: FontWeight.bold,
               fontSize: 15,
             ),
@@ -631,11 +633,11 @@ class _SurveyCard extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.calendar_today_outlined, size: 14, color: AppColors.muted),
+                Icon(Icons.calendar_today_outlined, size: 14, color: colors.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Text(
                   '${createdAt.day}/${createdAt.month}/${createdAt.year}',
-                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                  style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
                 ),
               ],
             ),

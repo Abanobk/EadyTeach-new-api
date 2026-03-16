@@ -227,6 +227,69 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
     return _ownerEmails.contains(email);
   }
 
+  Future<void> _resetPassword(Map<String, dynamic> user) async {
+    final id = user['id'];
+    final email = user['email'] ?? '';
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: AppThemeDecorations.cardColor(context),
+          title: const Text('إعادة تعيين كلمة المرور', style: TextStyle(color: AppColors.text)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('سيتم تعيين كلمة مرور جديدة للمستخدم:', style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+              const SizedBox(height: 4),
+              Text(email.toString(), style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              const Text('أدخل كلمة المرور الجديدة (لن تظهر للمستخدم إلا هنا):', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: controller,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  hintText: 'NewPassword123',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تأكيد', style: TextStyle(color: AppColors.primary))),
+          ],
+        ),
+      ),
+    );
+    if (confirmed == true) {
+      final newPass = controller.text.trim();
+      if (newPass.length < 6) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('كلمة المرور يجب ألا تقل عن 6 أحرف'), backgroundColor: AppColors.error));
+        }
+        return;
+      }
+      try {
+        await ApiService.mutate('clients.resetPassword', input: {'userId': id, 'newPassword': newPass});
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('تم تعيين كلمة مرور جديدة للمستخدم. كلمة المرور: $newPass'),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 5),
+        ));
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e'), backgroundColor: AppColors.error));
+        }
+      }
+    }
+  }
+
   void _deleteUser(Map<String, dynamic> user) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -365,6 +428,11 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                                 ],
                               ]),
                               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                                IconButton(
+                                  icon: const Icon(Icons.lock_reset, color: AppColors.primary, size: 20),
+                                  tooltip: 'إعادة تعيين كلمة المرور',
+                                  onPressed: () => _resetPassword(u),
+                                ),
                                 IconButton(
                                   icon: const Icon(Icons.edit_outlined, color: AppColors.muted, size: 20),
                                   onPressed: () => _showUserDialog(Map<String, dynamic>.from(u)),

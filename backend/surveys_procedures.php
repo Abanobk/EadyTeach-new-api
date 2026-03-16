@@ -188,6 +188,22 @@ function clients_delete(array $input, $ctx): array {
     return ['success' => true];
 }
 
+// ─── clients.resetPassword ─────────────────────────────────────
+function clients_resetPassword(array $input, $ctx): array {
+    global $db;
+    $userId = (int) ($input['userId'] ?? 0);
+    $newPassword = $input['newPassword'] ?? null;
+    if (!$userId) {
+        throw new Exception('userId مطلوب');
+    }
+    if (!$newPassword || strlen($newPassword) < 6) {
+        throw new Exception('كلمة المرور الجديدة مطلوبة ويجب ألا تقل عن 6 أحرف');
+    }
+    $hash = password_hash($newPassword, PASSWORD_BCRYPT);
+    $db->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([$hash, $userId]);
+    return ['success' => true];
+}
+
 // ─── surveys.update ─────────────────────────────────────────────
 function surveys_update(array $input, $ctx): array {
     global $db;

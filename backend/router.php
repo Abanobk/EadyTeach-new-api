@@ -553,6 +553,10 @@ try {
             $result = clients_delete($input, $ctx);
             break;
 
+        case 'clients.resetPassword':
+            $result = clients_resetPassword($input, $ctx);
+            break;
+
         case 'clients.list':
             $result = clients_list($ctx);
             break;

@@ -228,7 +228,9 @@ class ApiService {
   /// Upload a file via standalone upload.php endpoint.
   /// Uses bytes for web compatibility, falls back to file path on mobile.
   static Future<String> uploadFile(String filePath, {List<int>? bytes, String? filename}) async {
-    final url = _absoluteUrl('upload.php');
+    // On the server, upload endpoint lives under backend/upload.php
+    // (container document root is the project root).
+    final url = _absoluteUrl('backend/upload.php');
     final request = http.MultipartRequest('POST', Uri.parse(url));
     if (bytes != null) {
       request.files.add(http.MultipartFile.fromBytes(

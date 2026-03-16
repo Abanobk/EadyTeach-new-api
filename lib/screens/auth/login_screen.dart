@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -434,10 +433,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (!kIsWeb) ...[
-                          _socialButton(Icons.g_mobiledata, onPressed: _googleLoading ? null : _googleSignIn, loading: _googleLoading, iconColor: Colors.red),
-                          const SizedBox(width: 20),
-                        ],
+                        _socialButton(Icons.g_mobiledata, onPressed: _googleLoading ? null : _googleSignIn, loading: _googleLoading, iconColor: Colors.red),
+                        const SizedBox(width: 20),
                         _socialButton(Icons.facebook, onPressed: null, loading: false, iconColor: const Color(0xFF1877F2)),
                         const SizedBox(width: 20),
                         _socialButton(Icons.apple, onPressed: null, loading: false, iconColor: Colors.black),

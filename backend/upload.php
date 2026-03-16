@@ -4,6 +4,12 @@
 
 header('Content-Type: application/json; charset=utf-8');
 
+// Allow large uploads (up to ~200MB)
+@ini_set('upload_max_filesize', '200M');
+@ini_set('post_max_size', '220M');
+@ini_set('memory_limit', '256M');
+@ini_set('max_execution_time', '300');
+
 // Only allow POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -11,9 +17,46 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+if (!isset($_FILES['file'])) {
     http_response_code(400);
-    echo json_encode(['error' => 'No file uploaded or upload error']);
+    echo json_encode(['error' => 'No file field']);
+    exit;
+}
+
+// Handle PHP upload errors explicitly
+if ($_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+    $err = 'Upload error';
+    switch ($_FILES['file']['error']) {
+        case UPLOAD_ERR_INI_SIZE:
+        case UPLOAD_ERR_FORM_SIZE:
+            $err = 'File too large (server limit reached)';
+            break;
+        case UPLOAD_ERR_PARTIAL:
+            $err = 'Partial upload';
+            break;
+        case UPLOAD_ERR_NO_FILE:
+            $err = 'No file sent';
+            break;
+        case UPLOAD_ERR_NO_TMP_DIR:
+            $err = 'Missing temp directory on server';
+            break;
+        case UPLOAD_ERR_CANT_WRITE:
+            $err = 'Failed to write file to disk';
+            break;
+        case UPLOAD_ERR_EXTENSION:
+            $err = 'Upload blocked by PHP extension';
+            break;
+    }
+    http_response_code(400);
+    echo json_encode(['error' => $err, 'code' => $_FILES['file']['error']]);
+    exit;
+}
+
+// Optional manual limit (~180MB) to avoid exhausting disk/memory accidentally
+$maxBytes = 180 * 1024 * 1024;
+if (!empty($_FILES['file']['size']) && $_FILES['file']['size'] > $maxBytes) {
+    http_response_code(400);
+    echo json_encode(['error' => 'File too large (max ~180MB). Please compress or split the video.']);
     exit;
 }
 

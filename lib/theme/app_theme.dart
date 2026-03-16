@@ -12,13 +12,14 @@ const Color _darkOnSurfaceVariant = Color(0xFFA8C0D8);
 const Color _darkBorder = Color(0xFF1A3A5C);
 
 // ─── Light theme colors ─────────────────────────────────────────────────────
+// درجات أوضح وأكثر تبايناً في الوضع الفاتح
 const Color _lightPrimary = Color(0xFFF68B1F);
-const Color _lightBackground = Color(0xFFE5E9F0);  // darker soft gray for better contrast
-const Color _lightCard = Color(0xFFF9FAFB);        // off‑white cards (أغمق من الأبيض الصافي)
-const Color _lightAccentBlue = Color(0xFF2F6FED);
-const Color _lightTextDark = Color(0xFF1F2937);     // primary text - dark gray
-const Color _lightOnSurfaceVariant = Color(0xFF6B7280);  // secondary text - medium gray
-const Color _lightBorder = Color(0xFFE0E4E8);
+const Color _lightBackground = Color(0xFFE1E5ED); // خلفية أغمق قليلاً لتمييز البطاقات
+const Color _lightCard = Color(0xFFF9FAFB); // بطاقات أفتح من الخلفية لكن ليست أبيض صافي
+const Color _lightAccentBlue = Color(0xFF2563EB);
+const Color _lightTextDark = Color(0xFF111827); // نص غامق جداً لقراءة أوضح
+const Color _lightOnSurfaceVariant = Color(0xFF4B5563); // نص ثانوي أغمق
+const Color _lightBorder = Color(0xFFD1D5DB);
 
 const Color _error = Color(0xFFEF5350);
 const Color _success = Color(0xFF2E7D32);
@@ -49,8 +50,8 @@ class AppTheme {
           iconTheme: IconThemeData(color: _lightTextDark),
           titleTextStyle: TextStyle(
             color: _lightTextDark,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
           ),
         ),
         cardTheme: CardThemeData(
@@ -69,13 +70,13 @@ class AppTheme {
           hintStyle: const TextStyle(color: _lightOnSurfaceVariant, fontSize: 16),
         ),
         textTheme: const TextTheme(
-          bodyLarge: TextStyle(color: _lightTextDark, fontSize: 16),
-          bodyMedium: TextStyle(color: _lightTextDark, fontSize: 14),
-          bodySmall: TextStyle(color: _lightOnSurfaceVariant, fontSize: 12),
-          // عناوين بارزة بالبرتقالي في الوضع الفاتح لزيادة الوضوح
-          titleLarge: TextStyle(color: _lightPrimary, fontSize: 20, fontWeight: FontWeight.bold),
-          titleMedium: TextStyle(color: _lightPrimary, fontSize: 16, fontWeight: FontWeight.w600),
-          titleSmall: TextStyle(color: _lightOnSurfaceVariant, fontSize: 14),
+          bodyLarge: TextStyle(color: _lightTextDark, fontSize: 17, height: 1.4),
+          bodyMedium: TextStyle(color: _lightTextDark, fontSize: 15, height: 1.4),
+          bodySmall: TextStyle(color: _lightOnSurfaceVariant, fontSize: 13, height: 1.4),
+          // عناوين أوضح في الوضع الفاتح
+          titleLarge: TextStyle(color: _lightPrimary, fontSize: 22, fontWeight: FontWeight.bold),
+          titleMedium: TextStyle(color: _lightPrimary, fontSize: 18, fontWeight: FontWeight.w600),
+          titleSmall: TextStyle(color: _lightOnSurfaceVariant, fontSize: 15, fontWeight: FontWeight.w600),
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           backgroundColor: _lightCard,

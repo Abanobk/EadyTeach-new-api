@@ -105,14 +105,16 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
+    final auth = context.watch<AuthProvider>();
+    final canViewQuotations = auth.hasPermission('quotations.view');
 
-    final screens = [
+    final screens = <Widget>[
       _buildStore(cart),
       const ServiceRequestScreen(),
       const MyTasksScreen(),
       const CartScreen(),
       const ClientOrdersScreen(),
-      const ClientQuotationsScreen(),
+      if (canViewQuotations) const ClientQuotationsScreen(),
       const ClientProfileScreen(),
     ];
 
@@ -169,11 +171,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               activeIcon: Icon(Icons.receipt_long),
               label: 'طلباتي',
             ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.request_quote_outlined),
-              activeIcon: Icon(Icons.request_quote),
-              label: 'عروض الأسعار',
-            ),
+            if (canViewQuotations)
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.request_quote_outlined),
+                activeIcon: Icon(Icons.request_quote),
+                label: 'عروض الأسعار',
+              ),
             const BottomNavigationBarItem(
               icon: Icon(Icons.person_outline),
               activeIcon: Icon(Icons.person),

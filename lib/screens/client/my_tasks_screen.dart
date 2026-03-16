@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
+import '../../providers/auth_provider.dart';
+import 'client_quotations_screen.dart';
 
 class MyTasksScreen extends StatefulWidget {
   const MyTasksScreen({super.key});
@@ -67,6 +70,9 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final canViewQuotations = auth.hasPermission('quotations.view');
+
     return Scaffold(
       backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
@@ -105,30 +111,32 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
                     _loadSurveys();
                   },
                 ),
-                const SizedBox(width: 8),
-                _TabChip(
-                  label: 'عروض الأسعار',
-                  icon: Icons.request_quote_outlined,
-                  selected: _tab == 'quotations',
-                  onTap: () {
-                    setState(() => _tab = 'quotations');
-                    _loadQuotations();
-                  },
-                ),
+                if (canViewQuotations) ...[
+                  const SizedBox(width: 8),
+                  _TabChip(
+                    label: 'عروض الأسعار',
+                    icon: Icons.request_quote_outlined,
+                    selected: _tab == 'quotations',
+                    onTap: () {
+                      setState(() => _tab = 'quotations');
+                      _loadQuotations();
+                    },
+                  ),
+                ],
               ],
             ),
           ),
         ),
       ),
-      body: _buildCurrentTab(context),
+      body: _buildCurrentTab(context, canViewQuotations),
     );
   }
 
-  Widget _buildCurrentTab(BuildContext context) {
+  Widget _buildCurrentTab(BuildContext context, bool canViewQuotations) {
     if (_tab == 'surveys') {
       return _buildSurveysTab();
     }
-    if (_tab == 'quotations') {
+    if (_tab == 'quotations' && canViewQuotations) {
       return _buildQuotationsTab();
     }
 
@@ -235,7 +243,19 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _quotations.length,
-        itemBuilder: (ctx, i) => _QuotationCard(quotation: _quotations[i]),
+        itemBuilder: (ctx, i) {
+          final q = _quotations[i] as Map<String, dynamic>;
+          return InkWell(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ClientQuotationDetailScreen(quotationId: q['id'] as int),
+              ),
+            ).then((_) => _loadQuotations()),
+            borderRadius: BorderRadius.circular(12),
+            child: _QuotationCard(quotation: q),
+          );
+        },
       ),
     );
   }

@@ -886,18 +886,18 @@ function _formatTaskRow($r, $itemRows = []) {
 
 function _ensureAppointmentsTable() {
     global $db;
+    // ملاحظة: لتجنب مشاكل الـ foreign key في بعض إصدارات MySQL/SQLite
+    // نستخدم أعمدة عادية بدون قيود FK، ونربط في التطبيق فقط.
     $db->exec("CREATE TABLE IF NOT EXISTS appointments (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
         type VARCHAR(50) DEFAULT 'booking',
         appointment_date DATETIME NOT NULL,
         notes TEXT,
-        created_by INT,
-        assigned_to INT,
+        created_by INT NULL,
+        assigned_to INT NULL,
         color VARCHAR(30) DEFAULT 'blue',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
-        FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 }
 

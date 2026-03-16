@@ -541,29 +541,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                   )).toList(),
                 ),
                 const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('ملاحظات العمل', style: TextStyle(color: AppColors.muted, fontSize: 13)),
-                    IconButton(
-                      tooltip: 'إضافة ملاحظة جديدة',
-                      icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 20),
-                      onPressed: () {
-                        final text = noteCtrl.text.trim();
-                        if (text.isEmpty) return;
-                        final now = DateTime.now();
-                        final ts =
-                            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} '
-                            '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-                        final existing = noteCtrl.text.trim().isEmpty ? '' : '${noteCtrl.text.trim()}\n\n';
-                        noteCtrl.text = '$existing[$ts] $text';
-                        noteCtrl.selection = TextSelection.fromPosition(
-                          TextPosition(offset: noteCtrl.text.length),
-                        );
-                      },
-                    ),
-                  ],
-                ),
+                const Text('ملاحظات العمل', style: TextStyle(color: AppColors.muted, fontSize: 13)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: noteCtrl,
@@ -585,6 +563,35 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      final text = noteCtrl.text.trim();
+                      if (text.isEmpty) return;
+                      final now = DateTime.now();
+                      final ts =
+                          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} '
+                          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+                      final existing = noteCtrl.text.trim().isEmpty ? '' : '${noteCtrl.text.trim()}\n\n';
+                      noteCtrl.text = '$existing[$ts] $text';
+                      noteCtrl.selection = TextSelection.fromPosition(
+                        TextPosition(offset: noteCtrl.text.length),
+                      );
+                    },
+                    icon: const Icon(Icons.add_circle_outline, size: 18, color: AppColors.primary),
+                    label: const Text(
+                      'إضافة ملاحظة بتاريخ الآن',
+                      style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 0),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ),
                 ),

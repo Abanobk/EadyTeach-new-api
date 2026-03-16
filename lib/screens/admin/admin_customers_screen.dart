@@ -427,27 +427,34 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                                   ),
                                 ],
                               ]),
-                              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                                IconButton(
-                                  icon: const Icon(Icons.lock_reset, color: AppColors.primary, size: 20),
-                                  tooltip: 'إعادة تعيين كلمة المرور',
-                                  onPressed: () => _resetPassword(u),
+                              trailing: SizedBox(
+                                width: 120,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  mainAxisSize: MainAxisSize.max,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.lock_reset, color: AppColors.primary, size: 20),
+                                      tooltip: 'إعادة تعيين كلمة المرور',
+                                      onPressed: () => _resetPassword(u),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined, color: AppColors.muted, size: 20),
+                                      onPressed: () => _showUserDialog(Map<String, dynamic>.from(u)),
+                                    ),
+                                    if (_isOwner(u))
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 4),
+                                        child: Text('مالك', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                                      )
+                                    else
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                                        onPressed: () => _deleteUser(Map<String, dynamic>.from(u)),
+                                      ),
+                                  ],
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.edit_outlined, color: AppColors.muted, size: 20),
-                                  onPressed: () => _showUserDialog(Map<String, dynamic>.from(u)),
-                                ),
-                                if (_isOwner(u))
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 8),
-                                    child: Text('مالك', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                                  )
-                                else
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
-                                    onPressed: () => _deleteUser(Map<String, dynamic>.from(u)),
-                                  ),
-                              ]),
+                              ),
                             ),
                           ),
                         );

@@ -229,6 +229,45 @@ try {
     switch ($procedure) {
 
         // ── Auth ────────────────────────────────────────────────
+        case 'auth.googleAuth':
+            // تسجيل الدخول باستخدام Google بناءً على البريد الإلكتروني فقط
+            $email = $input['email'] ?? '';
+            if (!$email) {
+                throw new Exception('البريد الإلكتروني مطلوب لتسجيل الدخول بـ Google');
+            }
+
+            $stmt = $db->prepare('SELECT id, name, email, role FROM users WHERE email = ?');
+            $stmt->execute([$email]);
+            $user = $stmt->fetch();
+
+            if (!$user) {
+                throw new Exception('لا يوجد حساب مرتبط بهذا البريد. برجاء التواصل مع الإدارة لإضافة حسابك.');
+            }
+
+            $sid = bin2hex(random_bytes(32));
+            $expires = date('Y-m-d H:i:s', strtotime('+30 days'));
+            $db->prepare('INSERT INTO sessions (session_id, user_id, expires_at) VALUES (?, ?, ?)')
+               ->execute([$sid, $user['id'], $expires]);
+
+            setcookie('app_session_id', $sid, [
+                'expires'  => strtotime($expires),
+                'path'     => '/',
+                'secure'   => true,
+                'httponly' => true,
+                'samesite' => 'None',
+            ]);
+
+            $result = [
+                'user' => [
+                    'id'    => (int) $user['id'],
+                    'name'  => $user['name'],
+                    'email' => $user['email'],
+                    'role'  => $user['role'],
+                ],
+                'sessionToken' => $sid,
+            ];
+            break;
+
         case 'auth.adminLogin':
             $email    = $input['email'] ?? '';
             $password = $input['password'] ?? '';

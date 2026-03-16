@@ -304,9 +304,9 @@ class _TaskCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppThemeDecorations.cardColor(context),
+          color: colors.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: colors.outline),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -333,7 +333,7 @@ class _TaskCard extends StatelessWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.engineering_outlined, size: 14, color: AppColors.muted),
+                  Icon(Icons.engineering_outlined, size: 14, color: colors.onSurfaceVariant),
                   const SizedBox(width: 4),
                   Text(
                     'الفني: ${task['technicianName']}',
@@ -346,7 +346,7 @@ class _TaskCard extends StatelessWidget {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  const Icon(Icons.calendar_today_outlined, size: 14, color: AppColors.muted),
+                  Icon(Icons.calendar_today_outlined, size: 14, color: colors.onSurfaceVariant),
                   const SizedBox(width: 4),
                   Text(
                     'الموعد: ${scheduledAt.day}/${scheduledAt.month}/${scheduledAt.year}',
@@ -457,15 +457,16 @@ class _TabChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppThemeDecorations.cardColor(context),
+          color: selected ? colors.primary : colors.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? AppColors.primary : AppColors.border,
+            color: selected ? colors.primary : colors.outline,
           ),
         ),
         child: Row(
@@ -473,13 +474,13 @@ class _TabChip extends StatelessWidget {
             Icon(
               icon,
               size: 16,
-              color: selected ? Colors.black : AppColors.muted,
+              color: selected ? Colors.black : colors.onSurfaceVariant,
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.black : AppColors.text,
+                color: selected ? Colors.black : colors.onSurface,
                 fontSize: 13,
                 fontWeight: selected ? FontWeight.bold : FontWeight.normal,
               ),

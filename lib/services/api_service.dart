@@ -46,19 +46,24 @@ class ApiService {
   static String proxyImageUrl(String? url) {
     if (url == null || url.isEmpty) return '';
 
-    // بعض الصور القديمة مخزّنة كرابط للـ image-proxy:
-    // /api/image-proxy?url=<ENCODED_FIREBASE_URL>
-    // أو https://api.easytecheg.net/api/image-proxy?url=...
-    // نفكّها ونرجّع رابط الصورة الأصلي.
-    if (url.contains('image-proxy') && url.contains('url=')) {
-      final uri = Uri.tryParse(url);
-      final inner = uri?.queryParameters['url'];
-      if (inner != null && inner.isNotEmpty) {
-        return Uri.decodeComponent(inner);
+    // لو الرابط نفسه هو الـ image-proxy نتاكد إنه مطلق (absolute) من نفس الـ origin
+    if (url.contains('image-proxy')) {
+      // إن كان نسبي (يبدأ بـ /api/...) نحوله لمطلق على api.easytecheg.net
+      if (url.startsWith('/')) {
+        return _absoluteUrl(url);
       }
+      return url;
     }
 
-    // غير كده نرجّع الرابط كما هو (Firebase Storage أو غيره).
+    // لو الصورة على Firebase Storage أو نطاق خارجي مشابه، نمرّرها عبر image-proxy
+    final uri = Uri.tryParse(url);
+    final host = uri?.host.toLowerCase() ?? '';
+    if (host.contains('firebasestorage.googleapis.com')) {
+      final encoded = Uri.encodeComponent(url);
+      return '$_apiOrigin/api/image-proxy?url=$encoded';
+    }
+
+    // غير كده نرجّع الرابط كما هو.
     return url;
   }
 

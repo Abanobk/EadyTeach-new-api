@@ -15,7 +15,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
   List<dynamic> _customers = [];
   List<dynamic> _technicians = [];
   bool _loading = true;
-  String _filter = 'current'; // current, today, overdue, completed
+  String _filter = 'current'; // current, today, overdue, no_date, completed
 
   @override
   void initState() {
@@ -59,14 +59,15 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
         return _tasks.where((t) {
           final s = t['status'];
           if (s == 'cancelled') return false;
-          final sched = t['scheduledAt']?.toString() ?? '';
+          final sched = (t['scheduledAt']?.toString() ?? '').trim();
+          if (sched.isEmpty) return false;
           return sched.startsWith(today);
         }).toList();
       case 'overdue':
         return _tasks.where((t) {
           final s = t['status'];
           if (s == 'completed' || s == 'cancelled') return false;
-          final sched = t['scheduledAt']?.toString() ?? '';
+          final sched = (t['scheduledAt']?.toString() ?? '').trim();
           if (sched.isEmpty) return false;
           try {
             final schedDate = DateTime.parse(sched);
@@ -76,6 +77,13 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
           } catch (_) {
             return false;
           }
+        }).toList();
+      case 'no_date':
+        return _tasks.where((t) {
+          final s = t['status'];
+          if (s == 'completed' || s == 'cancelled') return false;
+          final sched = (t['scheduledAt']?.toString() ?? '').trim();
+          return sched.isEmpty;
         }).toList();
       case 'completed':
         return _tasks.where((t) => t['status'] == 'completed').toList();
@@ -216,6 +224,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                   _buildFilterChip('المهام الحالية', 'current', Icons.pending_actions),
                   _buildFilterChip('مهام اليوم', 'today', Icons.today, activeColor: Colors.blue),
                   _buildFilterChip('مهام متأخرة', 'overdue', Icons.warning_amber_rounded, activeColor: Colors.red),
+                  _buildFilterChip('بدون موعد', 'no_date', Icons.event_busy, activeColor: Colors.purple),
                   _buildFilterChip('مهام منفذة', 'completed', Icons.check_circle_outline, activeColor: Colors.green),
                 ],
               ),
@@ -283,7 +292,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                                     const SizedBox(width: 4),
                                     Text(task['technicianName'], style: TextStyle(color: AppThemeDecorations.mutedColor(context), fontSize: 12)),
                                   ]),
-                                if (task['scheduledAt'] != null)
+                                if ((task['scheduledAt']?.toString() ?? '').trim().isNotEmpty)
                                   Row(children: [
                                     Icon(Icons.calendar_today_outlined, size: 13, color: AppThemeDecorations.mutedColor(context)),
                                     const SizedBox(width: 4),
@@ -865,7 +874,19 @@ class _TaskWizardState extends State<_TaskWizard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('تاريخ الموعد', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                  Row(
+                    children: [
+                      const Text('تاريخ الموعد', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _scheduledDate = null;
+                          _estimatedArrivalTime = null;
+                        }),
+                        child: const Text('بدون', style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   GestureDetector(
                     onTap: () async {
@@ -879,7 +900,9 @@ class _TaskWizardState extends State<_TaskWizard> {
                           child: child!,
                         ),
                       );
-                      if (picked != null) setState(() => _scheduledDate = picked);
+                      if (picked != null) {
+                        setState(() => _scheduledDate = picked);
+                      }
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),

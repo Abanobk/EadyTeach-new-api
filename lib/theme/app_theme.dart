@@ -13,8 +13,8 @@ const Color _darkBorder = Color(0xFF1A3A5C);
 
 // ─── Light theme colors ─────────────────────────────────────────────────────
 const Color _lightPrimary = Color(0xFFF68B1F);
-const Color _lightBackground = Color(0xFFF3F6FA);  // soft gray page background
-const Color _lightCard = Color(0xFFFFFFFF);        // pure white cards
+const Color _lightBackground = Color(0xFFE5E9F0);  // darker soft gray for better contrast
+const Color _lightCard = Color(0xFFF9FAFB);        // off‑white cards (أغمق من الأبيض الصافي)
 const Color _lightAccentBlue = Color(0xFF2F6FED);
 const Color _lightTextDark = Color(0xFF1F2937);     // primary text - dark gray
 const Color _lightOnSurfaceVariant = Color(0xFF6B7280);  // secondary text - medium gray
@@ -158,13 +158,13 @@ class AppThemeDecorations {
   /// Dynamic page background: dark blue in dark mode, soft gray in light mode.
   static Color pageBackground(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return isDark ? const Color(0xFF0B1F3A) : const Color(0xFFF3F6FA);
+    return isDark ? const Color(0xFF0B1F3A) : _lightBackground;
   }
 
   /// Dynamic card/section color: deep blue in dark mode, white in light mode.
   static Color cardColor(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return isDark ? const Color(0xFF162F4D) : Colors.white;
+    return isDark ? const Color(0xFF162F4D) : _lightCard;
   }
 
   /// Card decoration with theme-aware color and subtle shadow in light mode.

@@ -212,19 +212,25 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Center(
-                  child: Text('ET',
-                      style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900)),
+                  child: Text(
+                    'ET',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
-              Text(_companyName,
-                  style: const TextStyle(
-                      color: AppColors.text,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 17)),
+              Text(
+                _companyName,
+                style: const TextStyle(
+                  color: AppColors.text,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                ),
+              ),
             ],
           ),
           actions: [

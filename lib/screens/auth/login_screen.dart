@@ -77,6 +77,66 @@ class _LoginScreenState extends State<LoginScreen> {
     await prefs.setBool(_keyRememberMe, value);
   }
 
+  Future<void> _forgotPassword() async {
+    final emailCtrl = TextEditingController(text: _emailController.text.trim());
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: AppThemeDecorations.cardColor(context),
+          title: const Text('إعادة تعيين كلمة المرور', style: TextStyle(color: AppColors.text)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('أدخل البريد الإلكتروني للحساب الذي تريد إعادة تعيين كلمته:', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                textDirection: TextDirection.ltr,
+                decoration: const InputDecoration(
+                  hintText: 'example@email.com',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('إرسال', style: TextStyle(color: _kPrimaryBlue))),
+          ],
+        ),
+      ),
+    );
+    if (confirmed == true) {
+      final email = emailCtrl.text.trim();
+      if (!email.contains('@')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أدخل بريد إلكتروني صحيح'), backgroundColor: Colors.red));
+        }
+        return;
+      }
+      try {
+        await ApiService.mutate('auth.forgotPassword', input: {'email': email});
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('تم إرسال كلمة مرور جديدة إلى بريدك (إن كان مسجلاً).'),
+          backgroundColor: Colors.green,
+        ));
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('خطأ أثناء إعادة التعيين: $e'),
+            backgroundColor: Colors.red,
+          ));
+        }
+      }
+    }
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -360,14 +420,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 18),
                     TextButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('تواصل مع الدعم لإعادة تعيين كلمة المرور'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
+                      onPressed: _forgotPassword,
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.grey,
                         padding: EdgeInsets.zero,

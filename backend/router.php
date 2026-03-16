@@ -268,6 +268,47 @@ try {
             ];
             break;
 
+        case 'auth.forgotPassword':
+            // إعادة تعيين كلمة المرور وإرسالها إلى بريد المستخدم
+            $email = trim($input['email'] ?? '');
+            if (!$email) {
+                throw new Exception('البريد الإلكتروني مطلوب');
+            }
+
+            $stmt = $db->prepare('SELECT id, name, email FROM users WHERE email = ?');
+            $stmt->execute([$email]);
+            $user = $stmt->fetch();
+            if (!$user) {
+                // لا نفصح إن المستخدم غير موجود لأسباب أمنية
+                throw new Exception('تم استلام الطلب. إذا كان البريد مسجلاً سيتم إرسال كلمة مرور جديدة.');
+            }
+
+            // توليد كلمة مرور عشوائية جديدة
+            $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789@#';
+            $plain = '';
+            for ($i = 0; $i < 10; $i++) {
+                $plain .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+            }
+
+            $hash = password_hash($plain, PASSWORD_BCRYPT);
+            $db->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([$hash, $user['id']]);
+
+            // محاولة إرسال بريد بكلمة المرور الجديدة
+            $subject = 'إعادة تعيين كلمة المرور - Easy Tech';
+            $body = "مرحباً {$user['name']},\n\n"
+                  . "تم إنشاء كلمة مرور جديدة لحسابك في نظام Easy Tech.\n"
+                  . "البريد: {$user['email']}\n"
+                  . "كلمة المرور الجديدة: {$plain}\n\n"
+                  . "ننصحك بتسجيل الدخول وتغيير كلمة المرور من داخل النظام.\n\n"
+                  . "مع تحيات Easy Tech.";
+            $headers = "Content-Type: text/plain; charset=utf-8\r\n";
+            $headers .= "From: Easy Tech <no-reply@easytecheg.net>\r\n";
+
+            @mail($user['email'], '=?UTF-8?B?'.base64_encode($subject).'?=', $body, $headers);
+
+            $result = ['success' => true];
+            break;
+
         case 'auth.adminLogin':
             $email    = $input['email'] ?? '';
             $password = $input['password'] ?? '';

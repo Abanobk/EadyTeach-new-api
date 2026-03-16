@@ -62,6 +62,7 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen>
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final tab1Label = _s('tab1Label', 'طلب صيانة');
     final tab2Label = _s('tab2Label', 'طلب تركيب');
 
@@ -70,8 +71,14 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen>
       child: Scaffold(
         backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
-          title: const Text('طلب خدمة',
-              style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
+          title: Text(
+            'طلب خدمة',
+            style: TextStyle(
+              color: colors.onSurface,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+            ),
+          ),
           backgroundColor: AppThemeDecorations.cardColor(context),
           automaticallyImplyLeading: false,
           bottom: TabBar(
@@ -198,8 +205,14 @@ class _MaintenanceRequestFormState extends State<_MaintenanceRequestForm> {
           children: [
             const Icon(Icons.check_circle, color: AppColors.success, size: 60),
             const SizedBox(height: 16),
-            Text(message, textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.text, fontSize: 15)),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 15,
+              ),
+            ),
           ],
         ),
         actions: [
@@ -215,6 +228,7 @@ class _MaintenanceRequestFormState extends State<_MaintenanceRequestForm> {
   @override
   Widget build(BuildContext context) {
     final l = widget.labels;
+    final colors = Theme.of(context).colorScheme;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Form(
@@ -239,12 +253,22 @@ class _MaintenanceRequestFormState extends State<_MaintenanceRequestForm> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(l['tab1Label'] ?? 'طلب صيانة',
-                            style: const TextStyle(color: AppColors.primary,
-                                fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text(
+                          l['tab1Label'] ?? 'طلب صيانة',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
                         const SizedBox(height: 2),
-                        Text(l['tab1Description'] ?? 'صيانة أنظمة المنزل الذكي',
-                            style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                        Text(
+                          l['tab1Description'] ?? 'صيانة أنظمة المنزل الذكي',
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -258,7 +282,7 @@ class _MaintenanceRequestFormState extends State<_MaintenanceRequestForm> {
             const SizedBox(height: 6),
             TextFormField(
               controller: _deviceController,
-              style: const TextStyle(color: AppColors.text),
+              style: TextStyle(color: colors.onSurface),
               decoration: _inputDecoration(l['tab1DevicePlaceholder'] ?? 'مثال: كاميرا المدخل'),
               validator: (v) => v == null || v.isEmpty ? 'هذا الحقل مطلوب' : null,
             ),
@@ -270,7 +294,7 @@ class _MaintenanceRequestFormState extends State<_MaintenanceRequestForm> {
             DropdownButtonFormField<String>(
               value: _selectedIssue,
               dropdownColor: AppThemeDecorations.cardColor(context),
-              style: const TextStyle(color: AppColors.text),
+              style: TextStyle(color: colors.onSurface),
               decoration: _inputDecoration('اختر...'),
               items: widget.serviceTypes
                   .map((issue) => DropdownMenuItem(value: issue, child: Text(issue)))
@@ -285,7 +309,7 @@ class _MaintenanceRequestFormState extends State<_MaintenanceRequestForm> {
             const SizedBox(height: 6),
             TextFormField(
               controller: _descController,
-              style: const TextStyle(color: AppColors.text),
+              style: TextStyle(color: colors.onSurface),
               decoration: _inputDecoration('اشرح بالتفصيل...'),
               maxLines: 4,
               validator: (v) => v == null || v.isEmpty ? 'هذا الحقل مطلوب' : null,
@@ -297,7 +321,7 @@ class _MaintenanceRequestFormState extends State<_MaintenanceRequestForm> {
             const SizedBox(height: 6),
             TextFormField(
               controller: _locationController,
-              style: const TextStyle(color: AppColors.text),
+              style: TextStyle(color: colors.onSurface),
               decoration: _inputDecoration('مثال: القاهرة، مدينة نصر...'),
             ),
 
@@ -327,11 +351,15 @@ class _MaintenanceRequestFormState extends State<_MaintenanceRequestForm> {
   }
 
   Widget _buildLabel(String text) => Text(text,
-      style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 14));
+      style: TextStyle(
+        color: Theme.of(context).colorScheme.onSurface,
+        fontWeight: FontWeight.w600,
+        fontSize: 14,
+      ));
 
   InputDecoration _inputDecoration(String hint) => InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(color: AppColors.muted),
+    hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
     filled: true,
     fillColor: AppThemeDecorations.cardColor(context),
     border: OutlineInputBorder(
@@ -446,6 +474,7 @@ class _InstallationRequestFormState extends State<_InstallationRequestForm> {
   @override
   Widget build(BuildContext context) {
     final l = widget.labels;
+    final colors = Theme.of(context).colorScheme;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Form(
@@ -470,12 +499,19 @@ class _InstallationRequestFormState extends State<_InstallationRequestForm> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(l['tab2Label'] ?? 'طلب تركيب',
-                            style: const TextStyle(color: AppColors.primary,
-                                fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text(
+                          l['tab2Label'] ?? 'طلب تركيب',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
                         const SizedBox(height: 2),
-                        Text(l['tab2Description'] ?? 'تركيب أنظمة المنزل الذكي',
-                            style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                        Text(
+                          l['tab2Description'] ?? 'تركيب أنظمة المنزل الذكي',
+                          style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+                        ),
                       ],
                     ),
                   ),
@@ -490,7 +526,7 @@ class _InstallationRequestFormState extends State<_InstallationRequestForm> {
             DropdownButtonFormField<String>(
               value: _selectedService,
               dropdownColor: AppThemeDecorations.cardColor(context),
-              style: const TextStyle(color: AppColors.text),
+              style: TextStyle(color: colors.onSurface),
               decoration: _inputDecoration('اختر نوع الخدمة...'),
               items: widget.serviceTypes
                   .map((s) => DropdownMenuItem(value: s, child: Text(s)))
@@ -505,7 +541,7 @@ class _InstallationRequestFormState extends State<_InstallationRequestForm> {
             const SizedBox(height: 6),
             TextFormField(
               controller: _titleController,
-              style: const TextStyle(color: AppColors.text),
+              style: TextStyle(color: colors.onSurface),
               decoration: _inputDecoration('مثال: تركيب كاميرات في المنزل'),
               validator: (v) => v == null || v.isEmpty ? 'هذا الحقل مطلوب' : null,
             ),
@@ -516,7 +552,7 @@ class _InstallationRequestFormState extends State<_InstallationRequestForm> {
             const SizedBox(height: 6),
             TextFormField(
               controller: _descController,
-              style: const TextStyle(color: AppColors.text),
+              style: TextStyle(color: colors.onSurface),
               decoration: _inputDecoration('اشرح متطلباتك بالتفصيل...'),
               maxLines: 4,
               validator: (v) => v == null || v.isEmpty ? 'هذا الحقل مطلوب' : null,
@@ -528,7 +564,7 @@ class _InstallationRequestFormState extends State<_InstallationRequestForm> {
             const SizedBox(height: 6),
             TextFormField(
               controller: _locationController,
-              style: const TextStyle(color: AppColors.text),
+              style: TextStyle(color: colors.onSurface),
               decoration: _inputDecoration('مثال: القاهرة، مدينة نصر...'),
             ),
 
@@ -538,7 +574,7 @@ class _InstallationRequestFormState extends State<_InstallationRequestForm> {
             const SizedBox(height: 6),
             TextFormField(
               controller: _budgetController,
-              style: const TextStyle(color: AppColors.text),
+              style: TextStyle(color: colors.onSurface),
               decoration: _inputDecoration('مثال: 5000 جنيه'),
               keyboardType: TextInputType.text,
             ),
@@ -569,11 +605,15 @@ class _InstallationRequestFormState extends State<_InstallationRequestForm> {
   }
 
   Widget _buildLabel(String text) => Text(text,
-      style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 14));
+      style: TextStyle(
+        color: Theme.of(context).colorScheme.onSurface,
+        fontWeight: FontWeight.w600,
+        fontSize: 14,
+      ));
 
   InputDecoration _inputDecoration(String hint) => InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(color: AppColors.muted),
+    hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
     filled: true,
     fillColor: AppThemeDecorations.cardColor(context),
     border: OutlineInputBorder(

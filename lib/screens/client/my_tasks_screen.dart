@@ -21,6 +21,7 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
   bool _loadingSurveys = false;
   bool _loadingQuotations = false;
   String _tab = 'tasks'; // tasks | surveys | quotations
+  String _quotationFilterStatus = 'all'; // all | draft | sent | accepted | rejected | expired
 
   @override
   void initState() {
@@ -54,6 +55,29 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
       setState(() => _loadingQuotations = false);
     }
   }
+
+  List<dynamic> get _filteredQuotations {
+    if (_quotationFilterStatus == 'all') return _quotations;
+    return _quotations.where((q) => q['status'] == _quotationFilterStatus).toList();
+  }
+
+  Map<String, int> get _quotationStats {
+    final counts = <String, int>{'draft': 0, 'sent': 0, 'accepted': 0, 'rejected': 0};
+    for (final q in _quotations) {
+      final s = q['status'] as String? ?? 'draft';
+      counts[s] = (counts[s] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  static const _quotationStatusLabels = <String, String>{
+    'all': 'الكل',
+    'draft': 'مسودة',
+    'sent': 'مرسل',
+    'accepted': 'مقبول',
+    'rejected': 'مرفوض',
+    'expired': 'منتهي',
+  };
 
   Future<void> _loadTasks() async {
     setState(() => _loading = true);
@@ -95,7 +119,11 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: AppColors.muted),
-            onPressed: () => _tab == 'tasks' ? _loadTasks() : _loadSurveys(),
+            onPressed: () {
+              if (_tab == 'tasks') _loadTasks();
+              else if (_tab == 'surveys') _loadSurveys();
+              else if (_tab == 'quotations') _loadQuotations();
+            },
           ),
         ],
         bottom: PreferredSize(
@@ -121,18 +149,16 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
                     _loadSurveys();
                   },
                 ),
-                if (canViewQuotations) ...[
-                  const SizedBox(width: 8),
-                  _TabChip(
-                    label: 'عروض الأسعار',
-                    icon: Icons.request_quote_outlined,
-                    selected: _tab == 'quotations',
-                    onTap: () {
-                      setState(() => _tab = 'quotations');
-                      _loadQuotations();
-                    },
-                  ),
-                ],
+                const SizedBox(width: 8),
+                _TabChip(
+                  label: 'عروض الأسعار',
+                  icon: Icons.request_quote_outlined,
+                  selected: _tab == 'quotations',
+                  onTap: () {
+                    setState(() => _tab = 'quotations');
+                    _loadQuotations();
+                  },
+                ),
               ],
             ),
           ),
@@ -146,7 +172,7 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
     if (_tab == 'surveys') {
       return _buildSurveysTab();
     }
-    if (_tab == 'quotations' && canViewQuotations) {
+    if (_tab == 'quotations') {
       return _buildQuotationsTab();
     }
 
@@ -240,6 +266,7 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
   }
 
   Widget _buildQuotationsTab() {
+    final colors = Theme.of(context).colorScheme;
     if (_loadingQuotations && _quotations.isEmpty) {
       return const Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
@@ -250,11 +277,11 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.request_quote_outlined, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              Icon(Icons.request_quote_outlined, size: 64, color: colors.onSurfaceVariant),
               const SizedBox(height: 16),
-              Text('لا توجد عروض أسعار بعد', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 18)),
+              Text('لا توجد عروض أسعار بعد', style: TextStyle(color: colors.onSurface, fontSize: 18)),
               const SizedBox(height: 8),
-              Text('أي عرض سعر يتم إرساله لك سيظهر هنا.', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13), textAlign: TextAlign.center),
+              Text('أي عرض سعر يتم إرساله لك سيظهر هنا.', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13), textAlign: TextAlign.center),
             ],
           ),
         ),
@@ -263,22 +290,91 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
     return RefreshIndicator(
       onRefresh: _loadQuotations,
       color: AppColors.primary,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _quotations.length,
-        itemBuilder: (ctx, i) {
-          final q = _quotations[i] as Map<String, dynamic>;
-          return InkWell(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ClientQuotationDetailScreen(quotationId: q['id'] as int),
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      _QuotationStatChip(label: 'مرفوض', count: _quotationStats['rejected'] ?? 0, color: Colors.red),
+                      const SizedBox(width: 8),
+                      _QuotationStatChip(label: 'مقبول', count: _quotationStats['accepted'] ?? 0, color: Colors.green),
+                      const SizedBox(width: 8),
+                      _QuotationStatChip(label: 'مرسل', count: _quotationStats['sent'] ?? 0, color: Colors.blue),
+                      const SizedBox(width: 8),
+                      _QuotationStatChip(label: 'مسودة', count: _quotationStats['draft'] ?? 0, color: Colors.grey),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _quotationStatusLabels.entries.map((e) {
+                        final selected = _quotationFilterStatus == e.key;
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: FilterChip(
+                            label: Text(e.value),
+                            selected: selected,
+                            onSelected: (_) => setState(() => _quotationFilterStatus = e.key),
+                            backgroundColor: colors.surface,
+                            selectedColor: AppColors.primary.withOpacity(0.2),
+                            checkmarkColor: AppColors.primary,
+                            labelStyle: TextStyle(
+                              color: selected ? AppColors.primary : colors.onSurface,
+                              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            side: BorderSide(
+                              color: selected ? AppColors.primary : colors.outline,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
               ),
-            ).then((_) => _loadQuotations()),
-            borderRadius: BorderRadius.circular(12),
-            child: _QuotationCard(quotation: q),
-          );
-        },
+            ),
+          ),
+          if (_filteredQuotations.isEmpty)
+            SliverFillRemaining(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.request_quote_outlined, size: 64, color: colors.onSurfaceVariant.withOpacity(0.5)),
+                    const SizedBox(height: 16),
+                    Text('لا توجد عروض أسعار بهذا الفلتر', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 16)),
+                  ],
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (ctx, i) {
+                    final q = _filteredQuotations[i] as Map<String, dynamic>;
+                    return InkWell(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ClientQuotationDetailScreen(quotationId: q['id'] as int),
+                        ),
+                      ).then((_) => _loadQuotations()),
+                      borderRadius: BorderRadius.circular(12),
+                      child: _QuotationCard(quotation: q),
+                    );
+                  },
+                  childCount: _filteredQuotations.length,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -492,6 +588,35 @@ class _TabChip extends StatelessWidget {
   }
 }
 
+class _QuotationStatChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+
+  const _QuotationStatChip({required this.label, required this.count, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            Text('$count', style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w900)),
+            Text(label, style: TextStyle(color: colors.onSurface, fontSize: 11)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _QuotationCard extends StatelessWidget {
   final Map<String, dynamic> quotation;
 
@@ -527,6 +652,10 @@ class _QuotationCard extends StatelessWidget {
       case 'draft':
         statusColor = Colors.grey;
         statusLabel = 'مسودة';
+        break;
+      case 'sent':
+        statusColor = Colors.blue;
+        statusLabel = 'مرسل';
         break;
       default:
         statusColor = Colors.blue;

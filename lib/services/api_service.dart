@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -55,12 +56,17 @@ class ApiService {
       return url;
     }
 
-    // لو الصورة على Firebase Storage أو نطاق خارجي مشابه، نمرّرها عبر image-proxy
+    // لو الصورة على Firebase Storage أو نطاق خارجي مشابه
     final uri = Uri.tryParse(url);
     final host = uri?.host.toLowerCase() ?? '';
     if (host.contains('firebasestorage.googleapis.com')) {
+      // على الويب: نمررها عبر image‑proxy لتفادي مشاكل CORS
+      if (kIsWeb) {
       final encoded = Uri.encodeComponent(url);
       return '$_apiOrigin/api/image-proxy?url=$encoded';
+      }
+      // على الموبايل: نستخدم رابط Firebase مباشرة (لا يوجد CORS)
+      return url;
     }
 
     // غير كده نرجّع الرابط كما هو.

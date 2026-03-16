@@ -86,9 +86,9 @@ if (!move_uploaded_file($_FILES['file']['tmp_name'], $targetPath)) {
 }
 
 // Build public URL (uploads is at /uploads on the same host).
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+// Always use https to avoid mixed-content blocking in the web app.
 $host = $_SERVER['HTTP_HOST'] ?? 'api.easytecheg.net';
-$publicUrl = $scheme . '://' . $host . '/uploads/' . $fileName;
+$publicUrl = 'https://' . $host . '/uploads/' . $fileName;
 
 echo json_encode([
     'success' => true,

@@ -541,15 +541,37 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                   )).toList(),
                 ),
                 const SizedBox(height: 20),
-                const Text('ملاحظات العمل', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('ملاحظات العمل', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                    IconButton(
+                      tooltip: 'إضافة ملاحظة جديدة',
+                      icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 20),
+                      onPressed: () {
+                        final text = noteCtrl.text.trim();
+                        if (text.isEmpty) return;
+                        final now = DateTime.now();
+                        final ts =
+                            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} '
+                            '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+                        final existing = noteCtrl.text.trim().isEmpty ? '' : '${noteCtrl.text.trim()}\n\n';
+                        noteCtrl.text = '$existing[$ts] $text';
+                        noteCtrl.selection = TextSelection.fromPosition(
+                          TextPosition(offset: noteCtrl.text.length),
+                        );
+                      },
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: noteCtrl,
-                  maxLines: 3,
-                  style: const TextStyle(color: AppColors.text),
+                  maxLines: 5,
+                  style: const TextStyle(color: AppColors.text, fontSize: 13),
                   decoration: InputDecoration(
-                    hintText: 'اكتب ايه الي اتعمل في البند ده...',
-                    hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
+                    hintText: 'اكتب ملاحظة ثم اضغط علامة + لإضافتها مع التاريخ...',
+                    hintStyle: const TextStyle(color: AppColors.muted, fontSize: 12),
                     filled: true,
                     fillColor: AppThemeDecorations.pageBackground(context),
                     border: OutlineInputBorder(

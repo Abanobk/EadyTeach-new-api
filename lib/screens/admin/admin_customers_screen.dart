@@ -319,11 +319,15 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final filtered = _filtered;
     return Scaffold(
       backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
-        title: const Text('إدارة المستخدمين'),
+        title: Text(
+          'إدارة المستخدمين',
+          style: TextStyle(color: colors.onSurface, fontWeight: FontWeight.w700, fontSize: 18),
+        ),
         backgroundColor: AppThemeDecorations.cardColor(context),
         automaticallyImplyLeading: false,
         actions: [IconButton(icon: const Icon(Icons.refresh, color: AppColors.muted), onPressed: _loadUsers)],
@@ -339,11 +343,11 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
           child: Directionality(
             textDirection: TextDirection.rtl,
             child: TextField(
-              style: const TextStyle(color: AppColors.text),
+              style: TextStyle(color: colors.onSurface),
               decoration: InputDecoration(
                 hintText: 'بحث بالاسم أو الهاتف...',
-                hintStyle: const TextStyle(color: AppColors.muted),
-                prefixIcon: const Icon(Icons.search, color: AppColors.muted),
+                hintStyle: TextStyle(color: colors.onSurfaceVariant),
+                prefixIcon: Icon(Icons.search, color: colors.onSurfaceVariant),
                 filled: true,
                 fillColor: AppThemeDecorations.cardColor(context),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
@@ -359,9 +363,9 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
               ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
               : filtered.isEmpty
                   ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      const Icon(Icons.people_outline, color: AppColors.muted, size: 48),
+                      Icon(Icons.people_outline, color: colors.onSurfaceVariant, size: 48),
                       const SizedBox(height: 12),
-                      const Text('لا يوجد مستخدمون', style: TextStyle(color: AppColors.muted)),
+                      Text('لا يوجد مستخدمون', style: TextStyle(color: colors.onSurfaceVariant)),
                       const SizedBox(height: 16),
                       ElevatedButton.icon(onPressed: () => _showUserDialog(null), icon: const Icon(Icons.add, color: Colors.black), label: const Text('إضافة مستخدم')),
                     ]))
@@ -387,7 +391,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                                 ),
                               ),
                               title: Row(children: [
-                                Expanded(child: Text(u['name'] ?? '—', style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600))),
+                                Expanded(child: Text(u['name'] ?? '—', style: TextStyle(color: colors.onSurface, fontWeight: FontWeight.w600))),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(
@@ -401,7 +405,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                               subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                                 if (u['phone'] != null && u['phone'] != '') ...[
                                   const SizedBox(height: 4),
-                                  Text(u['phone'], style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                                  Text(u['phone'], style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
                                 ],
                                 if (u['location'] != null && u['location'] != '') ...[
                                   const SizedBox(height: 2),

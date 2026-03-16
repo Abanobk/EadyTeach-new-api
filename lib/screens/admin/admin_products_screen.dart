@@ -418,6 +418,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final screenWidth = MediaQuery.of(context).size.width;
     final isWide = screenWidth > 700;
     final filtered = _filteredProducts;
@@ -449,9 +450,15 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('إدارة المنتجات', style: TextStyle(color: AppColors.text, fontSize: 20, fontWeight: FontWeight.bold)),
+                            Text(
+                              'إدارة المنتجات',
+                              style: TextStyle(color: colors.onSurface, fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
                             const SizedBox(height: 2),
-                            Text('${_products.length} منتج', style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+                            Text(
+                              '${_products.length} منتج',
+                              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
+                            ),
                           ],
                         ),
                       ),
@@ -489,11 +496,11 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         height: 40,
                         child: TextField(
                           controller: _searchCtrl,
-                          style: const TextStyle(color: AppColors.text, fontSize: 13),
+                          style: TextStyle(color: colors.onSurface, fontSize: 13),
                           decoration: InputDecoration(
                             hintText: 'بحث بالاسم أو الكود...',
-                            hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
-                            prefixIcon: const Icon(Icons.search, color: AppColors.muted, size: 20),
+                            hintStyle: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
+                            prefixIcon: Icon(Icons.search, color: colors.onSurfaceVariant, size: 20),
                             filled: true,
                             fillColor: AppThemeDecorations.pageBackground(context),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12),
@@ -515,11 +522,13 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<int?>(
                             value: _selectedCategoryFilter,
-                            hint: const Text('كل الفئات', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                            hint: Text('كل الفئات', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13)),
                             dropdownColor: AppThemeDecorations.cardColor(context),
                             icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.muted, size: 20),
                             items: [
-                              const DropdownMenuItem<int?>(value: null, child: Text('كل الفئات', style: TextStyle(color: AppColors.text, fontSize: 13))),
+                              DropdownMenuItem<int?>(
+                                  value: null,
+                                  child: Text('كل الفئات', style: TextStyle(color: colors.onSurface, fontSize: 13))),
                               ..._categories.map((cat) => DropdownMenuItem<int?>(
                                 value: cat['id'] as int?,
                                 child: Text(cat['nameAr'] ?? cat['name'] ?? '', style: const TextStyle(color: AppColors.text, fontSize: 13)),
@@ -645,6 +654,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     final isActive = p['isActive'] == true;
     final catName = _getCategoryName(p['categoryId'] as int?);
 
+    final colors = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
         color: AppThemeDecorations.cardColor(context),
@@ -691,12 +701,12 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                 children: [
                   Text(
                     p['name'] ?? '',
-                    style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 13),
+                    style: TextStyle(color: colors.onSurface, fontWeight: FontWeight.w600, fontSize: 13),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (catName.isNotEmpty)
-                    Text(catName, style: const TextStyle(color: AppColors.muted, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(catName, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 4),
                   Text(
                     '${price.toStringAsFixed(0)} ج.م',
@@ -794,6 +804,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     final isActive = p['isActive'] == true;
     final catName = _getCategoryName(p['categoryId'] as int?);
 
+    final colors = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: EdgeInsets.all(isWide ? 14 : 10),
@@ -824,13 +835,13 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
               children: [
                 Text(
                   p['name'] ?? '',
-                  style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 14),
+                  style: TextStyle(color: colors.onSurface, fontWeight: FontWeight.w600, fontSize: 14),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 3),
                 if (catName.isNotEmpty)
-                  Text(catName, style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                  Text(catName, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
               ],
             ),
           ),

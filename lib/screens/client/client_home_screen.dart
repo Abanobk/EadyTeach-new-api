@@ -121,7 +121,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.bg,
+        // خلي الخلفية تعتمد على الثيم (فاتح/غامق)
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1200),
@@ -132,9 +133,9 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           currentIndex: _selectedIndex,
           onTap: (i) => setState(() => _selectedIndex = i),
           type: BottomNavigationBarType.fixed,
-          backgroundColor: AppColors.card,
+          backgroundColor: Theme.of(context).colorScheme.surface,
           selectedItemColor: AppColors.primary,
-          unselectedItemColor: AppColors.muted,
+          unselectedItemColor: Theme.of(context).colorScheme.onSurfaceVariant,
           selectedFontSize: 11,
           unselectedFontSize: 10,
           items: [

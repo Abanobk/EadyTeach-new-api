@@ -524,14 +524,17 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                             value: _selectedCategoryFilter,
                             hint: Text('كل الفئات', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13)),
                             dropdownColor: AppThemeDecorations.cardColor(context),
-                            icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.muted, size: 20),
+                            icon: Icon(Icons.keyboard_arrow_down, color: colors.onSurfaceVariant, size: 20),
                             items: [
                               DropdownMenuItem<int?>(
                                   value: null,
                                   child: Text('كل الفئات', style: TextStyle(color: colors.onSurface, fontSize: 13))),
                               ..._categories.map((cat) => DropdownMenuItem<int?>(
                                 value: cat['id'] as int?,
-                                child: Text(cat['nameAr'] ?? cat['name'] ?? '', style: const TextStyle(color: AppColors.text, fontSize: 13)),
+                                child: Text(
+                                  cat['nameAr'] ?? cat['name'] ?? '',
+                                  style: TextStyle(color: colors.onSurface, fontSize: 13),
+                                ),
                               )),
                             ],
                             onChanged: (v) => setState(() => _selectedCategoryFilter = v),

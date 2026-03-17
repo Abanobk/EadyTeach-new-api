@@ -28,9 +28,10 @@ try {
     $db->exec("ALTER TABLE users MODIFY COLUMN role VARCHAR(50) NOT NULL");
 
     // 2) إضافة / تحديث دور dealer في جدول roles
-    $sql = "INSERT INTO roles (slug, name_ar, color, is_active)
-            VALUES ('dealer', 'تاجر', '#FF9800', 1)
+    $sql = "INSERT INTO roles (slug, name, name_ar, color, is_active)
+            VALUES ('dealer', 'Dealer', 'تاجر', '#FF9800', 1)
             ON DUPLICATE KEY UPDATE
+              name    = VALUES(name),
               name_ar = VALUES(name_ar),
               color   = VALUES(color),
               is_active = VALUES(is_active)";

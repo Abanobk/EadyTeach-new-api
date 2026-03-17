@@ -177,6 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 require_once __DIR__ . '/surveys_procedures.php';
 require_once __DIR__ . '/tasks_procedures.php';
 require_once __DIR__ . '/meta_procedures.php';
+require_once __DIR__ . '/discounts_procedures.php';
 require_once __DIR__ . '/accounting_procedures.php';
 require_once __DIR__ . '/permissions_procedures.php';
 require_once __DIR__ . '/notifications_procedures.php';
@@ -195,7 +196,101 @@ function formatCategory(array $row): array {
     ];
 }
 
-function formatProduct(array $row): array {
+function _applyUserDiscount(array $row, ?array $ctx): array {
+    global $db;
+    _ensureDiscountsSchema();
+
+    $userId = $ctx['userId'] ?? null;
+    if (!$userId) {
+        return [
+            'percent' => 0.0,
+            'amount' => 0.0,
+            'source' => null,
+            'minStock' => null,
+            'waitingMessage' => null,
+        ];
+    }
+
+    $productId = (int)($row['id'] ?? 0);
+    $categoryId = isset($row['category_id']) ? (int)$row['category_id'] : null;
+    $stock = (int)($row['stock'] ?? 0);
+
+    // Try as dealer first, then as client
+    $rules = [];
+    $stmt = $db->prepare("SELECT * FROM discount_rules
+                          WHERE target_type = 'dealer' AND target_id = ? AND is_active = 1
+                            AND scope_type = 'product' AND product_id = ?
+                          ORDER BY id DESC");
+    $stmt->execute([$userId, $productId]);
+    $rules = $stmt->fetchAll();
+
+    if (!$rules && $categoryId) {
+        $stmt = $db->prepare("SELECT * FROM discount_rules
+                              WHERE target_type = 'dealer' AND target_id = ? AND is_active = 1
+                                AND scope_type = 'category' AND category_id = ?
+                              ORDER BY id DESC");
+        $stmt->execute([$userId, $categoryId]);
+        $rules = $stmt->fetchAll();
+    }
+
+    if (!$rules) {
+        $stmt = $db->prepare("SELECT * FROM discount_rules
+                              WHERE target_type = 'client' AND target_id = ? AND is_active = 1
+                                AND scope_type = 'product' AND product_id = ?
+                              ORDER BY id DESC");
+        $stmt->execute([$userId, $productId]);
+        $rules = $stmt->fetchAll();
+    }
+
+    if (!$rules && $categoryId) {
+        $stmt = $db->prepare("SELECT * FROM discount_rules
+                              WHERE target_type = 'client' AND target_id = ? AND is_active = 1
+                                AND scope_type = 'category' AND category_id = ?
+                              ORDER BY id DESC");
+        $stmt->execute([$userId, $categoryId]);
+        $rules = $stmt->fetchAll();
+    }
+
+    if (!$rules) {
+        return [
+            'percent' => 0.0,
+            'amount' => 0.0,
+            'source' => null,
+            'minStock' => null,
+            'waitingMessage' => null,
+        ];
+    }
+
+    $rule = $rules[0];
+    $minStock = (int)($rule['min_stock'] ?? 0);
+
+    if ($stock === 0) {
+        // No discount when stock is zero – waiting for discount/special price
+        return [
+            'percent' => 0.0,
+            'amount' => 0.0,
+            'source' => 'user',
+            'minStock' => $minStock,
+            'waitingMessage' => 'الكمية صفر – في انتظار نسبة الخصم والسعر النهائي لهذا التاجر/العميل',
+        ];
+    }
+
+    $percent = (float)($rule['discount_percent'] ?? 0);
+    $amount = (float)($rule['discount_amount'] ?? 0);
+
+    if ($percent < 0) $percent = 0;
+    if ($amount < 0) $amount = 0;
+
+    return [
+        'percent' => $percent,
+        'amount' => $amount,
+        'source' => 'user',
+        'minStock' => $minStock,
+        'waitingMessage' => null,
+    ];
+}
+
+function formatProduct(array $row, ?array $ctx = null): array {
     $images = $row['images'] ? json_decode($row['images'], true) : [];
     $mainImage = $row['main_image_url'] ?? null;
     if (empty($mainImage) && is_array($images) && count($images) > 0) {
@@ -214,15 +309,26 @@ function formatProduct(array $row): array {
     $categoryDiscountAmount  = isset($row['cat_discount_amount']) ? (float) $row['cat_discount_amount'] : 0.0;
     $discountMinStock = isset($row['discount_min_stock']) ? (int) $row['discount_min_stock'] : 0;
 
+    $userRule = _applyUserDiscount($row, $ctx);
+
     $appliedPercent = 0.0;
     $appliedAmount = 0.0;
     $discountSource = null;
+    $waitingMessage = $userRule['waitingMessage'] ?? null;
 
-    if ($discountMinStock > 0 && $stock < $discountMinStock) {
+    if ($waitingMessage) {
+        // Explicitly no discount, just waiting message
+        $finalPrice = $basePrice;
+    } elseif ($discountMinStock > 0 && $stock < $discountMinStock) {
         // No discount if stock condition is not met
         $finalPrice = $basePrice;
     } else {
-        if ($productDiscountPercent > 0 || $productDiscountAmount > 0) {
+        // Priority: per-user rule > product > category
+        if (($userRule['percent'] ?? 0) > 0 || ($userRule['amount'] ?? 0) > 0) {
+            $appliedPercent = (float)$userRule['percent'];
+            $appliedAmount = (float)$userRule['amount'];
+            $discountSource = 'user';
+        } elseif ($productDiscountPercent > 0 || $productDiscountAmount > 0) {
             $appliedPercent = $productDiscountPercent;
             $appliedAmount = $productDiscountAmount;
             $discountSource = 'product';
@@ -274,6 +380,7 @@ function formatProduct(array $row): array {
         'discountAmount'  => $appliedAmount,
         'discountSource'  => $discountSource,
         'discountMinStock'=> $discountMinStock,
+        'discountWaitingMessage' => $waitingMessage,
     ];
 }
 
@@ -532,7 +639,10 @@ try {
             $stmt = $db->prepare($sql);
             $stmt->execute($params);
             $rows = $stmt->fetchAll();
-            $result = array_map('formatProduct', $rows);
+            $result = [];
+            foreach ($rows as $r) {
+                $result[] = formatProduct($r, $ctx);
+            }
             break;
 
         case 'products.listAdmin':
@@ -555,7 +665,10 @@ try {
             $stmt = $db->prepare($sql);
             $stmt->execute($params);
             $rows = $stmt->fetchAll();
-            $result = array_map('formatProduct', $rows);
+            $result = [];
+            foreach ($rows as $r) {
+                $result[] = formatProduct($r, $ctx);
+            }
             break;
 
         case 'products.create':

@@ -15,6 +15,7 @@ import 'admin_secretary_screen.dart';
 import 'admin_categories_screen.dart';
 import 'admin_inbox_screen.dart';
 import 'admin_permissions_screen.dart';
+import 'admin_discounts_screen.dart';
 import 'admin_reports_screen.dart';
 import 'admin_quotations_screen.dart';
 import 'admin_accounting_screen.dart';
@@ -213,6 +214,15 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           _sidebarItem(context, Icons.bar_chart_outlined, 'التقارير', () => _navigate(context, const AdminReportsScreen()), false, color: Colors.green),
                         if (auth.hasPermission('surveys.view'))
                           _sidebarItem(context, Icons.home_work_outlined, 'Smart Survey', () => _navigate(context, const SurveyEntryScreen()), false, color: Colors.cyan),
+                        if (auth.hasPermission('discounts.view'))
+                          _sidebarItem(
+                            context,
+                            Icons.percent,
+                            'خصومات التجار / العملاء',
+                            () => _navigate(context, const AdminDiscountsScreen()),
+                            false,
+                            color: Colors.deepPurple,
+                          ),
                         if (auth.hasPermission('permissions.view'))
                           _sidebarItem(context, Icons.admin_panel_settings_outlined, 'الصلاحيات', () => _navigate(context, const AdminPermissionsScreen()), false, color: Colors.red),
                         const SizedBox(height: 16),

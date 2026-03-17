@@ -165,6 +165,16 @@ function _getPermissionModules() {
                 'send' => 'إرسال عرض للعميل',
             ],
         ],
+        'discounts' => [
+            'label' => 'الخصومات الخاصة',
+            'icon' => 'percent',
+            'actions' => [
+                'view' => 'عرض قواعد الخصم',
+                'create' => 'إضافة قاعدة خصم',
+                'edit' => 'تعديل قاعدة خصم',
+                'delete' => 'حذف قاعدة خصم',
+            ],
+        ],
         'accounting' => [
             'label' => 'الحسابات والعهد',
             'icon' => 'account_balance_wallet',

@@ -689,12 +689,16 @@ class _ProductCard extends StatelessWidget {
         double.tryParse(product['price']?.toString() ?? '0') ?? 0;
     final originalPrice =
         double.tryParse(product['originalPrice']?.toString() ?? '0') ?? 0;
+    final discountPercent =
+        double.tryParse(product['discountPercent']?.toString() ?? '0') ?? 0;
     final rawImage = product['mainImageUrl'] as String?;
     final image = (rawImage != null && rawImage.isNotEmpty)
         ? ApiService.proxyImageUrl(rawImage)
         : null;
     final name = product['nameAr'] ?? product['name'] ?? '';
-    final hasDiscount = originalPrice > price && originalPrice > 0;
+    final hasDiscount =
+        (discountPercent > 0 && price > 0) ||
+            (originalPrice > price && originalPrice > 0);
     final stock = product['stock'] as int? ?? 0;
 
     return GestureDetector(
@@ -741,7 +745,11 @@ class _ProductCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          '-${((1 - price / originalPrice) * 100).toStringAsFixed(0)}%',
+                          discountPercent > 0 && price > 0
+                              ? '-${discountPercent.toStringAsFixed(0)}%'
+                              : (originalPrice > 0
+                                  ? '-${((1 - price / originalPrice) * 100).toStringAsFixed(0)}%'
+                                  : '-%'),
                           style: const TextStyle(
                               color: Colors.white,
                               fontSize: 10,

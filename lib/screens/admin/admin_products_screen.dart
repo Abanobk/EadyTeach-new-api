@@ -140,6 +140,15 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     final nameArCtrl = TextEditingController(text: product?['nameAr'] ?? '');
     final priceCtrl = TextEditingController(text: product?['price']?.toString() ?? '');
     final stockCtrl = TextEditingController(text: product?['stock']?.toString() ?? '0');
+    final discountPercentCtrl = TextEditingController(
+      text: (product?['discountPercent'] ?? '').toString(),
+    );
+    final discountAmountCtrl = TextEditingController(
+      text: (product?['discountAmount'] ?? '').toString(),
+    );
+    final discountMinStockCtrl = TextEditingController(
+      text: (product?['discountMinStock'] ?? '').toString(),
+    );
     final descCtrl = TextEditingController(text: product?['description'] ?? '');
     String? mainImageUrl = product?['mainImageUrl'] as String?;
     List<String> extraImages = [];
@@ -201,8 +210,53 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                 const SizedBox(height: 12),
                 const Text('السعر (ج.م) *', style: TextStyle(color: AppColors.muted, fontSize: 13)),
                 const SizedBox(height: 6),
-                TextField(controller: priceCtrl, keyboardType: TextInputType.number, style: const TextStyle(color: AppColors.text), decoration: _inputDecoration(hint: '0.00')),
+                TextField(
+                  controller: priceCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: AppColors.text),
+                  decoration: _inputDecoration(hint: '0.00'),
+                ),
                 const SizedBox(height: 12),
+                const Text('المخزون', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: stockCtrl,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: AppColors.text),
+                  decoration: _inputDecoration(hint: 'مثال: 10'),
+                ),
+                const SizedBox(height: 16),
+                const Divider(color: AppColors.border),
+                const SizedBox(height: 12),
+                const Text('إعدادات الخصم للمنتج', style: TextStyle(color: AppColors.text, fontSize: 13)),
+                const SizedBox(height: 8),
+                const Text('نسبة الخصم (%)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: discountPercentCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: AppColors.text),
+                  decoration: _inputDecoration(hint: 'مثال: 10'),
+                ),
+                const SizedBox(height: 12),
+                const Text('قيمة خصم ثابتة (ج.م) – تُستخدم إذا كانت النسبة فارغة أو 0', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: discountAmountCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: AppColors.text),
+                  decoration: _inputDecoration(hint: 'مثال: 100'),
+                ),
+                const SizedBox(height: 12),
+                const Text('شرط المخزون لتفعيل الخصم (الحد الأدنى للكمية في المخزون)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: discountMinStockCtrl,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: AppColors.text),
+                  decoration: _inputDecoration(hint: 'مثال: 1 (اتركها فارغة لإلغاء الشرط)'),
+                ),
+                const SizedBox(height: 16),
                 const Text('الأنواع (مثلاً: متر، قطعة...)', style: TextStyle(color: AppColors.text, fontSize: 13)),
                 const SizedBox(height: 6),
                 if (types.isNotEmpty)
@@ -769,6 +823,18 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           if (variants.isNotEmpty) 'variants': variants,
                           if (types.isNotEmpty) 'types': types,
                         };
+                        final discountPct = double.tryParse(discountPercentCtrl.text.trim());
+                        final discountAmt = double.tryParse(discountAmountCtrl.text.trim());
+                        final minStockForDiscount = int.tryParse(discountMinStockCtrl.text.trim());
+                        if (discountPct != null && discountPct > 0) {
+                          body['discountPercent'] = discountPct;
+                        }
+                        if ((discountPct == null || discountPct == 0) && discountAmt != null && discountAmt > 0) {
+                          body['discountAmount'] = discountAmt;
+                        }
+                        if (minStockForDiscount != null && minStockForDiscount > 0) {
+                          body['discountMinStock'] = minStockForDiscount;
+                        }
                         if (isEdit) {
                           body['id'] = product!['id'];
                           await ApiService.mutate('products.update', input: body);

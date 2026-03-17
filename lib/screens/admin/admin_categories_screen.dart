@@ -44,6 +44,12 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
     final nameCtrl = TextEditingController(text: category?['name'] ?? '');
     final nameArCtrl = TextEditingController(text: category?['nameAr'] ?? '');
     final descCtrl = TextEditingController(text: category?['description'] ?? '');
+    final discountPercentCtrl = TextEditingController(
+      text: category?['discountPercent']?.toString() ?? '',
+    );
+    final discountAmountCtrl = TextEditingController(
+      text: category?['discountAmount']?.toString() ?? '',
+    );
     String? imageUrl = category?['imageUrl'] as String?;
     bool uploading = false;
 
@@ -158,6 +164,28 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                 const SizedBox(height: 6),
                 TextField(controller: descCtrl, maxLines: 2, style: const TextStyle(color: AppColors.text),
                     decoration: _inputDec(hint: 'وصف الفئة...')),
+                const SizedBox(height: 16),
+                const Divider(color: AppColors.border),
+                const SizedBox(height: 12),
+                const Text('إعدادات الخصم (تُطبَّق على المنتجات داخل الفئة إذا لم يكن لها خصم خاص)', style: TextStyle(color: AppColors.text, fontSize: 13)),
+                const SizedBox(height: 8),
+                const Text('نسبة الخصم الافتراضية (%)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: discountPercentCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: AppColors.text),
+                  decoration: _inputDec(hint: 'مثال: 10'),
+                ),
+                const SizedBox(height: 12),
+                const Text('قيمة خصم ثابتة (ج.م) – تُستخدم إذا كانت النسبة فارغة أو 0', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: discountAmountCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: AppColors.text),
+                  decoration: _inputDec(hint: 'مثال: 100'),
+                ),
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
@@ -178,6 +206,14 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                           if (descCtrl.text.trim().isNotEmpty) 'description': descCtrl.text.trim(),
                           if (imageUrl != null && imageUrl!.isNotEmpty) 'imageUrl': imageUrl,
                         };
+                        final discountPct = double.tryParse(discountPercentCtrl.text.trim());
+                        final discountAmt = double.tryParse(discountAmountCtrl.text.trim());
+                        if (discountPct != null && discountPct > 0) {
+                          body['discountPercent'] = discountPct;
+                        }
+                        if ((discountPct == null || discountPct == 0) && discountAmt != null && discountAmt > 0) {
+                          body['discountAmount'] = discountAmt;
+                        }
                         if (isEdit) {
                           body['id'] = category!['id'];
                           await ApiService.mutate('products.updateCategory', input: body);

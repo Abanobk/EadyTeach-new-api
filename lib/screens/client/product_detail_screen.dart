@@ -104,7 +104,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final variants = _variants;
     final types = _types;
     final originalPrice = double.tryParse(p['originalPrice']?.toString() ?? '0') ?? 0;
-    final hasDiscount = originalPrice > 0 && originalPrice > _currentPrice;
+    final discountPercent =
+        double.tryParse(p['discountPercent']?.toString() ?? '0') ?? 0;
+    final hasDiscount =
+        (discountPercent > 0 && !originalPrice.isNaN && originalPrice > 0) ||
+            (originalPrice > 0 && originalPrice > _currentPrice);
     final bool isOutOfStock = _availableStock <= 0;
 
     return Directionality(
@@ -151,7 +155,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          'خصم ${(((originalPrice - _currentPrice) / originalPrice) * 100).toStringAsFixed(0)}%',
+                          discountPercent > 0
+                              ? 'خصم ${discountPercent.toStringAsFixed(0)}%'
+                              : 'خصم ${(((originalPrice - _currentPrice) / originalPrice) * 100).toStringAsFixed(0)}%',
                           style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                         ),
                       ),

@@ -190,6 +190,8 @@ function formatCategory(array $row): array {
         'nameAr'      => $row['name_ar'] ?? null,
         'description' => $row['description'] ?? null,
         'imageUrl'    => $row['image_url'] ?? null,
+        'discountPercent' => isset($row['discount_percent']) ? (float) $row['discount_percent'] : 0.0,
+        'discountAmount'  => isset($row['discount_amount']) ? (float) $row['discount_amount'] : 0.0,
     ];
 }
 
@@ -201,15 +203,64 @@ function formatProduct(array $row): array {
     }
     $variants = ($row['variants'] ?? null) ? json_decode($row['variants'], true) : [];
     $types = ($row['types'] ?? null) ? json_decode($row['types'], true) : [];
+
+    $stock = (int) ($row['stock'] ?? 0);
+    $basePrice = (float) ($row['price'] ?? 0);
+    $originalPrice = $row['original_price'] !== null ? (float) $row['original_price'] : null;
+
+    $productDiscountPercent = isset($row['discount_percent']) ? (float) $row['discount_percent'] : 0.0;
+    $productDiscountAmount  = isset($row['discount_amount']) ? (float) $row['discount_amount'] : 0.0;
+    $categoryDiscountPercent = isset($row['cat_discount_percent']) ? (float) $row['cat_discount_percent'] : 0.0;
+    $categoryDiscountAmount  = isset($row['cat_discount_amount']) ? (float) $row['cat_discount_amount'] : 0.0;
+    $discountMinStock = isset($row['discount_min_stock']) ? (int) $row['discount_min_stock'] : 0;
+
+    $appliedPercent = 0.0;
+    $appliedAmount = 0.0;
+    $discountSource = null;
+
+    if ($discountMinStock > 0 && $stock < $discountMinStock) {
+        // No discount if stock condition is not met
+        $finalPrice = $basePrice;
+    } else {
+        if ($productDiscountPercent > 0 || $productDiscountAmount > 0) {
+            $appliedPercent = $productDiscountPercent;
+            $appliedAmount = $productDiscountAmount;
+            $discountSource = 'product';
+        } elseif ($categoryDiscountPercent > 0 || $categoryDiscountAmount > 0) {
+            $appliedPercent = $categoryDiscountPercent;
+            $appliedAmount = $categoryDiscountAmount;
+            $discountSource = 'category';
+        }
+
+        if ($appliedPercent > 0) {
+            $discountValue = $basePrice * $appliedPercent / 100.0;
+        } else {
+            $discountValue = $appliedAmount;
+        }
+
+        if ($discountValue < 0) {
+            $discountValue = 0;
+        }
+
+        if ($discountValue > 0 && $originalPrice === null) {
+            $originalPrice = $basePrice;
+        }
+
+        $finalPrice = $basePrice - $discountValue;
+        if ($finalPrice < 0) {
+            $finalPrice = 0;
+        }
+    }
+
     return [
         'id'            => (int) $row['id'],
         'name'          => $row['name'] ?? '',
         'nameAr'        => $row['name_ar'] ?? null,
         'description'   => $row['description'] ?? null,
         'descriptionAr' => $row['description_ar'] ?? null,
-        'price'         => $row['price'] ?? '0',
-        'originalPrice' => $row['original_price'] ?? null,
-        'stock'         => (int) ($row['stock'] ?? 0),
+        'price'         => (string) $finalPrice,
+        'originalPrice' => $originalPrice,
+        'stock'         => $stock,
         'isFeatured'    => (bool) ($row['is_featured'] ?? false),
         'isActive'      => (bool) ($row['is_active'] ?? true),
         'categoryId'    => $row['category_id'] ? (int) $row['category_id'] : null,
@@ -219,6 +270,10 @@ function formatProduct(array $row): array {
         'types'         => $types,
         'sku'           => $row['sku'] ?? null,
         'serialNumber'  => $row['serial_number'] ?? null,
+        'discountPercent' => $appliedPercent,
+        'discountAmount'  => $appliedAmount,
+        'discountSource'  => $discountSource,
+        'discountMinStock'=> $discountMinStock,
     ];
 }
 
@@ -423,9 +478,14 @@ try {
             $nameAr  = $input['nameAr'] ?? null;
             $desc    = $input['description'] ?? null;
             $imgUrl  = $input['imageUrl'] ?? null;
+            $catDiscountPercent = isset($input['discountPercent']) ? (float) $input['discountPercent'] : 0.0;
+            $catDiscountAmount  = isset($input['discountAmount']) ? (float) $input['discountAmount'] : 0.0;
 
-            $stmt = $db->prepare('INSERT INTO categories (name, name_ar, description, image_url) VALUES (?, ?, ?, ?)');
-            $stmt->execute([$name, $nameAr, $desc, $imgUrl]);
+            try { $db->exec('ALTER TABLE categories ADD COLUMN IF NOT EXISTS discount_percent DECIMAL(5,2) DEFAULT 0'); } catch (Exception $e) {}
+            try { $db->exec('ALTER TABLE categories ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(12,2) DEFAULT 0'); } catch (Exception $e) {}
+
+            $stmt = $db->prepare('INSERT INTO categories (name, name_ar, description, image_url, discount_percent, discount_amount) VALUES (?, ?, ?, ?, ?, ?)');
+            $stmt->execute([$name, $nameAr, $desc, $imgUrl, $catDiscountPercent, $catDiscountAmount]);
             $result = ['id' => (int) $db->lastInsertId()];
             break;
 
@@ -435,9 +495,14 @@ try {
             $nameAr  = $input['nameAr'] ?? null;
             $desc    = $input['description'] ?? null;
             $imgUrl  = $input['imageUrl'] ?? null;
+            $catDiscountPercent = isset($input['discountPercent']) ? (float) $input['discountPercent'] : 0.0;
+            $catDiscountAmount  = isset($input['discountAmount']) ? (float) $input['discountAmount'] : 0.0;
 
-            $stmt = $db->prepare('UPDATE categories SET name = ?, name_ar = ?, description = ?, image_url = ? WHERE id = ?');
-            $stmt->execute([$name, $nameAr, $desc, $imgUrl, $id]);
+            try { $db->exec('ALTER TABLE categories ADD COLUMN IF NOT EXISTS discount_percent DECIMAL(5,2) DEFAULT 0'); } catch (Exception $e) {}
+            try { $db->exec('ALTER TABLE categories ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(12,2) DEFAULT 0'); } catch (Exception $e) {}
+
+            $stmt = $db->prepare('UPDATE categories SET name = ?, name_ar = ?, description = ?, image_url = ?, discount_percent = ?, discount_amount = ? WHERE id = ?');
+            $stmt->execute([$name, $nameAr, $desc, $imgUrl, $catDiscountPercent, $catDiscountAmount, $id]);
             $result = ['success' => true];
             break;
 
@@ -449,18 +514,21 @@ try {
 
         // ── Products ───────────────────────────────────────────
         case 'products.list':
-            $sql = 'SELECT * FROM products WHERE is_active = 1';
+            $sql = 'SELECT p.*, c.discount_percent AS cat_discount_percent, c.discount_amount AS cat_discount_amount
+                    FROM products p
+                    LEFT JOIN categories c ON c.id = p.category_id
+                    WHERE p.is_active = 1';
             $params = [];
             if (!empty($input['categoryId'])) {
-                $sql .= ' AND category_id = ?';
+                $sql .= ' AND p.category_id = ?';
                 $params[] = (int)$input['categoryId'];
             }
             if (!empty($input['search'])) {
-                $sql .= ' AND (name LIKE ? OR name_ar LIKE ? OR serial_number LIKE ? OR sku LIKE ?)';
+                $sql .= ' AND (p.name LIKE ? OR p.name_ar LIKE ? OR p.serial_number LIKE ? OR p.sku LIKE ?)';
                 $s = '%' . $input['search'] . '%';
                 $params = array_merge($params, [$s, $s, $s, $s]);
             }
-            $sql .= ' ORDER BY id DESC';
+            $sql .= ' ORDER BY p.id DESC';
             $stmt = $db->prepare($sql);
             $stmt->execute($params);
             $rows = $stmt->fetchAll();
@@ -468,20 +536,22 @@ try {
             break;
 
         case 'products.listAdmin':
-            $sql = 'SELECT * FROM products';
+            $sql = 'SELECT p.*, c.discount_percent AS cat_discount_percent, c.discount_amount AS cat_discount_amount
+                    FROM products p
+                    LEFT JOIN categories c ON c.id = p.category_id';
             $params = [];
             $where = [];
             if (!empty($input['categoryId'])) {
-                $where[] = 'category_id = ?';
+                $where[] = 'p.category_id = ?';
                 $params[] = (int)$input['categoryId'];
             }
             if (!empty($input['search'])) {
-                $where[] = '(name LIKE ? OR name_ar LIKE ? OR serial_number LIKE ? OR sku LIKE ?)';
+                $where[] = '(p.name LIKE ? OR p.name_ar LIKE ? OR p.serial_number LIKE ? OR p.sku LIKE ?)';
                 $s = '%' . $input['search'] . '%';
                 $params = array_merge($params, [$s, $s, $s, $s]);
             }
             if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
-            $sql .= ' ORDER BY id DESC';
+            $sql .= ' ORDER BY p.id DESC';
             $stmt = $db->prepare($sql);
             $stmt->execute($params);
             $rows = $stmt->fetchAll();
@@ -496,6 +566,9 @@ try {
             $price    = $input['price'] ?? '0';
             $origPrice= $input['originalPrice'] ?? null;
             $stock    = (int) ($input['stock'] ?? 0);
+            $discountPercent = (float) ($input['discountPercent'] ?? 0);
+            $discountAmount  = (float) ($input['discountAmount'] ?? 0);
+            $discountMinStock = isset($input['discountMinStock']) ? (int) $input['discountMinStock'] : 0;
             $featured = ($input['isFeatured'] ?? false) ? 1 : 0;
             $catId    = isset($input['categoryId']) ? (int) $input['categoryId'] : null;
             $imgUrl   = $input['mainImageUrl'] ?? null;
@@ -505,8 +578,12 @@ try {
             $sku      = $input['sku'] ?? null;
             $serial   = $input['serialNumber'] ?? null;
 
-            $stmt = $db->prepare('INSERT INTO products (name, name_ar, description, description_ar, price, original_price, stock, is_featured, category_id, main_image_url, images, variants, types, sku, serial_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial]);
+            try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent DECIMAL(5,2) DEFAULT 0'); } catch (Exception $e) {}
+            try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(12,2) DEFAULT 0'); } catch (Exception $e) {}
+            try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_min_stock INT DEFAULT 0'); } catch (Exception $e) {}
+
+            $stmt = $db->prepare('INSERT INTO products (name, name_ar, description, description_ar, price, original_price, stock, is_featured, category_id, main_image_url, images, variants, types, sku, serial_number, discount_percent, discount_amount, discount_min_stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial, $discountPercent, $discountAmount, $discountMinStock]);
             $result = ['id' => (int) $db->lastInsertId()];
             break;
 
@@ -519,6 +596,9 @@ try {
             $price    = $input['price'] ?? '0';
             $origPrice= $input['originalPrice'] ?? null;
             $stock    = (int) ($input['stock'] ?? 0);
+            $discountPercent = (float) ($input['discountPercent'] ?? 0);
+            $discountAmount  = (float) ($input['discountAmount'] ?? 0);
+            $discountMinStock = isset($input['discountMinStock']) ? (int) $input['discountMinStock'] : 0;
             $featured = ($input['isFeatured'] ?? false) ? 1 : 0;
             $catId    = isset($input['categoryId']) ? (int) $input['categoryId'] : null;
             $imgUrl   = $input['mainImageUrl'] ?? null;
@@ -528,8 +608,12 @@ try {
             $sku      = $input['sku'] ?? null;
             $serial   = $input['serialNumber'] ?? null;
 
-            $stmt = $db->prepare('UPDATE products SET name = ?, name_ar = ?, description = ?, description_ar = ?, price = ?, original_price = ?, stock = ?, is_featured = ?, category_id = ?, main_image_url = ?, images = ?, variants = ?, types = ?, sku = ?, serial_number = ? WHERE id = ?');
-            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial, $id]);
+            try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent DECIMAL(5,2) DEFAULT 0'); } catch (Exception $e) {}
+            try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(12,2) DEFAULT 0'); } catch (Exception $e) {}
+            try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_min_stock INT DEFAULT 0'); } catch (Exception $e) {}
+
+            $stmt = $db->prepare('UPDATE products SET name = ?, name_ar = ?, description = ?, description_ar = ?, price = ?, original_price = ?, stock = ?, is_featured = ?, category_id = ?, main_image_url = ?, images = ?, variants = ?, types = ?, sku = ?, serial_number = ?, discount_percent = ?, discount_amount = ?, discount_min_stock = ? WHERE id = ?');
+            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial, $discountPercent, $discountAmount, $discountMinStock, $id]);
             $result = ['success' => true];
             break;
 

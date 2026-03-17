@@ -11,13 +11,77 @@ RemoteMessage? _pendingOpenMessage;
 String? _pendingTapPayload;
 
 /// Background message handler - must be top-level function (outside any class)
-/// This runs in a separate isolate when the app is terminated/background
+/// يعمل عندما يكون التطبيق في الخلفية أو مغلق تماماً (Android)
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Note: Firebase is already initialized by the time this is called
-  debugPrint('[FCM Background] Received: ${message.notification?.title}');
-  // Badge will be updated when app opens via updateBadgeFromServer
-  // Note: Background badge update requires native plugin - handled via FCM data payload
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+    }
+    debugPrint('[FCM Background] Received: ${message.notification?.title ?? message.data['title']}');
+
+    // نعرض إشعار محلي بالصوت والاهتزاز حتى لو كانت رسالة data فقط
+    final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
+    const AndroidInitializationSettings androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings();
+    const InitializationSettings initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+    await flutterLocalNotificationsPlugin.initialize(initSettings);
+
+    const AndroidNotificationChannel bgChannel = AndroidNotificationChannel(
+      'easy_tech_v2',
+      'Easy Tech - إشعارات مهمة',
+      description: 'إشعارات تطبيق Easy Tech للمهام والطلبات',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+      enableLights: true,
+    );
+
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(bgChannel);
+
+    final notification = message.notification;
+    final title = notification?.title ?? message.data['title'] ?? 'Easy Tech';
+    final body = notification?.body ?? message.data['body'] ?? '';
+    if (body.isEmpty) return;
+
+    final notifId = message.hashCode.abs() % 2147483647;
+
+    await flutterLocalNotificationsPlugin.show(
+      notifId,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'easy_tech_v2',
+          'Easy Tech - إشعارات مهمة',
+          channelDescription: 'إشعارات تطبيق Easy Tech للمهام والطلبات',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          enableLights: true,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      payload: jsonEncode(message.data),
+    );
+  } catch (e) {
+    debugPrint('[FCM Background] Error: $e');
+  }
 }
 
 class NotificationService {

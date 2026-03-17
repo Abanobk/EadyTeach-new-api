@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_messaging/firebase_messaging.dart' show FirebaseMessaging;
 import 'controllers/theme_controller.dart';
 import 'providers/auth_provider.dart';
 import 'providers/cart_provider.dart';
@@ -18,15 +18,6 @@ import 'dart:async';
 import 'services/notification_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
-/// Background message handler - must be top-level function
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp();
-  }
-  debugPrint('[FCM Background] ${message.notification?.title}');
-}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,7 +59,8 @@ void main() async {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
       }
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      // استخدم الهاندلر الموحد من NotificationService لعرض الإشعارات في الخلفية
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
       await NotificationService().initialize();
     } catch (e) {
       debugPrint('Firebase/Notification init failed: $e');

@@ -190,7 +190,8 @@ class _AdminOrderCard extends StatelessWidget {
                     'confirmed',
                     'processing',
                     'delivered',
-                    'cancelled'
+                    'cancelled',
+                    'preorder',
                   ]
                       .map((s) => _StatusChip(
                             statusKey: s,
@@ -302,6 +303,10 @@ class _StatusBadge extends StatelessWidget {
       case 'pending':
         color = const Color(0xFFD4920A);
         label = 'انتظار';
+        break;
+      case 'preorder':
+        color = const Color(0xFF6A1B9A);
+        label = 'طلب مسبق';
         break;
       case 'confirmed':
         color = const Color(0xFF2E7D32);

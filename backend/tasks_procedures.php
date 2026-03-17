@@ -805,12 +805,14 @@ function orders_create($input, $ctx) {
     _ensureOrdersTable();
     $userId = $ctx['userId'] ?? null;
     $items = isset($input['items']) ? json_encode($input['items']) : '[]';
-    $total = $input['total'] ?? 0;
+    // نحاول قراءة totalAmount أولاً لأنها المستخدمة من تطبيق العميل، ثم نرجع إلى total إن لم تكن موجودة
+    $total = $input['totalAmount'] ?? ($input['total'] ?? 0);
     $address = $input['shippingAddress'] ?? null;
     $notes = $input['notes'] ?? null;
+    $status = $input['status'] ?? 'pending';
 
-    $stmt = $db->prepare('INSERT INTO orders (user_id, items, total, shipping_address, notes) VALUES (?, ?, ?, ?, ?)');
-    $stmt->execute([$userId, $items, $total, $address, $notes]);
+    $stmt = $db->prepare('INSERT INTO orders (user_id, items, total, status, shipping_address, notes) VALUES (?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$userId, $items, $total, $status, $address, $notes]);
     $orderId = (int)$db->lastInsertId();
 
     try {

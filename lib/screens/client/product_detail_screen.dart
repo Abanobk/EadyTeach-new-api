@@ -72,6 +72,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return base;
   }
 
+  int get _availableStock {
+    final p = widget.product;
+    int baseStock = p['stock'] is int ? p['stock'] as int : int.tryParse(p['stock']?.toString() ?? '0') ?? 0;
+    if (_selectedTypeIndex != null && _types.isNotEmpty) {
+      final t = _types[_selectedTypeIndex!];
+      final ts = t['stock'];
+      if (ts != null) {
+        final typeStock = ts is int ? ts : int.tryParse(ts.toString()) ?? 0;
+        return typeStock;
+      }
+    }
+    return baseStock;
+  }
+
   Color _parseColor(String? hex) {
     if (hex == null || hex.isEmpty) return Colors.grey;
     try {
@@ -91,6 +105,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final types = _types;
     final originalPrice = double.tryParse(p['originalPrice']?.toString() ?? '0') ?? 0;
     final hasDiscount = originalPrice > 0 && originalPrice > _currentPrice;
+    final bool isOutOfStock = _availableStock <= 0;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -370,11 +385,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // ─── زر إضافة للسلة ───
+                    // ─── زر إضافة للسلة / طلب مسبق ───
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: () {
+                        onPressed: () async {
                           // تحديد الـ variant أو type المختار
                           String? selectedVariant;
                           if (_selectedVariantIndex != null && variants.isNotEmpty) {
@@ -383,26 +398,68 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             selectedVariant = types[_selectedTypeIndex!]['name'] as String?;
                           }
 
-                          context.read<CartProvider>().addItem(CartItem(
-                                productId: p['id'],
-                                name: p['name'] ?? '',
-                                price: _currentPrice,
-                                image: images.isNotEmpty ? images[0] : null,
-                                quantity: _qty,
-                                variant: selectedVariant,
-                              ));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('تمت الإضافة للسلة ✓'),
-                              backgroundColor: AppColors.success,
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                          Navigator.pop(context);
+                          if (isOutOfStock) {
+                            try {
+                              await ApiService.mutate('orders.create', input: {
+                                'items': [
+                                  {
+                                    'productId': p['id'],
+                                    'quantity': _qty,
+                                    'unitPrice': _currentPrice.toString(),
+                                    if (selectedVariant != null) 'variant': selectedVariant,
+                                    'isPreorder': true,
+                                  }
+                                ],
+                                'totalAmount': (_currentPrice * _qty).toString(),
+                                'status': 'preorder',
+                                'notes': 'Pre-order from mobile app',
+                              });
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('تم تسجيل طلب الحجز (طلب مسبق) وسيتم التواصل معك من الإدارة'),
+                                  backgroundColor: AppColors.success,
+                                  duration: Duration(seconds: 3),
+                                ),
+                              );
+                              Navigator.pop(context);
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('تعذر إنشاء طلب مسبق: $e'),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                            }
+                          } else {
+                            context.read<CartProvider>().addItem(CartItem(
+                                  productId: p['id'],
+                                  name: p['name'] ?? '',
+                                  price: _currentPrice,
+                                  image: images.isNotEmpty ? images[0] : null,
+                                  quantity: _qty,
+                                  variant: selectedVariant,
+                                ));
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('تمت الإضافة للسلة ✓'),
+                                backgroundColor: AppColors.success,
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            Navigator.pop(context);
+                          }
                         },
-                        icon: const Icon(Icons.shopping_cart_outlined, color: Colors.black),
+                        icon: Icon(
+                          isOutOfStock ? Icons.schedule_send_outlined : Icons.shopping_cart_outlined,
+                          color: Colors.black,
+                        ),
                         label: Text(
-                          'أضف للسلة - ${_currentPrice.toStringAsFixed(2)} ج.م',
+                          isOutOfStock
+                              ? 'طلب مسبق - ${_currentPrice.toStringAsFixed(2)} ج.م'
+                              : 'أضف للسلة - ${_currentPrice.toStringAsFixed(2)} ج.م',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         style: ElevatedButton.styleFrom(

@@ -152,6 +152,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     }
     bool isFeatured = product?['isFeatured'] == true;
     bool uploadingImage = false;
+    bool uploadingTypeImage = false;
     int? selectedCategoryId = product?['categoryId'] as int?;
     List<Map<String, dynamic>> variants = [];
     List<Map<String, dynamic>> types = [];
@@ -171,11 +172,19 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Padding(
-          padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 40,
+          ),
           child: SingleChildScrollView(
             child: Directionality(
               textDirection: TextDirection.rtl,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                   Text(isEdit ? 'تعديل المنتج' : 'إضافة منتج جديد',
                       style: const TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.bold)),
@@ -288,12 +297,77 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                   decoration: _inputDecoration(hint: 'Part Number'),
                                 ),
                                 const SizedBox(height: 12),
-                                const Text('رابط صورة للنوع (اختياري)', style: TextStyle(color: AppColors.text, fontSize: 13)),
+                                const Text('صورة للنوع (اختياري)', style: TextStyle(color: AppColors.text, fontSize: 13)),
                                 const SizedBox(height: 6),
-                                TextField(
-                                  controller: imageController,
-                                  style: const TextStyle(color: AppColors.text),
-                                  decoration: _inputDecoration(hint: 'ضع رابط صورة إن وجد'),
+                                StatefulBuilder(
+                                  builder: (ctx2, setLocal) => Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      ElevatedButton.icon(
+                                        onPressed: uploadingTypeImage
+                                            ? null
+                                            : () async {
+                                                final picker = ImagePicker();
+                                                final picked = await picker.pickImage(
+                                                  source: ImageSource.gallery,
+                                                  imageQuality: 80,
+                                                );
+                                                if (picked == null) return;
+                                                setModalState(() => uploadingTypeImage = true);
+                                                try {
+                                                  final bytes = await picked.readAsBytes();
+                                                  final url = await ApiService.uploadFile(
+                                                    picked.path,
+                                                    bytes: bytes,
+                                                    filename: picked.name,
+                                                  );
+                                                  setModalState(() {
+                                                    uploadingTypeImage = false;
+                                                  });
+                                                  setLocal(() {
+                                                    imageController.text = url;
+                                                  });
+                                                } catch (e) {
+                                                  setModalState(() => uploadingTypeImage = false);
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text('فشل رفع صورة النوع: $e'),
+                                                        backgroundColor: AppColors.error,
+                                                      ),
+                                                    );
+                                                  }
+                                                }
+                                              },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          foregroundColor: Colors.black,
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        ),
+                                        icon: uploadingTypeImage
+                                            ? const SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Colors.black,
+                                                ),
+                                              )
+                                            : const Icon(Icons.photo_library_outlined, size: 18),
+                                        label: Text(
+                                          uploadingTypeImage ? 'جاري الرفع...' : 'اختيار صورة من الجهاز',
+                                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                      if (imageController.text.isNotEmpty) ...[
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'تم اختيار صورة لهذا النوع',
+                                          style: const TextStyle(color: AppColors.text, fontSize: 12),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),

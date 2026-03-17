@@ -153,6 +153,16 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     bool isFeatured = product?['isFeatured'] == true;
     bool uploadingImage = false;
     int? selectedCategoryId = product?['categoryId'] as int?;
+    List<Map<String, dynamic>> variants = [];
+    List<Map<String, dynamic>> types = [];
+    final rawVariants = product?['variants'];
+    if (rawVariants is List) {
+      variants = rawVariants.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    final rawTypes = product?['types'];
+    if (rawTypes is List) {
+      types = rawTypes.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
 
     showModalBottomSheet(
       context: context,
@@ -183,6 +193,229 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                 const Text('السعر (ج.م) *', style: TextStyle(color: AppColors.muted, fontSize: 13)),
                 const SizedBox(height: 6),
                 TextField(controller: priceCtrl, keyboardType: TextInputType.number, style: const TextStyle(color: AppColors.text), decoration: _inputDecoration(hint: '0.00')),
+                const SizedBox(height: 12),
+                const Text('الأنواع (مثلاً: متر، قطعة...)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                const SizedBox(height: 6),
+                if (types.isNotEmpty)
+                  Column(
+                    children: types.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final t = entry.value;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppThemeDecorations.pageBackground(context),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${t['name'] ?? ''} - ${t['price'] ?? ''} ج.م',
+                                style: const TextStyle(color: AppColors.text, fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 18),
+                              onPressed: () {
+                                setModalState(() {
+                                  types.removeAt(idx);
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  )
+                else
+                  const Text('لا توجد أنواع مضافة بعد', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final nameController = TextEditingController();
+                      final priceController = TextEditingController();
+                      final added = await showDialog<bool>(
+                        context: ctx,
+                        builder: (dCtx) => Directionality(
+                          textDirection: TextDirection.rtl,
+                          child: AlertDialog(
+                            backgroundColor: AppThemeDecorations.cardColor(context),
+                            title: const Text('إضافة نوع', style: TextStyle(color: AppColors.text)),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('اسم النوع', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                TextField(
+                                  controller: nameController,
+                                  style: const TextStyle(color: AppColors.text),
+                                  decoration: _inputDecoration(hint: 'مثال: متر، قطعة...'),
+                                ),
+                                const SizedBox(height: 12),
+                                const Text('السعر لهذا النوع (اختياري)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                TextField(
+                                  controller: priceController,
+                                  keyboardType: TextInputType.number,
+                                  style: const TextStyle(color: AppColors.text),
+                                  decoration: _inputDecoration(hint: 'اتركه فارغًا لاستخدام السعر الأساسي'),
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('إلغاء')),
+                              TextButton(onPressed: () => Navigator.pop(dCtx, true), child: const Text('حفظ')),
+                            ],
+                          ),
+                        ),
+                      );
+                      if (added == true && nameController.text.trim().isNotEmpty) {
+                        setModalState(() {
+                          types.add({
+                            'name': nameController.text.trim(),
+                            if (priceController.text.trim().isNotEmpty) 'price': priceController.text.trim(),
+                          });
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('إضافة نوع', style: TextStyle(fontSize: 13)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text('الألوان', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                const SizedBox(height: 6),
+                if (variants.isNotEmpty)
+                  Column(
+                    children: variants.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final v = entry.value;
+                      final String? colorName = v['color'] as String?;
+                      final String? colorHex = v['colorHex'] as String?;
+                      Color? parsedColor;
+                      if (colorHex != null && colorHex.isNotEmpty) {
+                        try {
+                          var h = colorHex.replaceAll('#', '');
+                          if (h.length == 6) h = 'FF$h';
+                          parsedColor = Color(int.parse(h, radix: 16));
+                        } catch (_) {}
+                      }
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppThemeDecorations.pageBackground(context),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            if (parsedColor != null)
+                              Container(
+                                width: 18,
+                                height: 18,
+                                margin: const EdgeInsets.only(left: 8),
+                                decoration: BoxDecoration(
+                                  color: parsedColor,
+                                  borderRadius: BorderRadius.circular(9),
+                                  border: Border.all(color: Colors.white, width: 1),
+                                ),
+                              ),
+                            Expanded(
+                              child: Text(
+                                '${colorName ?? ''}${v['price'] != null ? ' - ${v['price']} ج.م' : ''}',
+                                style: const TextStyle(color: AppColors.text, fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 18),
+                              onPressed: () {
+                                setModalState(() {
+                                  variants.removeAt(idx);
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  )
+                else
+                  const Text('لا توجد ألوان مضافة بعد', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final colorNameController = TextEditingController();
+                      final colorHexController = TextEditingController();
+                      final priceController = TextEditingController();
+                      final added = await showDialog<bool>(
+                        context: ctx,
+                        builder: (dCtx) => Directionality(
+                          textDirection: TextDirection.rtl,
+                          child: AlertDialog(
+                            backgroundColor: AppThemeDecorations.cardColor(context),
+                            title: const Text('إضافة لون', style: TextStyle(color: AppColors.text)),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('اسم اللون', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                TextField(
+                                  controller: colorNameController,
+                                  style: const TextStyle(color: AppColors.text),
+                                  decoration: _inputDecoration(hint: 'مثال: أبيض، أسود...'),
+                                ),
+                                const SizedBox(height: 12),
+                                const Text('كود اللون (اختياري)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                TextField(
+                                  controller: colorHexController,
+                                  style: const TextStyle(color: AppColors.text),
+                                  decoration: _inputDecoration(hint: '#FFFFFF'),
+                                ),
+                                const SizedBox(height: 12),
+                                const Text('السعر لهذا اللون (اختياري)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                TextField(
+                                  controller: priceController,
+                                  keyboardType: TextInputType.number,
+                                  style: const TextStyle(color: AppColors.text),
+                                  decoration: _inputDecoration(hint: 'اتركه فارغًا لاستخدام السعر الأساسي'),
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('إلغاء')),
+                              TextButton(onPressed: () => Navigator.pop(dCtx, true), child: const Text('حفظ')),
+                            ],
+                          ),
+                        ),
+                      );
+                      if (added == true && colorNameController.text.trim().isNotEmpty) {
+                        setModalState(() {
+                          variants.add({
+                            'color': colorNameController.text.trim(),
+                            if (colorHexController.text.trim().isNotEmpty) 'colorHex': colorHexController.text.trim(),
+                            if (priceController.text.trim().isNotEmpty) 'price': priceController.text.trim(),
+                          });
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('إضافة لون', style: TextStyle(fontSize: 13)),
+                  ),
+                ),
                 const SizedBox(height: 12),
                 const Text('الكمية في المخزن', style: TextStyle(color: AppColors.muted, fontSize: 13)),
                 const SizedBox(height: 6),
@@ -364,6 +597,8 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           'stock': int.tryParse(stockCtrl.text) ?? 0,
                           'isFeatured': isFeatured,
                           if (selectedCategoryId != null) 'categoryId': selectedCategoryId,
+                          if (variants.isNotEmpty) 'variants': variants,
+                          if (types.isNotEmpty) 'types': types,
                         };
                         if (isEdit) {
                           body['id'] = product!['id'];

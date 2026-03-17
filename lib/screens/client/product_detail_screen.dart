@@ -36,11 +36,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   List<String> get _images {
     final imgs = widget.product['images'];
     final main = widget.product['mainImageUrl'] as String?;
+    String? override;
+    if (_selectedTypeIndex != null && _types.isNotEmpty) {
+      override = _types[_selectedTypeIndex!]['imageUrl'] as String?;
+    } else if (_selectedVariantIndex != null && _variants.isNotEmpty) {
+      override = _variants[_selectedVariantIndex!]['imageUrl'] as String?;
+    }
     List<String> result = [];
-    if (main != null && main.isNotEmpty) result.add(ApiService.proxyImageUrl(main));
+    if (override != null && override.isNotEmpty) {
+      result.add(ApiService.proxyImageUrl(override));
+    }
+    if (main != null && main.isNotEmpty && main != override) {
+      result.add(ApiService.proxyImageUrl(main));
+    }
     if (imgs is List) {
       for (var img in imgs) {
-        if (img is String && img.isNotEmpty && img != main) {
+        if (img is String && img.isNotEmpty && img != main && img != override) {
           result.add(ApiService.proxyImageUrl(img));
         }
       }
@@ -214,6 +225,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             onTap: () => setState(() {
                               _selectedVariantIndex = i;
                               _selectedTypeIndex = null;
+                              _selectedImageIndex = 0;
                             }),
                             child: Column(
                               children: [
@@ -267,6 +279,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             onTap: () => setState(() {
                               _selectedTypeIndex = i;
                               _selectedVariantIndex = null;
+                              _selectedImageIndex = 0;
                             }),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),

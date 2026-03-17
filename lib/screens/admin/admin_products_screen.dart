@@ -194,7 +194,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                 const SizedBox(height: 6),
                 TextField(controller: priceCtrl, keyboardType: TextInputType.number, style: const TextStyle(color: AppColors.text), decoration: _inputDecoration(hint: '0.00')),
                 const SizedBox(height: 12),
-                const Text('الأنواع (مثلاً: متر، قطعة...)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                const Text('الأنواع (مثلاً: متر، قطعة...)', style: TextStyle(color: AppColors.text, fontSize: 13)),
                 const SizedBox(height: 6),
                 if (types.isNotEmpty)
                   Column(
@@ -232,7 +232,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                     }).toList(),
                   )
                 else
-                  const Text('لا توجد أنواع مضافة بعد', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+                  const Text('لا توجد أنواع مضافة بعد', style: TextStyle(color: AppColors.text, fontSize: 12)),
                 const SizedBox(height: 6),
                 Align(
                   alignment: Alignment.centerRight,
@@ -240,6 +240,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                     onPressed: () async {
                       final nameController = TextEditingController();
                       final priceController = TextEditingController();
+                      final stockController = TextEditingController();
+                      final partController = TextEditingController();
+                      final imageController = TextEditingController();
                       final added = await showDialog<bool>(
                         context: ctx,
                         builder: (dCtx) => Directionality(
@@ -251,7 +254,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('اسم النوع', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                                const Text('اسم النوع', style: TextStyle(color: AppColors.text, fontSize: 13)),
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: nameController,
@@ -259,13 +262,38 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                   decoration: _inputDecoration(hint: 'مثال: متر، قطعة...'),
                                 ),
                                 const SizedBox(height: 12),
-                                const Text('السعر لهذا النوع (اختياري)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                                const Text('السعر لهذا النوع (اختياري)', style: TextStyle(color: AppColors.text, fontSize: 13)),
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: priceController,
                                   keyboardType: TextInputType.number,
                                   style: const TextStyle(color: AppColors.text),
                                   decoration: _inputDecoration(hint: 'اتركه فارغًا لاستخدام السعر الأساسي'),
+                                ),
+                                const SizedBox(height: 12),
+                                const Text('المخزون لهذا النوع (اختياري)', style: TextStyle(color: AppColors.text, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                TextField(
+                                  keyboardType: TextInputType.number,
+                                  style: const TextStyle(color: AppColors.text),
+                                  decoration: _inputDecoration(hint: 'اتركه فارغًا لاستخدام مخزون المنتج الأساسي'),
+                                controller: stockController,
+                                ),
+                                const SizedBox(height: 12),
+                                const Text('رقم البارت (اختياري)', style: TextStyle(color: AppColors.text, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                TextField(
+                                  controller: partController,
+                                  style: const TextStyle(color: AppColors.text),
+                                  decoration: _inputDecoration(hint: 'Part Number'),
+                                ),
+                                const SizedBox(height: 12),
+                                const Text('رابط صورة للنوع (اختياري)', style: TextStyle(color: AppColors.text, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                TextField(
+                                  controller: imageController,
+                                  style: const TextStyle(color: AppColors.text),
+                                  decoration: _inputDecoration(hint: 'ضع رابط صورة إن وجد'),
                                 ),
                               ],
                             ),
@@ -281,6 +309,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           types.add({
                             'name': nameController.text.trim(),
                             if (priceController.text.trim().isNotEmpty) 'price': priceController.text.trim(),
+                            if (stockController.text.trim().isNotEmpty) 'stock': stockController.text.trim(),
+                            if (partController.text.trim().isNotEmpty) 'partNumber': partController.text.trim(),
+                            if (imageController.text.trim().isNotEmpty) 'imageUrl': imageController.text.trim(),
                           });
                         });
                       }
@@ -290,7 +321,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text('الألوان', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                const Text('الألوان', style: TextStyle(color: AppColors.text, fontSize: 13)),
                 const SizedBox(height: 6),
                 if (variants.isNotEmpty)
                   Column(
@@ -349,7 +380,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                     }).toList(),
                   )
                 else
-                  const Text('لا توجد ألوان مضافة بعد', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+                  const Text('لا توجد ألوان مضافة بعد', style: TextStyle(color: AppColors.text, fontSize: 12)),
                 const SizedBox(height: 6),
                 Align(
                   alignment: Alignment.centerRight,
@@ -369,7 +400,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('اسم اللون', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                                const Text('اسم اللون', style: TextStyle(color: AppColors.text, fontSize: 13)),
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: colorNameController,
@@ -377,7 +408,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                   decoration: _inputDecoration(hint: 'مثال: أبيض، أسود...'),
                                 ),
                                 const SizedBox(height: 12),
-                                const Text('كود اللون (اختياري)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                                const Text('كود اللون (اختياري)', style: TextStyle(color: AppColors.text, fontSize: 13)),
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: colorHexController,
@@ -385,7 +416,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                   decoration: _inputDecoration(hint: '#FFFFFF'),
                                 ),
                                 const SizedBox(height: 12),
-                                const Text('السعر لهذا اللون (اختياري)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                                const Text('السعر لهذا اللون (اختياري)', style: TextStyle(color: AppColors.text, fontSize: 13)),
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: priceController,

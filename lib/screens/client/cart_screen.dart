@@ -15,6 +15,32 @@ class CartScreen extends StatefulWidget {
 class _CartScreenState extends State<CartScreen> {
   String _paymentMethod = 'cash';
   bool _submitting = false;
+  String? _shippingName;
+  String? _shippingPhone;
+  String? _shippingAddress;
+  bool _loadingProfile = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() => _loadingProfile = true);
+    try {
+      final res = await ApiService.query('users.getProfile');
+      final data = res['data'] ?? res;
+      setState(() {
+        _shippingName = data['name'] as String?;
+        _shippingPhone = data['phone'] as String?;
+        _shippingAddress = data['address'] as String?;
+        _loadingProfile = false;
+      });
+    } catch (_) {
+      setState(() => _loadingProfile = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -126,6 +152,84 @@ class _CartScreenState extends State<CartScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const Text('بيانات التوصيل:',
+                          style: TextStyle(
+                              color: AppColors.text,
+                              fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppThemeDecorations.pageBackground(context),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: _loadingProfile
+                            ? const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppColors.primary),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text('جاري تحميل بياناتك...',
+                                      style: TextStyle(
+                                          color: AppColors.muted,
+                                          fontSize: 13)),
+                                ],
+                              )
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _shippingName?.isNotEmpty == true
+                                        ? _shippingName!
+                                        : 'الاسم: غير مُدخل',
+                                    style: const TextStyle(
+                                        color: AppColors.text, fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _shippingPhone?.isNotEmpty == true
+                                        ? 'الهاتف: $_shippingPhone'
+                                        : 'الهاتف: غير مُدخل',
+                                    style: const TextStyle(
+                                        color: AppColors.text, fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _shippingAddress?.isNotEmpty == true
+                                        ? 'العنوان: $_shippingAddress'
+                                        : 'العنوان: غير مُدخل',
+                                    style: const TextStyle(
+                                        color: AppColors.text, fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: TextButton.icon(
+                                      onPressed: _submitting
+                                          ? null
+                                          : () => _editShippingInfo(),
+                                      icon: const Icon(Icons.edit_location_alt,
+                                          size: 18),
+                                      label: Text(
+                                        _shippingAddress?.isNotEmpty == true
+                                            ? 'تعديل بيانات التوصيل'
+                                            : 'إضافة بيانات التوصيل',
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                      const SizedBox(height: 16),
                       const Text('طريقة الدفع:',
                           style: TextStyle(
                               color: AppColors.text,
@@ -175,7 +279,8 @@ class _CartScreenState extends State<CartScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _submitting ? null : () => _placeOrder(cart),
+                          onPressed:
+                              _submitting ? null : () => _placeOrder(cart),
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
@@ -200,6 +305,14 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _placeOrder(CartProvider cart) async {
+    // تأكد من وجود بيانات التوصيل (خاصة العنوان)
+    final hasAddress =
+        _shippingAddress != null && _shippingAddress!.trim().isNotEmpty;
+    if (!hasAddress) {
+      final ok = await _editShippingInfo();
+      if (!ok) return;
+    }
+
     setState(() => _submitting = true);
     try {
       final items = cart.items
@@ -214,6 +327,8 @@ class _CartScreenState extends State<CartScreen> {
         'items': items,
         'paymentMethod': _paymentMethod,
         'totalAmount': cart.total.toString(),
+        if (_shippingAddress != null && _shippingAddress!.isNotEmpty)
+          'shippingAddress': _shippingAddress,
       });
 
       cart.clear();
@@ -256,6 +371,84 @@ class _CartScreenState extends State<CartScreen> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<bool> _editShippingInfo() async {
+    final nameCtrl = TextEditingController(text: _shippingName ?? '');
+    final phoneCtrl = TextEditingController(text: _shippingPhone ?? '');
+    final addressCtrl = TextEditingController(text: _shippingAddress ?? '');
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: AppThemeDecorations.cardColor(context),
+          title: const Text('بيانات التوصيل',
+              style: TextStyle(color: AppColors.text)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'الاسم الكامل',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'رقم الهاتف',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: addressCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'عنوان التوصيل',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == true) {
+      // حفظ في البروفايل حتى تُستخدم لاحقاً
+      try {
+        await ApiService.mutate('users.updateProfile', input: {
+          'name': nameCtrl.text.trim(),
+          'phone': phoneCtrl.text.trim(),
+          'address': addressCtrl.text.trim(),
+        });
+      } catch (_) {
+        // نتجاهل الخطأ هنا، المهم نحدّث الطلب الحالي
+      }
+
+      setState(() {
+        _shippingName = nameCtrl.text.trim();
+        _shippingPhone = phoneCtrl.text.trim();
+        _shippingAddress = addressCtrl.text.trim();
+      });
+      return true;
+    }
+    return false;
   }
 
   Widget _imgPlaceholder() {

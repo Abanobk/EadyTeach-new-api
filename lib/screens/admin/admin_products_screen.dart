@@ -210,6 +210,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                     children: types.asMap().entries.map((entry) {
                       final idx = entry.key;
                       final t = entry.value;
+                      final String? imageUrl = t['imageUrl'] as String?;
                       return Container(
                         margin: const EdgeInsets.only(bottom: 6),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -220,13 +221,76 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         ),
                         child: Row(
                           children: [
+                            if (imageUrl != null && imageUrl.isNotEmpty) ...[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: Image.network(
+                                  ApiService.proxyImageUrl(imageUrl),
+                                  width: 40,
+                                  height: 40,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 22, color: AppColors.muted),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
                             Expanded(
-                              child: Text(
-                                '${t['name'] ?? ''} - ${t['price'] ?? ''} ج.م',
-                                style: const TextStyle(color: AppColors.text, fontSize: 13),
-                                overflow: TextOverflow.ellipsis,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    t['name'] ?? '',
+                                    style: const TextStyle(color: AppColors.text, fontSize: 13, fontWeight: FontWeight.w600),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (t['price'] != null && t['price'].toString().isNotEmpty)
+                                    Text(
+                                      '${t['price']} ج.م',
+                                      style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w500),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  if (t['partNumber'] != null && t['partNumber'].toString().isNotEmpty)
+                                    Text(
+                                      'Part: ${t['partNumber']}',
+                                      style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                ],
                               ),
                             ),
+                            if (imageUrl != null && imageUrl.isNotEmpty)
+                              IconButton(
+                                tooltip: 'تغيير صورة النوع',
+                                icon: const Icon(Icons.photo_library_outlined, color: AppColors.muted, size: 18),
+                                onPressed: () async {
+                                  final picker = ImagePicker();
+                                  final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+                                  if (picked == null) return;
+                                  setModalState(() => uploadingTypeImage = true);
+                                  try {
+                                    final bytes = await picked.readAsBytes();
+                                    final url = await ApiService.uploadFile(
+                                      picked.path,
+                                      bytes: bytes,
+                                      filename: picked.name,
+                                    );
+                                    setModalState(() {
+                                      uploadingTypeImage = false;
+                                      types[idx]['imageUrl'] = url;
+                                    });
+                                  } catch (e) {
+                                    setModalState(() => uploadingTypeImage = false);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('فشل تغيير صورة النوع: $e'),
+                                          backgroundColor: AppColors.error,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
                             IconButton(
                               icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 18),
                               onPressed: () {

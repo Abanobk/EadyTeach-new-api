@@ -47,6 +47,17 @@ class ApiService {
   static String proxyImageUrl(String? url) {
     if (url == null || url.isEmpty) return '';
 
+    // On web: always proxy images to avoid CORS issues.
+    // Backend image proxy lives at /api/image-proxy?url=...
+    if (kIsWeb) {
+      if (url.contains('image-proxy')) return url;
+      if (url.startsWith('/')) {
+        url = _absoluteUrl(url);
+      }
+      final encoded = Uri.encodeComponent(url);
+      return '${_apiOrigin}/api/image-proxy?url=$encoded';
+    }
+
     // لو الرابط نفسه هو الـ image-proxy نتاكد إنه مطلق (absolute) من نفس الـ origin
     if (url.contains('image-proxy')) {
       // إن كان نسبي (يبدأ بـ /api/...) نحوله لمطلق على api.easytecheg.net

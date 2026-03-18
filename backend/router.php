@@ -766,6 +766,19 @@ try {
             $result = ['success' => true];
             break;
 
+        // ── Discounts (per dealer/client rules) ─────────────────
+        case 'discounts.listRules':
+            $result = discounts_listRules($input, $ctx);
+            break;
+
+        case 'discounts.saveRule':
+            $result = discounts_saveRule($input, $ctx);
+            break;
+
+        case 'discounts.deleteRule':
+            $result = discounts_deleteRule($input, $ctx);
+            break;
+
         // ── Store Settings ─────────────────────────────────────
         case 'storeSettings.get':
             $result = [

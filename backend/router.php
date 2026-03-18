@@ -184,6 +184,30 @@ require_once __DIR__ . '/notifications_procedures.php';
 
 // ─── Helper functions ──────────────────────────────────────────
 
+function _hasCategoryDiscountColumns(): bool {
+    global $db, $dbName;
+    static $cache = null;
+    if ($cache !== null) return $cache;
+
+    try {
+        $stmt = $db->prepare(
+            "SELECT COLUMN_NAME
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = ?
+               AND TABLE_NAME = 'categories'
+               AND COLUMN_NAME IN ('discount_percent','discount_amount')"
+        );
+        $stmt->execute([$dbName]);
+        $cols = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $required = ['discount_percent', 'discount_amount'];
+        $cache = count(array_intersect($required, $cols)) === 2;
+    } catch (\Exception $e) {
+        $cache = false;
+    }
+
+    return $cache;
+}
+
 function formatCategory(array $row): array {
     return [
         'id'          => (int) $row['id'],
@@ -621,7 +645,10 @@ try {
 
         // ── Products ───────────────────────────────────────────
         case 'products.list':
-            $sql = 'SELECT p.*, c.discount_percent AS cat_discount_percent, c.discount_amount AS cat_discount_amount
+            $catSel = _hasCategoryDiscountColumns()
+                ? ', c.discount_percent AS cat_discount_percent, c.discount_amount AS cat_discount_amount'
+                : '';
+            $sql = 'SELECT p.*' . $catSel . '
                     FROM products p
                     LEFT JOIN categories c ON c.id = p.category_id
                     WHERE p.is_active = 1';
@@ -646,7 +673,10 @@ try {
             break;
 
         case 'products.listAdmin':
-            $sql = 'SELECT p.*, c.discount_percent AS cat_discount_percent, c.discount_amount AS cat_discount_amount
+            $catSel = _hasCategoryDiscountColumns()
+                ? ', c.discount_percent AS cat_discount_percent, c.discount_amount AS cat_discount_amount'
+                : '';
+            $sql = 'SELECT p.*' . $catSel . '
                     FROM products p
                     LEFT JOIN categories c ON c.id = p.category_id';
             $params = [];

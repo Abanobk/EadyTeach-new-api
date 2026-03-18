@@ -51,8 +51,13 @@ class ApiService {
     // Backend image proxy lives at /api/image-proxy?url=...
     if (kIsWeb) {
       if (url.contains('image-proxy')) return url;
-      if (url.startsWith('/')) {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        // keep as-is
+      } else if (url.startsWith('/')) {
         url = _absoluteUrl(url);
+      } else {
+        // Handle relative paths like "uploads/x.jpg"
+        url = _absoluteUrl('/$url');
       }
       final encoded = Uri.encodeComponent(url);
       return '${_apiOrigin}/api/image-proxy?url=$encoded';

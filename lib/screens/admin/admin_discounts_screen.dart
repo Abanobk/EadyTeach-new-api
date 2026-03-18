@@ -159,6 +159,10 @@ class _AdminDiscountsScreenState extends State<AdminDiscountsScreen>
         backgroundColor: AppThemeDecorations.pageBackground(context),
         appBar: AppBar(
           backgroundColor: AppThemeDecorations.cardColor(context),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.text),
+            onPressed: () => Navigator.maybePop(context),
+          ),
           title: const Text(
             'إدارة خصومات التجار / العملاء',
             style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),

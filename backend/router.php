@@ -288,14 +288,18 @@ function _applyUserDiscount(array $row, ?array $ctx): array {
     $rule = $rules[0];
     $minStock = (int)($rule['min_stock'] ?? 0);
 
-    if ($stock === 0) {
-        // No discount when stock is zero – waiting for discount/special price
+    if ($stock === 0 || ($minStock > 0 && $stock < $minStock)) {
+        // No discount if stock is zero or doesn't meet minStock requirement
+        $msg = $stock === 0
+            ? 'الكمية صفر – في انتظار نسبة الخصم والسعر النهائي لهذا التاجر/العميل'
+            : "المخزون أقل من شرط الخصم ($minStock) – في انتظار نسبة الخصم والسعر النهائي لهذا التاجر/العميل";
+
         return [
             'percent' => 0.0,
             'amount' => 0.0,
             'source' => 'user',
             'minStock' => $minStock,
-            'waitingMessage' => 'الكمية صفر – في انتظار نسبة الخصم والسعر النهائي لهذا التاجر/العميل',
+            'waitingMessage' => $msg,
         ];
     }
 

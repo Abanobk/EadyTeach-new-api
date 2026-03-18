@@ -599,6 +599,33 @@ class _AdminDiscountsScreenState extends State<AdminDiscountsScreen>
                           .toList(),
                       onChanged: (v) => setState(() => categoryId = v),
                     ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'اختياري: منتج محدد (لو اخترته يبقى التنفيذ للمنتج)',
+                      style: TextStyle(color: AppColors.muted, fontSize: 13),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<int?>(
+                      value: productId,
+                      decoration: _inputDec(hint: 'لا شيء'),
+                      dropdownColor: AppThemeDecorations.cardColor(context),
+                      items: [
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text('- لا شيء', style: TextStyle(color: AppColors.muted)),
+                        ),
+                        ..._products.map(
+                          (p) => DropdownMenuItem<int?>(
+                            value: p['id'] as int?,
+                            child: Text(
+                              (p['nameAr'] ?? p['name'] ?? '').toString(),
+                              style: const TextStyle(color: AppColors.text),
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() => productId = v),
+                    ),
                   ] else ...[
                     const Text('المنتج', style: TextStyle(color: AppColors.muted, fontSize: 13)),
                     const SizedBox(height: 6),
@@ -707,21 +734,26 @@ class _AdminDiscountsScreenState extends State<AdminDiscountsScreen>
                 );
                 return;
               }
+
+              final finalScopeType = scopeType == 'category'
+                  ? (productId != null ? 'product' : 'category')
+                  : scopeType;
+
               await _saveRule(
                 data: {
                   if (existing != null) 'id': existing['id'],
                   'targetType': _targetType,
                   'targetId': _selectedTargetId,
-                  'scopeType': scopeType,
-                  if (scopeType == 'category') 'categoryId': categoryId,
-                  if (scopeType == 'product') 'productId': productId,
+                  'scopeType': finalScopeType,
+                  if (finalScopeType == 'category') 'categoryId': categoryId,
+                  if (finalScopeType == 'product') 'productId': productId,
                   'discountPercent': pct,
                   'discountAmount': pct > 0 ? 0 : amt,
                   'minStock': minStock,
                   'isActive': isActive,
                   'note': noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
                 },
-                scopeType: scopeType,
+                scopeType: finalScopeType,
               );
               if (context.mounted) Navigator.pop(ctx);
             },

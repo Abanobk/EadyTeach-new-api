@@ -125,46 +125,63 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ─── صور المنتج ───
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Stack(
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        if (images.isEmpty) return;
-                        _openImageViewer(images, _selectedImageIndex);
-                      },
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: images.isNotEmpty
-                            ? Image.network(
-                                images[_selectedImageIndex],
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => _placeholder(),
-                              )
-                            : _placeholder(),
+              LayoutBuilder(
+                builder: (ctx, constraints) {
+                  final maxWidth =
+                      constraints.maxWidth > 720 ? 600.0 : constraints.maxWidth;
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxWidth),
+                      child: AspectRatio(
+                        aspectRatio: 4 / 3,
+                        child: Stack(
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                if (images.isEmpty) return;
+                                _openImageViewer(
+                                    images, _selectedImageIndex);
+                              },
+                              child: SizedBox(
+                                width: double.infinity,
+                                child: images.isNotEmpty
+                                    ? Image.network(
+                                        images[_selectedImageIndex],
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_, __, ___) =>
+                                            _placeholder(),
+                                      )
+                                    : _placeholder(),
+                              ),
+                            ),
+                            if (hasDiscount)
+                              Positioned(
+                                top: 12,
+                                right: 12,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    discountPercent > 0
+                                        ? 'خصم ${discountPercent.toStringAsFixed(0)}%'
+                                        : 'خصم ${(((originalPrice - _currentPrice) / originalPrice) * 100).toStringAsFixed(0)}%',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                  if (hasDiscount)
-                    Positioned(
-                      top: 12,
-                      right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          discountPercent > 0
-                              ? 'خصم ${discountPercent.toStringAsFixed(0)}%'
-                              : 'خصم ${(((originalPrice - _currentPrice) / originalPrice) * 100).toStringAsFixed(0)}%',
-                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
 
               // ─── صور مصغرة ───

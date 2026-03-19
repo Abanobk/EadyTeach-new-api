@@ -58,6 +58,28 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     _loadQuotation();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // `AuthProvider` may finish loading after `initState`, so trigger preview later too.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await _maybeLoadDealerPurchasePreview();
+    });
+  }
+
+  Future<void> _maybeLoadDealerPurchasePreview() async {
+    if (_quotation == null) return;
+    if (_loadingDealerPreview) return;
+    if (_dealerPreviewLoadedForCurrentQuotation) return;
+
+    final auth = context.read<AuthProvider>();
+    final role = auth.user?.role ?? '';
+    if (!_isDealerRole(role)) return;
+
+    await _loadDealerPurchasePreview();
+  }
+
   Future<void> _loadQuotation() async {
     setState(() => _loading = true);
     try {
@@ -67,12 +89,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         _loading = false;
         _dealerPreviewLoadedForCurrentQuotation = false;
       });
-
-      final auth = context.read<AuthProvider>();
-      final role = auth.user?.role ?? '';
-      if (_isDealerRole(role)) {
-        await _loadDealerPurchasePreview();
-      }
+      // Preview loading is handled by `_maybeLoadDealerPurchasePreview()` (see didChangeDependencies).
     } catch (e) {
       setState(() => _loading = false);
     }
@@ -111,13 +128,16 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         _dealerPreviewLoadedForCurrentQuotation = true;
         _loadingDealerPreview = false;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _dealerPurchasePreview = <String, dynamic>{};
         _dealerPreviewLoadedForCurrentQuotation = true;
         _loadingDealerPreview = false;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذر حساب سعر التاجر: $e'), backgroundColor: AppColors.error),
+      );
     }
   }
 

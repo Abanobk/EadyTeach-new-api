@@ -159,7 +159,11 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
   }
 
   void _addToCartDirect(Map<String, dynamic> product, String? color, String? variant) {
-    final basePrice = double.tryParse(product['price']?.toString() ?? '0') ?? 0;
+    // When the dealer module applies discounts, backend may return:
+    // - `price` = discounted price
+    // - `originalPrice` = official price
+    // For quotation creation we always want to start from the official price.
+    final basePrice = double.tryParse((product['originalPrice'] ?? product['price'])?.toString() ?? '0') ?? 0;
     // Find price from selected color/variant
     double unitPrice = basePrice;
     if (color != null) {
@@ -430,7 +434,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                           itemBuilder: (context, i) {
                             final p = _filteredProducts[i];
                             final inCart = _cartItems.where((c) => c['productId'] == p['id']).fold(0, (sum, c) => sum + (c['qty'] as int));
-                            final price = double.tryParse(p['price']?.toString() ?? '0') ?? 0;
+                            final price = double.tryParse((p['originalPrice'] ?? p['price'])?.toString() ?? '0') ?? 0;
                             // variants = ألوان, types = أنواع
                             final variantsList = (p['variants'] as List?) ?? [];
                             final typesList = (p['types'] as List?) ?? [];

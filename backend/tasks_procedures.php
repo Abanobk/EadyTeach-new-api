@@ -952,7 +952,10 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
     if (!$q) throw new Exception('Quotation not found');
 
     $status = $q['purchase_request_status'] ?? 'none';
-    if ($status !== 'requested') return ['success' => true];
+    $statusNorm = strtolower(trim((string)$status));
+    if ($statusNorm !== 'requested' && $statusNorm !== 'accepted') {
+        return ['success' => true];
+    }
 
     // Basic admin check (by role from DB)
     $roleStmt = $db->prepare('SELECT role FROM users WHERE id = ?');
@@ -988,6 +991,12 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
 
     $purchaseItems = null;
     $purchaseTotal = (float)($q['purchase_total_amount'] ?? 0);
+
+    // If already accepted and we don't need to recompute (e.g. imageUrl missing isn't present),
+    // just exit without changing anything.
+    if ($statusNorm === 'accepted' && $needComputeItems === false) {
+        return ['success' => true];
+    }
 
     if ($needComputeItems) {
         $items = $q['items'] ? json_decode($q['items'], true) : [];

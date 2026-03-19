@@ -207,13 +207,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
     if (!_isDealerForCurrentQuote) return;
     final purchaseStatus = _quotation?['purchaseRequestStatus'] ?? 'none';
+    final purchaseStatusNorm = purchaseStatus.toString().trim().toLowerCase();
 
-    if (purchaseStatus == 'accepted') {
+    if (purchaseStatusNorm == 'accepted') {
       _syncCartFromPurchaseItemsIfNeeded();
       return;
     }
 
-    if (purchaseStatus != 'requested') return;
+    if (purchaseStatusNorm != 'requested') return;
 
     // Poll until admin accepts.
     _dealerPollTimer = Timer.periodic(const Duration(seconds: 4), (t) async {
@@ -229,7 +230,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   Future<void> _syncCartFromPurchaseItemsIfNeeded() async {
     if (_cartSyncedForThisQuote) return;
     final purchaseStatus = _quotation?['purchaseRequestStatus'] ?? 'none';
-    if (purchaseStatus != 'accepted') return;
+    final purchaseStatusNorm = purchaseStatus.toString().trim().toLowerCase();
+    if (purchaseStatusNorm != 'accepted') return;
 
     final purchaseItems = _quotation?['purchaseItems'] as List? ?? [];
     if (purchaseItems.isEmpty) return;
@@ -672,6 +674,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     final isDealer = (dealerId != null && quoteCreatedById != null) ? (dealerId == quoteCreatedById) : _isDealerRole(role);
     final canAcceptPurchase = auth.user?.canAccessAdmin ?? false;
     final purchaseRequestStatus = _quotation?['purchaseRequestStatus'] ?? 'none';
+    final purchaseRequestStatusNorm = purchaseRequestStatus.toString().trim().toLowerCase();
     final qSubtotal = double.tryParse(_quotation?['subtotal']?.toString() ?? '0') ?? 0.0;
     final qInstallationAmount = double.tryParse(_quotation?['installationAmount']?.toString() ?? '0') ?? 0.0;
     final qOriginalTotal = qSubtotal + qInstallationAmount;
@@ -880,7 +883,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                     style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14),
                                   ),
                                   const SizedBox(height: 8),
-                                  if (purchaseRequestStatus != 'accepted')
+                                  if (purchaseRequestStatusNorm != 'accepted')
                                     const Text(
                                       'بانتظار اعتماد الإدارة لسعر التاجر...',
                                       style: TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600, fontSize: 12),
@@ -936,7 +939,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
-                                onPressed: (_requestingPurchase || purchaseRequestStatus == 'requested' || purchaseRequestStatus == 'accepted')
+                                onPressed: (_requestingPurchase || purchaseRequestStatusNorm == 'requested' || purchaseRequestStatusNorm == 'accepted')
                                     ? null
                                     : _requestPurchase,
                                 icon: _requestingPurchase
@@ -945,9 +948,9 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                 label: Text(
                                   _requestingPurchase
                                       ? 'جاري إرسال الطلب...'
-                                      : (purchaseRequestStatus == 'requested'
+                                      : (purchaseRequestStatusNorm == 'requested'
                                           ? 'بانتظار اعتماد الإدارة'
-                                          : (purchaseRequestStatus == 'accepted' ? 'تم اعتماد الطلب' : 'طلب شراء')),
+                                          : (purchaseRequestStatusNorm == 'accepted' ? 'تم اعتماد الطلب' : 'طلب شراء')),
                                 ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.primary,
@@ -957,7 +960,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                               ),
                             ),
                             const SizedBox(height: 10),
-                            if (purchaseRequestStatus == 'accepted') ...[
+                            if (purchaseRequestStatusNorm == 'accepted') ...[
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton.icon(
@@ -977,7 +980,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                             ],
                           ],
                           // Admin/staff: accept purchase request
-                          if (canAcceptPurchase && purchaseRequestStatus == 'requested') ...[
+                          if (canAcceptPurchase && purchaseRequestStatusNorm == 'requested') ...[
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(

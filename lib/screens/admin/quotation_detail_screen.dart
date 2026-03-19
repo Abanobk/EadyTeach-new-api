@@ -35,6 +35,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   Map<String, dynamic>? _dealerPurchasePreview;
   bool _dealerPreviewLoadedForCurrentQuotation = false;
+  String? _dealerPurchasePreviewError;
 
   final _statusLabels = {
     'draft': 'مسودة',
@@ -75,7 +76,17 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
     final auth = context.read<AuthProvider>();
     final role = auth.user?.role ?? '';
-    if (!_isDealerRole(role)) return;
+    final dealerId = auth.user?.id;
+    final quoteCreatedBy = _quotation?['createdBy'];
+    final quoteCreatedById = quoteCreatedBy == null ? null : int.tryParse(quoteCreatedBy.toString());
+
+    // Prefer strict check based on which dealer created the quotation.
+    // Fallback to role-string for backward compatibility if createdBy isn't present.
+    if (dealerId != null && quoteCreatedById != null) {
+      if (dealerId != quoteCreatedById) return;
+    } else {
+      if (!_isDealerRole(role)) return;
+    }
 
     await _loadDealerPurchasePreview();
   }
@@ -88,6 +99,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         _quotation = res['data'];
         _loading = false;
         _dealerPreviewLoadedForCurrentQuotation = false;
+        _dealerPurchasePreviewError = null;
       });
       // Preview loading is handled by `_maybeLoadDealerPurchasePreview()` (see didChangeDependencies).
     } catch (e) {
@@ -127,6 +139,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         _dealerPurchasePreview = (data is Map<String, dynamic>) ? data : <String, dynamic>{};
         _dealerPreviewLoadedForCurrentQuotation = true;
         _loadingDealerPreview = false;
+        _dealerPurchasePreviewError = null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -135,6 +148,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         _dealerPreviewLoadedForCurrentQuotation = true;
         _loadingDealerPreview = false;
       });
+      setState(() => _dealerPurchasePreviewError = e.toString());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('تعذر حساب سعر التاجر: $e'), backgroundColor: AppColors.error),
       );
@@ -521,7 +535,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final role = auth.user?.role ?? '';
-    final isDealer = _isDealerRole(role);
+    final dealerId = auth.user?.id;
+    final quoteCreatedBy = _quotation?['createdBy'];
+    final quoteCreatedById = quoteCreatedBy == null ? null : int.tryParse(quoteCreatedBy.toString());
+    final isDealer = (dealerId != null && quoteCreatedById != null) ? (dealerId == quoteCreatedById) : _isDealerRole(role);
     final canAcceptPurchase = auth.user?.canAccessAdmin ?? false;
     final purchaseRequestStatus = _quotation?['purchaseRequestStatus'] ?? 'none';
     final qSubtotal = double.tryParse(_quotation?['subtotal']?.toString() ?? '0') ?? 0.0;
@@ -735,10 +752,17 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                   if (_loadingDealerPreview)
                                     const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: AppColors.primary)))
                                   else ...[
-                                    _TotalRow(label: 'السعر الأصلي', value: '${qOriginalTotal.toStringAsFixed(0)} ج.م'),
-                                    _TotalRow(label: 'سعر التاجر', value: '${qDealerTotal.toStringAsFixed(0)} ج.م'),
-                                    _TotalRow(label: 'بعد خصم التاجر لعميله', value: '${qFinalTotal.toStringAsFixed(0)} ج.م'),
-                                    _TotalRow(label: 'مكسبك', value: '${qProfit.toStringAsFixed(0)} ج.م'),
+                                    if (_dealerPurchasePreviewError != null)
+                                      Text(
+                                        'تعذر حساب سعر التاجر: $_dealerPurchasePreviewError',
+                                        style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600, fontSize: 12),
+                                      )
+                                    else ...[
+                                      _TotalRow(label: 'السعر الأصلي', value: '${qOriginalTotal.toStringAsFixed(0)} ج.م'),
+                                      _TotalRow(label: 'سعر التاجر', value: '${qDealerTotal.toStringAsFixed(0)} ج.م'),
+                                      _TotalRow(label: 'بعد خصم التاجر لعميله', value: '${qFinalTotal.toStringAsFixed(0)} ج.م'),
+                                      _TotalRow(label: 'مكسبك', value: '${qProfit.toStringAsFixed(0)} ج.م'),
+                                    ],
                                   ],
                                 ],
                               ),

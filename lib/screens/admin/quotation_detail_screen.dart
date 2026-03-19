@@ -677,9 +677,11 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     final purchaseRequestStatusNorm = purchaseRequestStatus.toString().trim().toLowerCase();
     final purchaseRequestStatusRaw = purchaseRequestStatus.toString().trim();
     final qSubtotal = double.tryParse(_quotation?['subtotal']?.toString() ?? '0') ?? 0.0;
-    final qInstallationAmount = double.tryParse(_quotation?['installationAmount']?.toString() ?? '0') ?? 0.0;
-    final qOriginalTotal = qSubtotal + qInstallationAmount;
-    final qFinalTotal = double.tryParse(_quotation?['totalAmount']?.toString() ?? '0') ?? 0.0;
+    // For dealer admin pricing we must exclude "تركيبات/installation" and exclude client-wide discount effects
+    // except the manual discount the dealer entered for their client (discountAmount).
+    final qDiscountAmount = double.tryParse(_quotation?['discountAmount']?.toString() ?? '0') ?? 0.0;
+    final qOriginalTotal = qSubtotal; // official product-only total (no installation)
+    final qFinalTotal = (qSubtotal - qDiscountAmount).clamp(0.0, double.infinity); // after dealer's discount to client (no installation)
     final dealerTotalRaw = _quotation?['purchaseTotalAmount'];
     final qDealerTotal = (dealerTotalRaw == null) ? 0.0 : (double.tryParse(dealerTotalRaw.toString()) ?? 0.0);
     final qProfit = qFinalTotal - qDealerTotal;
@@ -895,15 +897,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                   const SizedBox(height: 6),
                                   if (purchaseRequestStatusNorm != 'accepted')
                                     const Text(
-                                      'بانتظار اعتماد الإدارة لسعر التاجر...',
-                                      style: TextStyle(color: AppColors.muted, fontWeight: FontWeight.w800, fontSize: 14),
-                                    )
-                                  else ...[
-                                    _TotalRow(label: 'السعر الأصلي', value: '${qOriginalTotal.toStringAsFixed(0)} ج.م'),
-                                    _TotalRow(label: 'سعر التاجر', value: '${qDealerTotal.toStringAsFixed(0)} ج.م'),
-                                    _TotalRow(label: 'بعد خصم التاجر لعميله', value: '${qFinalTotal.toStringAsFixed(0)} ج.م'),
-                                    _TotalRow(label: 'مكسبك', value: '${qProfit.toStringAsFixed(0)} ج.م'),
-                                  ],
+                                      'تفاصيل سعر التاجر تحت المراجعة والموافقة من إدارة إيزي تك',
+                                      style: TextStyle(color: AppColors.muted, fontWeight: FontWeight.w900, fontSize: 14),
+                                    ),
+                                  _TotalRow(label: 'السعر الأصلي', value: '${qOriginalTotal.toStringAsFixed(0)} ج.م'),
+                                  _TotalRow(label: 'سعر التاجر', value: '${qDealerTotal.toStringAsFixed(0)} ج.م'),
+                                  _TotalRow(
+                                      label: 'بعد خصم التاجر لعميله', value: '${qFinalTotal.toStringAsFixed(0)} ج.م'),
+                                  _TotalRow(label: 'مكسبك', value: '${qProfit.toStringAsFixed(0)} ج.م'),
                                 ],
                               ),
                             ),

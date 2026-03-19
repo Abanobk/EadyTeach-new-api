@@ -5,4 +5,5 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^(api/)?trpc/.* router.php [L,QSA]
+    RewriteRule ^api/image-proxy$ router.php [L,QSA]
 </IfModule>

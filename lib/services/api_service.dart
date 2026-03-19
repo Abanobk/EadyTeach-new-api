@@ -59,19 +59,22 @@ class ApiService {
     // لو الصورة على Firebase Storage أو نطاق خارجي مشابه
     final uri = Uri.tryParse(url);
     final host = uri?.host.toLowerCase() ?? '';
-    if (host.contains('firebasestorage.googleapis.com')) {
-      // نستخدم رابط Firebase مباشرة (لا يوجد CORS في المتصفح حالياً)
-      return url;
-    }
 
-    // على الويب: نمرر فقط روابط /uploads عبر proxy لتفادي مشاكل CORS لو كانت من نفس الدومين
     if (kIsWeb) {
-      if (url.startsWith('/uploads') || host == Uri.tryParse(_apiOrigin)?.host) {
+      // على الويب: نمرّر Firebase و /uploads عبر proxy لتفادي CORS
+      if (host.contains('firebasestorage.googleapis.com') ||
+          url.startsWith('/uploads') ||
+          host == Uri.tryParse(_apiOrigin)?.host) {
         final absolute = url.startsWith('http') ? url : _absoluteUrl(url);
         final encoded = Uri.encodeComponent(absolute);
         return '$_apiOrigin/api/image-proxy?url=$encoded';
       }
       // أي دومينات خارجية أخرى نستخدمها مباشرة
+      return url;
+    }
+
+    // على الموبايل: نستخدم Firebase / الروابط الخارجية مباشرة
+    if (host.contains('firebasestorage.googleapis.com')) {
       return url;
     }
 

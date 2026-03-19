@@ -608,6 +608,10 @@ function _ensureQuotationsTable() {
         client_note TEXT NULL,
         pdf_url TEXT NULL,
         sent_at DATETIME NULL,
+        purchase_request_status VARCHAR(30) DEFAULT "none",
+        purchase_items LONGTEXT NULL,
+        purchase_total_amount DECIMAL(12,2) DEFAULT 0,
+        purchase_accepted_at DATETIME NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_client (client_user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
@@ -624,6 +628,10 @@ function _ensureQuotationsTable() {
     try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS total_amount DECIMAL(12,2) DEFAULT 0'); } catch(\Exception $e) {}
     try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS client_note TEXT NULL'); } catch(\Exception $e) {}
     try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS sent_at DATETIME NULL'); } catch(\Exception $e) {}
+    try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS purchase_request_status VARCHAR(30) DEFAULT "none"'); } catch(\Exception $e) {}
+    try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS purchase_items LONGTEXT NULL'); } catch(\Exception $e) {}
+    try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS purchase_total_amount DECIMAL(12,2) DEFAULT 0'); } catch(\Exception $e) {}
+    try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS purchase_accepted_at DATETIME NULL'); } catch(\Exception $e) {}
 }
 
 function quotations_list($ctx) {
@@ -717,6 +725,244 @@ function quotations_myDealerQuotations($ctx) {
     return $result;
 }
 
+function quotations_requestPurchase($input, $ctx) {
+    global $db;
+    _ensureQuotationsTable();
+
+    $dealerId = isset($ctx['userId']) ? (int)$ctx['userId'] : 0;
+    if ($dealerId <= 0) throw new Exception('UNAUTHORIZED');
+
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) throw new Exception('Invalid quotation id');
+
+    $qStmt = $db->prepare('SELECT * FROM quotations WHERE id = ?');
+    $qStmt->execute([$id]);
+    $q = $qStmt->fetch();
+    if (!$q) throw new Exception('Quotation not found');
+
+    $createdBy = isset($q['created_by']) ? (int)$q['created_by'] : 0;
+    if ($createdBy !== $dealerId) throw new Exception('FORBIDDEN');
+
+    $items = $q['items'] ? json_decode($q['items'], true) : [];
+    if (!is_array($items)) $items = [];
+
+    // We'll compute dealer prices using the dealer-specific discount rule only,
+    // applied on top of the "official" unitPrice currently stored in the quote.
+    $purchaseItems = [];
+    $purchaseTotal = 0.0;
+
+    $prodStmt = $db->prepare('SELECT id, category_id, stock FROM products WHERE id = ?');
+
+    foreach ($items as $item) {
+        if (!is_array($item)) continue;
+
+        $productId = (int)($item['productId'] ?? 0);
+        $productName = $item['productName'] ?? null;
+        $qty = (int)($item['quantity'] ?? $item['qty'] ?? 1);
+        $officialUnitPrice = (float)($item['unitPrice'] ?? 0);
+
+        $dealerUnitPrice = $officialUnitPrice;
+        $appliedPercent = 0.0;
+        $appliedAmount = 0.0;
+        $waitingMessage = null;
+
+        if ($productId > 0) {
+            $prodStmt->execute([$productId]);
+            $pr = $prodStmt->fetch();
+
+            if ($pr) {
+                $rowForDiscount = [
+                    'id' => $pr['id'],
+                    'category_id' => $pr['category_id'] ?? null,
+                    'stock' => $pr['stock'] ?? 0,
+                ];
+
+                $userRule = _applyUserDiscount($rowForDiscount, $ctx);
+                $waitingMessage = $userRule['waitingMessage'] ?? null;
+                $appliedPercent = (float)($userRule['percent'] ?? 0);
+                $appliedAmount = (float)($userRule['amount'] ?? 0);
+
+                if ($waitingMessage == null) {
+                    // Convert percent rule to money based on the current official unit price.
+                    $discountValue = 0.0;
+                    if ($appliedPercent > 0) {
+                        $discountValue = $officialUnitPrice * $appliedPercent / 100.0;
+                    } elseif ($appliedAmount > 0) {
+                        $discountValue = $appliedAmount;
+                    }
+                    $dealerUnitPrice = $officialUnitPrice - $discountValue;
+                    if ($dealerUnitPrice < 0) $dealerUnitPrice = 0.0;
+                    $appliedAmount = $discountValue; // store applied money discount
+                }
+            }
+        }
+
+        $dealerTotal = $dealerUnitPrice * $qty;
+        $purchaseTotal += $dealerTotal;
+
+        $purchaseItems[] = [
+            'productId' => $productId,
+            'productName' => $productName,
+            'qty' => $qty,
+            'officialUnitPrice' => $officialUnitPrice,
+            'dealerUnitPrice' => $dealerUnitPrice,
+            'dealerTotalPrice' => $dealerTotal,
+            'discountPercent' => $appliedPercent,
+            'discountAmount' => $appliedAmount, // applied money discount
+            'discountWaitingMessage' => $waitingMessage,
+        ];
+    }
+
+    $db->prepare('UPDATE quotations
+        SET purchase_request_status = ?, purchase_items = ?, purchase_total_amount = ?
+        WHERE id = ?')
+        ->execute([
+            'requested',
+            json_encode($purchaseItems, JSON_UNESCAPED_UNICODE),
+            $purchaseTotal,
+            $id
+        ]);
+
+    return ['success' => true, 'purchaseTotalAmount' => $purchaseTotal];
+}
+
+function quotations_previewDealerPurchase($input, $ctx) {
+    global $db;
+    _ensureQuotationsTable();
+
+    $dealerId = isset($ctx['userId']) ? (int)$ctx['userId'] : 0;
+    if ($dealerId <= 0) throw new Exception('UNAUTHORIZED');
+
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) throw new Exception('Invalid quotation id');
+
+    $qStmt = $db->prepare('SELECT * FROM quotations WHERE id = ?');
+    $qStmt->execute([$id]);
+    $q = $qStmt->fetch();
+    if (!$q) throw new Exception('Quotation not found');
+
+    $createdBy = isset($q['created_by']) ? (int)$q['created_by'] : 0;
+    if ($createdBy !== $dealerId) throw new Exception('FORBIDDEN');
+
+    $items = $q['items'] ? json_decode($q['items'], true) : [];
+    if (!is_array($items)) $items = [];
+
+    $purchaseItems = [];
+    $purchaseTotal = 0.0;
+
+    $prodStmt = $db->prepare('SELECT id, category_id, stock FROM products WHERE id = ?');
+
+    foreach ($items as $item) {
+        if (!is_array($item)) continue;
+
+        $productId = (int)($item['productId'] ?? 0);
+        $productName = $item['productName'] ?? null;
+        $qty = (int)($item['quantity'] ?? $item['qty'] ?? 1);
+        $officialUnitPrice = (float)($item['unitPrice'] ?? 0);
+
+        $dealerUnitPrice = $officialUnitPrice;
+        $appliedPercent = 0.0;
+        $appliedAmount = 0.0;
+        $waitingMessage = null;
+
+        if ($productId > 0) {
+            $prodStmt->execute([$productId]);
+            $pr = $prodStmt->fetch();
+
+            if ($pr) {
+                $rowForDiscount = [
+                    'id' => $pr['id'],
+                    'category_id' => $pr['category_id'] ?? null,
+                    'stock' => $pr['stock'] ?? 0,
+                ];
+
+                $userRule = _applyUserDiscount($rowForDiscount, $ctx);
+                $waitingMessage = $userRule['waitingMessage'] ?? null;
+                $appliedPercent = (float)($userRule['percent'] ?? 0);
+                $appliedAmount = (float)($userRule['amount'] ?? 0);
+
+                if ($waitingMessage == null) {
+                    $discountValue = 0.0;
+                    if ($appliedPercent > 0) {
+                        $discountValue = $officialUnitPrice * $appliedPercent / 100.0;
+                    } elseif ($appliedAmount > 0) {
+                        $discountValue = $appliedAmount;
+                    }
+                    $dealerUnitPrice = $officialUnitPrice - $discountValue;
+                    if ($dealerUnitPrice < 0) $dealerUnitPrice = 0.0;
+                    $appliedAmount = $discountValue; // store applied money discount
+                }
+            }
+        }
+
+        $dealerTotal = $dealerUnitPrice * $qty;
+        $purchaseTotal += $dealerTotal;
+
+        $purchaseItems[] = [
+            'productId' => $productId,
+            'productName' => $productName,
+            'qty' => $qty,
+            'officialUnitPrice' => $officialUnitPrice,
+            'dealerUnitPrice' => $dealerUnitPrice,
+            'dealerTotalPrice' => $dealerTotal,
+            'discountPercent' => $appliedPercent,
+            'discountAmount' => $appliedAmount,
+            'discountWaitingMessage' => $waitingMessage,
+        ];
+    }
+
+    return [
+        'success' => true,
+        'purchaseTotalAmount' => $purchaseTotal,
+        'purchaseItems' => $purchaseItems,
+    ];
+}
+
+function quotations_acceptPurchaseRequest($input, $ctx) {
+    global $db;
+    _ensureQuotationsTable();
+
+    $adminId = isset($ctx['userId']) ? (int)$ctx['userId'] : 0;
+    if ($adminId <= 0) throw new Exception('UNAUTHORIZED');
+
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) throw new Exception('Invalid quotation id');
+
+    $qStmt = $db->prepare('SELECT * FROM quotations WHERE id = ?');
+    $qStmt->execute([$id]);
+    $q = $qStmt->fetch();
+    if (!$q) throw new Exception('Quotation not found');
+
+    $status = $q['purchase_request_status'] ?? 'none';
+    if ($status !== 'requested') return ['success' => true];
+
+    // Basic admin check (by role from DB)
+    $roleStmt = $db->prepare('SELECT role FROM users WHERE id = ?');
+    $roleStmt->execute([$adminId]);
+    $role = $roleStmt->fetchColumn();
+    $role = $role ? strtolower(trim((string)$role)) : '';
+    if (!in_array($role, ['admin', 'supervisor', 'staff'], true)) throw new Exception('FORBIDDEN');
+
+    $db->prepare("UPDATE quotations SET purchase_request_status = 'accepted', purchase_accepted_at = NOW() WHERE id = ?")
+        ->execute([$id]);
+
+    $dealerId = isset($q['created_by']) ? (int)$q['created_by'] : 0;
+    if ($dealerId > 0) {
+        $ref = $q['ref_number'] ?? ('QT-' . $id);
+        $purchaseTotal = (float)($q['purchase_total_amount'] ?? 0);
+        _notifyUser(
+            $dealerId,
+            'تم قبول طلب شراء',
+            "تم قبول طلب الشراء لعرض السعر رقم {$ref}. المجموع: {$purchaseTotal} ج.م",
+            'quotationPurchase',
+            $id,
+            'quotation'
+        );
+    }
+
+    return ['success' => true];
+}
+
 function quotations_respond($input, $ctx) {
     global $db;
     _ensureQuotationsTable();
@@ -778,6 +1024,7 @@ function _formatQuotation($r) {
     return [
         'id' => (int)$r['id'],
         'refNumber' => $r['ref_number'] ?? ('QT-' . $r['id']),
+        'createdBy' => isset($r['created_by']) && $r['created_by'] ? (int)$r['created_by'] : null,
         'clientUserId' => isset($r['client_user_id']) && $r['client_user_id'] ? (int)$r['client_user_id'] : null,
         'clientName' => $r['client_name'] ?? null,
         'clientEmail' => $r['client_email'] ?? null,
@@ -793,6 +1040,10 @@ function _formatQuotation($r) {
         'notes' => $r['notes'] ?? null,
         'clientNote' => $r['client_note'] ?? null,
         'pdfUrl' => $r['pdf_url'] ?? null,
+        'purchaseRequestStatus' => $r['purchase_request_status'] ?? 'none',
+        'purchaseItems' => $r['purchase_items'] ? json_decode($r['purchase_items'], true) : null,
+        'purchaseTotalAmount' => (float)($r['purchase_total_amount'] ?? 0),
+        'purchaseAcceptedAt' => isset($r['purchase_accepted_at']) && $r['purchase_accepted_at'] ? strtotime($r['purchase_accepted_at']) * 1000 : null,
         'createdAt' => isset($r['created_at']) ? strtotime($r['created_at']) * 1000 : null,
         'sentAt' => isset($r['sent_at']) && $r['sent_at'] ? strtotime($r['sent_at']) * 1000 : null,
     ];

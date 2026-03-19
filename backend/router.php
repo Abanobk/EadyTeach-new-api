@@ -675,8 +675,9 @@ try {
             $stmt->execute($params);
             $rows = $stmt->fetchAll();
             $result = [];
+            $ctxToUse = !empty($input['adminView']) ? null : $ctx;
             foreach ($rows as $r) {
-                $result[] = formatProduct($r, $ctx);
+                $result[] = formatProduct($r, $ctxToUse);
             }
             break;
 
@@ -704,8 +705,9 @@ try {
             $stmt->execute($params);
             $rows = $stmt->fetchAll();
             $result = [];
+            $ctxToUse = !empty($input['adminView']) ? null : $ctx;
             foreach ($rows as $r) {
-                $result[] = formatProduct($r, $ctx);
+                $result[] = formatProduct($r, $ctxToUse);
             }
             break;
 
@@ -956,6 +958,18 @@ try {
 
         case 'quotations.delete':
             $result = quotations_delete($input, $ctx);
+            break;
+
+        case 'quotations.requestPurchase':
+            $result = quotations_requestPurchase($input, $ctx);
+            break;
+
+        case 'quotations.previewDealerPurchase':
+            $result = quotations_previewDealerPurchase($input, $ctx);
+            break;
+
+        case 'quotations.acceptPurchaseRequest':
+            $result = quotations_acceptPurchaseRequest($input, $ctx);
             break;
 
         // ── Orders ────────────────────────────────────────────

@@ -6,9 +6,11 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
+import '../../providers/auth_provider.dart';
 import '../../utils/pdf_saver_stub.dart'
     if (dart.library.html) '../../utils/pdf_saver_web.dart' as pdf_saver;
 
@@ -27,6 +29,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   bool _deleting = false;
   bool _generatingPdf = false;
   bool _downloadingPdf = false;
+  bool _loadingDealerPreview = false;
+  bool _requestingPurchase = false;
+  bool _acceptingPurchase = false;
+
+  Map<String, dynamic>? _dealerPurchasePreview;
+  bool _dealerPreviewLoadedForCurrentQuotation = false;
 
   final _statusLabels = {
     'draft': 'مسودة',
@@ -57,9 +65,103 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       setState(() {
         _quotation = res['data'];
         _loading = false;
+        _dealerPreviewLoadedForCurrentQuotation = false;
       });
+
+      final auth = context.read<AuthProvider>();
+      final role = auth.user?.role ?? '';
+      if (_isDealerRole(role)) {
+        await _loadDealerPurchasePreview();
+      }
     } catch (e) {
       setState(() => _loading = false);
+    }
+  }
+
+  bool _isDealerRole(String role) {
+    final normalized = role.toLowerCase().trim().replaceAll(
+          RegExp(r'[^a-z0-9\u0600-\u06FF]'),
+          '',
+        );
+    const dealerTerms = <String>[
+      'dealer',
+      'reseller',
+      'merchant',
+      'tager',
+      'seller',
+      'vendor',
+      'deal',
+      'تاجر',
+      'موزع',
+      'وكيل',
+      'تاج',
+    ];
+    return dealerTerms.any((t) => normalized.contains(t.toLowerCase()));
+  }
+
+  Future<void> _loadDealerPurchasePreview() async {
+    if (_dealerPreviewLoadedForCurrentQuotation) return;
+    setState(() => _loadingDealerPreview = true);
+    try {
+      final res = await ApiService.query('quotations.previewDealerPurchase', input: {'id': widget.quotationId});
+      final data = res['data'];
+      if (!mounted) return;
+      setState(() {
+        _dealerPurchasePreview = (data is Map<String, dynamic>) ? data : <String, dynamic>{};
+        _dealerPreviewLoadedForCurrentQuotation = true;
+        _loadingDealerPreview = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _dealerPurchasePreview = <String, dynamic>{};
+        _dealerPreviewLoadedForCurrentQuotation = true;
+        _loadingDealerPreview = false;
+      });
+    }
+  }
+
+  Future<void> _requestPurchase() async {
+    if (_quotation == null) return;
+    setState(() => _requestingPurchase = true);
+    try {
+      await ApiService.mutate('quotations.requestPurchase', input: {'id': widget.quotationId});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ تم إرسال طلب الشراء للإدارة'), backgroundColor: AppColors.success),
+        );
+        await _loadQuotation();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في طلب الشراء: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _requestingPurchase = false);
+    }
+  }
+
+  Future<void> _acceptPurchaseRequest() async {
+    if (_quotation == null) return;
+    setState(() => _acceptingPurchase = true);
+    try {
+      await ApiService.mutate('quotations.acceptPurchaseRequest', input: {'id': widget.quotationId});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ تم قبول طلب الشراء'), backgroundColor: AppColors.success),
+        );
+        await _loadQuotation();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في قبول طلب الشراء: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _acceptingPurchase = false);
     }
   }
 
@@ -397,6 +499,18 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final role = auth.user?.role ?? '';
+    final isDealer = _isDealerRole(role);
+    final canAcceptPurchase = auth.user?.canAccessAdmin ?? false;
+    final purchaseRequestStatus = _quotation?['purchaseRequestStatus'] ?? 'none';
+    final qSubtotal = double.tryParse(_quotation?['subtotal']?.toString() ?? '0') ?? 0.0;
+    final qInstallationAmount = double.tryParse(_quotation?['installationAmount']?.toString() ?? '0') ?? 0.0;
+    final qOriginalTotal = qSubtotal + qInstallationAmount;
+    final qFinalTotal = double.tryParse(_quotation?['totalAmount']?.toString() ?? '0') ?? 0.0;
+    final dealerTotalRaw = _dealerPurchasePreview?['purchaseTotalAmount'] ?? _quotation?['purchaseTotalAmount'];
+    final qDealerTotal = double.tryParse(dealerTotalRaw?.toString() ?? '0') ?? 0.0;
+    final qProfit = qFinalTotal - qDealerTotal;
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -581,7 +695,37 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 20),
+                          if (isDealer) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppThemeDecorations.cardColor(context),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'تفاصيل الأسعار للتاجر',
+                                    style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  if (_loadingDealerPreview)
+                                    const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: AppColors.primary)))
+                                  else ...[
+                                    _TotalRow(label: 'السعر الأصلي', value: '${qOriginalTotal.toStringAsFixed(0)} ج.م'),
+                                    _TotalRow(label: 'سعر التاجر', value: '${qDealerTotal.toStringAsFixed(0)} ج.م'),
+                                    _TotalRow(label: 'بعد خصم التاجر لعميله', value: '${qFinalTotal.toStringAsFixed(0)} ج.م'),
+                                    _TotalRow(label: 'مكسبك', value: '${qProfit.toStringAsFixed(0)} ج.م'),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                          ] else
+                            const SizedBox(height: 20),
                           // تحميل PDF على الجهاز
                           SizedBox(
                             width: double.infinity,
@@ -616,6 +760,52 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                             ),
                           ),
                           const SizedBox(height: 10),
+                          // Dealer: request purchase to admin
+                          if (isDealer) ...[
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: (_requestingPurchase || purchaseRequestStatus == 'requested' || purchaseRequestStatus == 'accepted')
+                                    ? null
+                                    : _requestPurchase,
+                                icon: _requestingPurchase
+                                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                    : const Icon(Icons.shopping_cart),
+                                label: Text(
+                                  _requestingPurchase
+                                      ? 'جاري إرسال الطلب...'
+                                      : (purchaseRequestStatus == 'requested'
+                                          ? 'بانتظار اعتماد الإدارة'
+                                          : (purchaseRequestStatus == 'accepted' ? 'تم اعتماد الطلب' : 'طلب شراء')),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                          // Admin/staff: accept purchase request
+                          if (canAcceptPurchase && purchaseRequestStatus == 'requested') ...[
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _acceptingPurchase ? null : _acceptPurchaseRequest,
+                                icon: _acceptingPurchase
+                                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                    : const Icon(Icons.check_circle_outline),
+                                label: Text(_acceptingPurchase ? 'جاري القبول...' : 'قبول طلب الشراء'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
                           if (_quotation!['status'] == 'draft' || _quotation!['status'] == 'sent') ...[
                             SizedBox(
                               width: double.infinity,

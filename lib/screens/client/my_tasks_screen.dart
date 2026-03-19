@@ -316,17 +316,54 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
       return const Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
     if (_quotations.isEmpty) {
+      final user = context.read<AuthProvider>().user;
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      if (user == null) return;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CreateQuotationScreen(
+                            forceExternalClient: true,
+                          ),
+                        ),
+                      ).then((_) => _loadQuotations());
+                    },
+                    icon: const Icon(Icons.add, color: Colors.black),
+                    label: const Text(
+                      'إضافة عرض سعر جديد',
+                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary.withOpacity(0.95),
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               Icon(Icons.request_quote_outlined, size: 64, color: colors.onSurfaceVariant),
               const SizedBox(height: 16),
               Text('لا توجد عروض أسعار بعد', style: TextStyle(color: colors.onSurface, fontSize: 18)),
               const SizedBox(height: 8),
-              Text('أي عرض سعر يتم إرساله لك سيظهر هنا.', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13), textAlign: TextAlign.center),
+              Text(
+                'سيظهر هنا أي عرض سعر تمت إضافته من حسابك.',
+                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),

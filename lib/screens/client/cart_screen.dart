@@ -117,10 +117,12 @@ class _CartScreenState extends State<CartScreen> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: AspectRatio(
-                                  aspectRatio: 1,
+                              // Fixed-size image box avoids RTL/constraint issues.
+                              SizedBox(
+                                width: 72,
+                                height: 72,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
                                   child: item.image != null && item.image!.isNotEmpty
                                       ? Image.network(
                                           ApiService.proxyImageUrl(item.image!),
@@ -130,7 +132,7 @@ class _CartScreenState extends State<CartScreen> {
                                       : _imgPlaceholder(),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 14),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,23 +185,26 @@ class _CartScreenState extends State<CartScreen> {
                                   ],
                                 ),
                               ),
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.start,
-                                children: [
-                                  // Qty controls
-                                  IconButton(
-                                    icon: const Icon(Icons.remove_circle_outline, color: AppColors.muted, size: 20),
-                                    onPressed: () => cart.decrementItem(item.productId),
-                                  ),
-                                  Text(
-                                    '${item.quantity}',
-                                    style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 20),
-                                    onPressed: () => cart.incrementItem(item.productId),
-                                  ),
-                                ],
+                              // Fixed-width qty column so the rest doesn't collapse.
+                              SizedBox(
+                                width: 60,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.remove_circle_outline, color: AppColors.muted, size: 20),
+                                      onPressed: () => cart.decrementItem(item.productId),
+                                    ),
+                                    Text(
+                                      '${item.quantity}',
+                                      style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 20),
+                                      onPressed: () => cart.incrementItem(item.productId),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),

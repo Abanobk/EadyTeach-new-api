@@ -75,6 +75,14 @@ class _CartScreenState extends State<CartScreen> {
             )
           : Column(
               children: [
+                // Debug header to verify cart content vs rendering.
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Text(
+                    'DEBUG cart.items.length=${cart.items.length} | total=${cart.total.toStringAsFixed(2)} | first=${cart.items.isNotEmpty ? cart.items.first.name : "-"}',
+                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 12),
+                  ),
+                ),
                 Expanded(
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),

@@ -751,7 +751,7 @@ function quotations_requestPurchase($input, $ctx) {
     $purchaseItems = [];
     $purchaseTotal = 0.0;
 
-    $prodStmt = $db->prepare('SELECT id, category_id, stock FROM products WHERE id = ?');
+    $prodStmt = $db->prepare('SELECT id, category_id, stock, main_image_url, images FROM products WHERE id = ?');
 
     foreach ($items as $item) {
         if (!is_array($item)) continue;
@@ -765,12 +765,20 @@ function quotations_requestPurchase($input, $ctx) {
         $appliedPercent = 0.0;
         $appliedAmount = 0.0;
         $waitingMessage = null;
+        $imageUrl = null;
 
         if ($productId > 0) {
             $prodStmt->execute([$productId]);
             $pr = $prodStmt->fetch();
 
             if ($pr) {
+                // ImageUrl for dealer cart sync.
+                $imageUrl = $pr['main_image_url'] ?? null;
+                if (empty($imageUrl) && !empty($pr['images'])) {
+                    $imgs = json_decode($pr['images'], true);
+                    if (is_array($imgs) && count($imgs) > 0) $imageUrl = $imgs[0];
+                }
+
                 $rowForDiscount = [
                     'id' => $pr['id'],
                     'category_id' => $pr['category_id'] ?? null,
@@ -803,6 +811,7 @@ function quotations_requestPurchase($input, $ctx) {
         $purchaseItems[] = [
             'productId' => $productId,
             'productName' => $productName,
+            'imageUrl' => $imageUrl,
             'qty' => $qty,
             'officialUnitPrice' => $officialUnitPrice,
             'dealerUnitPrice' => $dealerUnitPrice,
@@ -850,7 +859,7 @@ function quotations_previewDealerPurchase($input, $ctx) {
     $purchaseItems = [];
     $purchaseTotal = 0.0;
 
-    $prodStmt = $db->prepare('SELECT id, category_id, stock FROM products WHERE id = ?');
+    $prodStmt = $db->prepare('SELECT id, category_id, stock, main_image_url, images FROM products WHERE id = ?');
 
     foreach ($items as $item) {
         if (!is_array($item)) continue;
@@ -864,12 +873,20 @@ function quotations_previewDealerPurchase($input, $ctx) {
         $appliedPercent = 0.0;
         $appliedAmount = 0.0;
         $waitingMessage = null;
+        $imageUrl = null;
 
         if ($productId > 0) {
             $prodStmt->execute([$productId]);
             $pr = $prodStmt->fetch();
 
             if ($pr) {
+                // ImageUrl for dealer cart sync.
+                $imageUrl = $pr['main_image_url'] ?? null;
+                if (empty($imageUrl) && !empty($pr['images'])) {
+                    $imgs = json_decode($pr['images'], true);
+                    if (is_array($imgs) && count($imgs) > 0) $imageUrl = $imgs[0];
+                }
+
                 $rowForDiscount = [
                     'id' => $pr['id'],
                     'category_id' => $pr['category_id'] ?? null,
@@ -901,6 +918,7 @@ function quotations_previewDealerPurchase($input, $ctx) {
         $purchaseItems[] = [
             'productId' => $productId,
             'productName' => $productName,
+            'imageUrl' => $imageUrl,
             'qty' => $qty,
             'officialUnitPrice' => $officialUnitPrice,
             'dealerUnitPrice' => $dealerUnitPrice,
@@ -952,7 +970,19 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
     if ($purchaseItemsExisting !== null) {
         try {
             $tmp = json_decode($purchaseItemsExisting, true);
-            if (is_array($tmp) && count($tmp) > 0) $needComputeItems = false;
+            if (is_array($tmp) && count($tmp) > 0) {
+                // Recompute if any item is missing imageUrl (older rows before this fix).
+                $missingImage = false;
+                foreach ($tmp as $it) {
+                    if (!is_array($it)) continue;
+                    $img = $it['imageUrl'] ?? null;
+                    if ($img === null || $img === '') {
+                        $missingImage = true;
+                        break;
+                    }
+                }
+                if (!$missingImage) $needComputeItems = false;
+            }
         } catch (\Exception $e) { /* ignore */ }
     }
 
@@ -966,7 +996,7 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
         $purchaseItems = [];
         $purchaseTotal = 0.0;
 
-        $prodStmt = $db->prepare('SELECT id, category_id, stock FROM products WHERE id = ?');
+        $prodStmt = $db->prepare('SELECT id, category_id, stock, main_image_url, images FROM products WHERE id = ?');
 
         foreach ($items as $item) {
             if (!is_array($item)) continue;
@@ -980,12 +1010,20 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
             $appliedPercent = 0.0;
             $appliedAmount = 0.0;
             $waitingMessage = null;
+            $imageUrl = null;
 
             if ($productId > 0) {
                 $prodStmt->execute([$productId]);
                 $pr = $prodStmt->fetch();
 
                 if ($pr) {
+                    // ImageUrl for dealer cart sync.
+                    $imageUrl = $pr['main_image_url'] ?? null;
+                    if (empty($imageUrl) && !empty($pr['images'])) {
+                        $imgs = json_decode($pr['images'], true);
+                        if (is_array($imgs) && count($imgs) > 0) $imageUrl = $imgs[0];
+                    }
+
                     $rowForDiscount = [
                         'id' => $pr['id'],
                         'category_id' => $pr['category_id'] ?? null,
@@ -1019,6 +1057,7 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
             $purchaseItems[] = [
                 'productId' => $productId,
                 'productName' => $productName,
+                'imageUrl' => $imageUrl,
                 'qty' => $qty,
                 'officialUnitPrice' => $officialUnitPrice,
                 'dealerUnitPrice' => $dealerUnitPrice,

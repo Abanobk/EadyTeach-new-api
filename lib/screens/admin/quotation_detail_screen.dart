@@ -216,6 +216,9 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
     if (purchaseStatusNorm != 'requested') return;
 
+    // Sync immediately for requested too (dealer can see cart while waiting).
+    _syncCartFromPurchaseItemsIfNeeded();
+
     // Poll until admin accepts.
     _dealerPollTimer = Timer.periodic(const Duration(seconds: 4), (t) async {
       if (!mounted) return;
@@ -231,7 +234,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     if (_cartSyncedForThisQuote) return;
     final purchaseStatus = _quotation?['purchaseRequestStatus'] ?? 'none';
     final purchaseStatusNorm = purchaseStatus.toString().trim().toLowerCase();
-    if (purchaseStatusNorm != 'accepted') return;
+    if (purchaseStatusNorm != 'accepted' && purchaseStatusNorm != 'requested') return;
 
     final purchaseItems = _quotation?['purchaseItems'] as List? ?? [];
     if (purchaseItems.isEmpty) return;

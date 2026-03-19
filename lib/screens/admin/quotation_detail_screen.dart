@@ -258,6 +258,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
     if (mounted) {
       setState(() => _cartSyncedForThisQuote = true);
+      final count = cart.items.fold<int>(0, (sum, e) => sum + e.quantity);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تم مزامنة السلة: $count قطعة/قطع', style: const TextStyle(fontWeight: FontWeight.w600)), backgroundColor: AppColors.success),
+      );
     } else {
       _cartSyncedForThisQuote = true;
     }

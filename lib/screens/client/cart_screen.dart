@@ -190,6 +190,10 @@ class _CartScreenState extends State<CartScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text(
+                        'عدد المنتجات/القطع: ${cart.items.fold<int>(0, (s, i) => s + i.quantity)}',
+                        style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
                       const Text('طريقة الدفع:',
                           style: TextStyle(
                               color: AppColors.text,

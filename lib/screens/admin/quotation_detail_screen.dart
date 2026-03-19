@@ -675,6 +675,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     final canAcceptPurchase = auth.user?.canAccessAdmin ?? false;
     final purchaseRequestStatus = _quotation?['purchaseRequestStatus'] ?? 'none';
     final purchaseRequestStatusNorm = purchaseRequestStatus.toString().trim().toLowerCase();
+    final purchaseRequestStatusRaw = purchaseRequestStatus.toString().trim();
     final qSubtotal = double.tryParse(_quotation?['subtotal']?.toString() ?? '0') ?? 0.0;
     final qInstallationAmount = double.tryParse(_quotation?['installationAmount']?.toString() ?? '0') ?? 0.0;
     final qOriginalTotal = qSubtotal + qInstallationAmount;
@@ -883,10 +884,19 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                     style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14),
                                   ),
                                   const SizedBox(height: 8),
+                                  Text(
+                                    'حالة طلب الشراء: $purchaseRequestStatusRaw',
+                                    style: const TextStyle(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
                                   if (purchaseRequestStatusNorm != 'accepted')
                                     const Text(
                                       'بانتظار اعتماد الإدارة لسعر التاجر...',
-                                      style: TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600, fontSize: 12),
+                                      style: TextStyle(color: AppColors.muted, fontWeight: FontWeight.w800, fontSize: 14),
                                     )
                                   else ...[
                                     _TotalRow(label: 'السعر الأصلي', value: '${qOriginalTotal.toStringAsFixed(0)} ج.م'),

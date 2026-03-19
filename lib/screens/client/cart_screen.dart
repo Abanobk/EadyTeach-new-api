@@ -96,138 +96,115 @@ class _CartScreenState extends State<CartScreen> {
             )
           : Column(
               children: [
-                // Debug header to verify cart content vs rendering.
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  child: Text(
-                    'DEBUG cart.items.length=${cart.items.length} | total=${cart.total.toStringAsFixed(2)} | first=${cart.items.isNotEmpty ? cart.items.first.name : "-"}',
-                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 12),
-                  ),
-                ),
-                // Debug: show first item outside ListView to ensure rendering isn't blocked.
-                if (cart.items.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.redAccent, width: 2),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.shopping_bag_outlined, color: Colors.redAccent),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'DEBUG first card: ${cart.items.first.name} (${cart.items.first.quantity}) - ${cart.items.first.price.toStringAsFixed(0)} ج.م',
-                              style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w800, fontSize: 12),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 Expanded(
-                  child: ListView.builder(
+                  child: SingleChildScrollView(
                     controller: _itemsScrollController,
                     padding: const EdgeInsets.all(16),
-                    itemCount: cart.items.length,
-                    itemBuilder: (ctx, i) {
-                      final item = cart.items[i];
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(12),
-                        height: 120, // force visible height for debugging
-                        decoration: BoxDecoration(
-                          // Debug-friendly styling: make items clearly visible.
-                          color: AppColors.primary.withOpacity(0.10),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.redAccent, width: 2),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'DEBUG list card index=$i | id=${item.productId} | name=${item.name}',
-                              style: const TextStyle(
-                                color: Colors.redAccent,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 12,
+                    child: Column(
+                      children: List.generate(cart.items.length, (idx) {
+                        final item = cart.items[idx];
+                        final hasOriginal = item.originalPrice != null && item.originalPrice! > item.price;
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppThemeDecorations.cardColor(context),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: AspectRatio(
+                                  aspectRatio: 1,
+                                  child: item.image != null && item.image!.isNotEmpty
+                                      ? Image.network(
+                                          ApiService.proxyImageUrl(item.image!),
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => _imgPlaceholder(),
+                                        )
+                                      : _imgPlaceholder(),
+                                ),
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 8),
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  // Image
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: AspectRatio(
-                                      aspectRatio: 1,
-                                      child: item.image != null && item.image!.isNotEmpty
-                                          ? Image.network(
-                                              ApiService.proxyImageUrl(item.image!),
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) => _imgPlaceholder(),
-                                            )
-                                          : _imgPlaceholder(),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: AppColors.text,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          item.name,
+                                    if (item.variant != null && item.variant!.toString().isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          item.variant!,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: AppColors.text,
-                                            fontWeight: FontWeight.w700,
-                                          ),
+                                          style: const TextStyle(color: AppColors.muted, fontSize: 12),
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '${item.price.toStringAsFixed(2)} ج.م',
-                                          style: const TextStyle(
-                                            color: AppColors.primary,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  // Qty controls
-                                  Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.remove_circle_outline, color: AppColors.muted, size: 20),
-                                        onPressed: () => cart.decrementItem(item.productId),
                                       ),
+                                    const SizedBox(height: 10),
+                                    if (hasOriginal)
                                       Text(
-                                        '${item.quantity}',
-                                        style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
+                                        '${item.originalPrice!.toStringAsFixed(2)} ج.م',
+                                        style: const TextStyle(
+                                          color: AppColors.muted,
+                                          decoration: TextDecoration.lineThrough,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
-                                      IconButton(
-                                        icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 20),
-                                        onPressed: () => cart.incrementItem(item.productId),
+                                    Text(
+                                      '${item.price.toStringAsFixed(2)} ج.م',
+                                      style: const TextStyle(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    if (hasOriginal) ...[
+                                      const SizedBox(height: 2),
+                                      const Text(
+                                        'السعر الاساسي / السعر بعد الخصم',
+                                        style: TextStyle(color: AppColors.muted, fontSize: 11, fontWeight: FontWeight.w600),
                                       ),
                                     ],
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.remove_circle_outline, color: AppColors.muted, size: 20),
+                                    onPressed: () => cart.decrementItem(item.productId),
+                                  ),
+                                  Text(
+                                    '${item.quantity}',
+                                    style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 20),
+                                    onPressed: () => cart.incrementItem(item.productId),
                                   ),
                                 ],
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                            ],
+                          ),
+                        );
+                      }),
+                    ),
                   ),
                 ),
 

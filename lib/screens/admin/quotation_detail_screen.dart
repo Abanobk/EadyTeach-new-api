@@ -42,6 +42,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   Timer? _dealerPollTimer;
   bool _cartSyncedForThisQuote = false;
+  bool _didAutoRecomputeRequestedPricing = false;
 
   final _statusLabels = {
     'draft': 'مسودة',
@@ -92,7 +93,28 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         _dealerPreviewLoadedForCurrentQuotation = false;
         _dealerPurchasePreviewError = null;
         _cartSyncedForThisQuote = false;
+        _didAutoRecomputeRequestedPricing = false;
       });
+
+      // If dealer opened a quotation that is still "requested" but dealerTotal is 0 (old payload),
+      // recompute purchaseItems on the backend once so the pricing details show correctly
+      // before admin acceptance.
+      final statusNorm = (_quotation?['purchaseRequestStatus'] ?? 'none').toString().trim().toLowerCase();
+      final dealerTotalRaw = _quotation?['purchaseTotalAmount'];
+      final dealerTotal = dealerTotalRaw == null ? 0.0 : (double.tryParse(dealerTotalRaw.toString()) ?? 0.0);
+      if (_isDealerForCurrentQuote && statusNorm == 'requested' && dealerTotal <= 0 && !_didAutoRecomputeRequestedPricing) {
+        _didAutoRecomputeRequestedPricing = true;
+        try {
+          await ApiService.mutate('quotations.requestPurchase', input: {'id': widget.quotationId});
+          if (!mounted) return;
+          // Reload quotation to reflect updated purchase_total_amount and purchase_items.
+          await _loadQuotation();
+          return;
+        } catch (_) {
+          // Ignore; UI will keep showing waiting state.
+        }
+      }
+
       // Dealer pricing will be computed from stored purchase values.
       _maybeStartDealerPolling();
     } catch (e) {

@@ -49,9 +49,20 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
     setState(() => _loadingQuotations = true);
     try {
       final auth = context.read<AuthProvider>();
-      final role = (auth.user?.role ?? '').toLowerCase();
-      final isDealer =
-          role.contains('dealer') || role.contains('reseller') || role.contains('merchant') || role.contains('tager');
+      final roleRaw = auth.user?.role ?? '';
+      final role = roleRaw.toString().toLowerCase().trim();
+      final normalizedRole = role.replaceAll(RegExp(r'[\s_\-]+'), '');
+      final isDealer = normalizedRole.isNotEmpty &&
+          (
+              normalizedRole.contains('dealer') ||
+              normalizedRole.contains('reseller') ||
+              normalizedRole.contains('merchant') ||
+              normalizedRole.contains('tager') ||
+              normalizedRole.contains('تاجر') ||
+              normalizedRole.contains('موزع') ||
+              normalizedRole.contains('وكيل') ||
+              normalizedRole.contains('تاج')
+          );
       final proc = isDealer ? 'quotations.myDealerQuotations' : 'quotations.myQuotations';
       final res = await ApiService.query(proc);
       setState(() {
@@ -102,22 +113,28 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final role = (auth.user?.role ?? '').toLowerCase();
+    final roleRaw = auth.user?.role ?? '';
+    final role = roleRaw.toString().toLowerCase().trim();
+    final normalizedRole = role.replaceAll(RegExp(r'[\s_\-]+'), '');
     // بعض السيرفرات بتسمي التاجر بشكل مختلف؛ فندعم أكثر من صيغة (إنجليزي/عربي).
-    final isMerchant = role.isNotEmpty &&
+    final isMerchant = normalizedRole.isNotEmpty &&
         (
-            role.contains('dealer') ||
-            role.contains('reseller') ||
-            role.contains('merchant') ||
-            role.contains('tager') ||
-            role.contains('seller') ||
-            role.contains('vendor') ||
-            role.contains('تاجر') ||
-            role.contains('موزع') ||
-            role.contains('وكيل')
+            normalizedRole.contains('dealer') ||
+            normalizedRole.contains('reseller') ||
+            normalizedRole.contains('merchant') ||
+            normalizedRole.contains('tager') ||
+            normalizedRole.contains('seller') ||
+            normalizedRole.contains('vendor') ||
+            normalizedRole.contains('deal') ||
+            normalizedRole.contains('تاجر') ||
+            normalizedRole.contains('موزع') ||
+            normalizedRole.contains('وكيل') ||
+            normalizedRole.contains('تاج')
         );
     final canViewQuotations =
-        auth.hasPermission('quotations.view') || isMerchant;
+        auth.hasPermission('quotations.view') ||
+        auth.hasPermission('quotations.create') ||
+        isMerchant;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
@@ -422,8 +439,21 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (_) {
-                            final role = (context.read<AuthProvider>().user?.role ?? '').toLowerCase();
-                            final isDealer = role.contains('dealer') || role.contains('reseller') || role.contains('merchant') || role.contains('tager');
+                            final auth = context.read<AuthProvider>();
+                            final roleRaw = auth.user?.role ?? '';
+                            final role = roleRaw.toString().toLowerCase().trim();
+                            final normalizedRole = role.replaceAll(RegExp(r'[\s_\-]+'), '');
+                            final isDealer = normalizedRole.isNotEmpty &&
+                                (
+                                    normalizedRole.contains('dealer') ||
+                                    normalizedRole.contains('reseller') ||
+                                    normalizedRole.contains('merchant') ||
+                                    normalizedRole.contains('tager') ||
+                                    normalizedRole.contains('تاجر') ||
+                                    normalizedRole.contains('موزع') ||
+                                    normalizedRole.contains('وكيل') ||
+                                    normalizedRole.contains('تاج')
+                                );
                             return isDealer
                                 ? QuotationDetailScreen(quotationId: q['id'] as int)
                                 : ClientQuotationDetailScreen(quotationId: q['id'] as int);

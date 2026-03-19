@@ -601,6 +601,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                         color: Colors.cyan,
                         onTap: () => _navigate(context, const SurveyEntryScreen()),
                       ),
+                    if (p.hasPermission('discounts.view'))
+                      _DashboardCard(
+                        icon: Icons.percent,
+                        title: 'خصومات التجار / العملاء',
+                        color: Colors.deepPurple,
+                        onTap: () => _navigate(context, const AdminDiscountsScreen()),
+                      ),
                   ];
                   return GridView.count(
                     crossAxisCount: 3,

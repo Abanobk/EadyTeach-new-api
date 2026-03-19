@@ -101,7 +101,11 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         _dealerPreviewLoadedForCurrentQuotation = false;
         _dealerPurchasePreviewError = null;
       });
-      // Preview loading is handled by `_maybeLoadDealerPurchasePreview()` (see didChangeDependencies).
+      // Load dealer preview now (don't depend on `AuthProvider` finishing first).
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _loadDealerPurchasePreview();
+      });
     } catch (e) {
       setState(() => _loading = false);
     }

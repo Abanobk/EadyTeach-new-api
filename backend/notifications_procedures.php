@@ -234,7 +234,9 @@ function _notifyAdminsAndSupervisors($title, $body, $type = 'general', $refId = 
     global $db;
     _ensureNotificationsSchema();
 
-    $stmt = $db->query("SELECT id FROM users WHERE role IN ('admin', 'supervisor') AND is_active = TRUE");
+    // Use LOWER(role) because roles might be stored with different casing (e.g. Admin/staff).
+    // Include staff because some admin accounts use role=staff but can access the admin panel.
+    $stmt = $db->query("SELECT id FROM users WHERE LOWER(role) IN ('admin', 'supervisor', 'staff') AND is_active = TRUE");
     $users = $stmt->fetchAll();
 
     foreach ($users as $u) {

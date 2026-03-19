@@ -1141,6 +1141,19 @@ try {
             $result = perm_assignRole($input, $ctx);
             break;
 
+        // ── Admin ──────────────────────────────────────────────
+        case 'admin.getDashboardStats':
+            $result = admin_getDashboardStats($input, $ctx);
+            break;
+
+        case 'admin.getAllOrders':
+            $result = admin_getAllOrders($input, $ctx);
+            break;
+
+        case 'admin.updateOrderStatus':
+            $result = admin_updateOrderStatus($input, $ctx);
+            break;
+
         // ── Notifications ────────────────────────────────────────
         case 'notifications.list':
             $result = notif_list($input, $ctx);

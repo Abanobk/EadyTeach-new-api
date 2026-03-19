@@ -1153,6 +1153,58 @@ function _formatQuotation($r) {
     ];
 }
 
+// ─── Admin Dashboard Stats ───────────────────────────────────
+// Used by: lib/screens/admin/admin_home_screen.dart + lib/screens/admin/admin_reports_screen.dart
+function admin_getDashboardStats($input, $ctx) {
+    global $db;
+
+    $userId = (int)($ctx['userId'] ?? 0);
+    if ($userId <= 0) {
+        throw new Exception('UNAUTHORIZED');
+    }
+
+    // Only allow admin/staff/supervisor accounts to access admin stats.
+    $roleStmt = $db->prepare("SELECT role FROM users WHERE id = ?");
+    $roleStmt->execute([$userId]);
+    $role = $roleStmt->fetchColumn();
+    $roleLower = $role ? strtolower(trim((string)$role)) : '';
+    $allowedRoles = ['admin', 'staff', 'supervisor'];
+    if (!in_array($roleLower, $allowedRoles, true)) {
+        throw new Exception('FORBIDDEN');
+    }
+
+    // Orders table is needed by the mobile/clients flow too.
+    try { _ensureOrdersTable(); } catch (\Exception $e) {}
+
+    $totalOrders = 0;
+    try {
+        $totalOrders = (int)$db->query("SELECT COUNT(*) FROM orders")->fetchColumn();
+    } catch (\Exception $e) {}
+
+    $totalTasks = 0;
+    try {
+        $totalTasks = (int)$db->query("SELECT COUNT(*) FROM tasks")->fetchColumn();
+    } catch (\Exception $e) {}
+
+    $totalProducts = 0;
+    try {
+        $totalProducts = (int)$db->query("SELECT COUNT(*) FROM products")->fetchColumn();
+    } catch (\Exception $e) {}
+
+    $totalCustomers = 0;
+    try {
+        $stmt = $db->query("SELECT COUNT(*) FROM users WHERE LOWER(role) IN ('user', 'client')");
+        $totalCustomers = (int)$stmt->fetchColumn();
+    } catch (\Exception $e) {}
+
+    return [
+        'totalOrders' => $totalOrders,
+        'totalCustomers' => $totalCustomers,
+        'totalProducts' => $totalProducts,
+        'totalTasks' => $totalTasks,
+    ];
+}
+
 // ─── Orders ────────────────────────────────────────────────────
 function _ensureOrdersTable() {
     global $db;
@@ -1220,6 +1272,96 @@ function orders_getMyOrders($ctx) {
         ];
     }
     return $result;
+}
+
+// ─── Admin Orders ──────────────────────────────────────────────
+function admin_getAllOrders($input, $ctx) {
+    global $db;
+    _ensureOrdersTable();
+
+    $userId = (int)($ctx['userId'] ?? 0);
+    if ($userId <= 0) throw new Exception('UNAUTHORIZED');
+
+    $roleStmt = $db->prepare("SELECT role FROM users WHERE id = ?");
+    $roleStmt->execute([$userId]);
+    $role = $roleStmt->fetchColumn();
+    $roleLower = $role ? strtolower(trim((string)$role)) : '';
+    if (!in_array($roleLower, ['admin', 'staff', 'supervisor'], true)) {
+        throw new Exception('FORBIDDEN');
+    }
+
+    $stmt = $db->query("
+        SELECT
+            o.id,
+            o.items,
+            o.total,
+            o.status,
+            o.created_at,
+            u.name AS customer_name,
+            u.phone AS customer_phone,
+            u.address AS customer_address
+        FROM orders o
+        LEFT JOIN users u ON u.id = o.user_id
+        ORDER BY o.created_at DESC
+    ");
+
+    $result = [];
+    foreach ($stmt->fetchAll() as $r) {
+        $result[] = [
+            'id' => (int)$r['id'],
+            'items' => $r['items'] ? json_decode($r['items'], true) : [],
+            // UI expects totalAmount key
+            'totalAmount' => (float)($r['total'] ?? 0),
+            'status' => $r['status'] ?? 'pending',
+            'customerName' => $r['customer_name'] ?? null,
+            'customerPhone' => $r['customer_phone'] ?? null,
+            'customerAddress' => $r['customer_address'] ?? null,
+            'createdAt' => $r['created_at'] ? strtotime($r['created_at']) * 1000 : null,
+        ];
+    }
+
+    return $result;
+}
+
+function admin_updateOrderStatus($input, $ctx) {
+    global $db;
+    _ensureOrdersTable();
+
+    $userId = (int)($ctx['userId'] ?? 0);
+    if ($userId <= 0) throw new Exception('UNAUTHORIZED');
+
+    $orderId = (int)($input['orderId'] ?? 0);
+    $status = (string)($input['status'] ?? 'pending');
+    if ($orderId <= 0) throw new Exception('INVALID_ARGUMENT');
+
+    $roleStmt = $db->prepare("SELECT role FROM users WHERE id = ?");
+    $roleStmt->execute([$userId]);
+    $role = $roleStmt->fetchColumn();
+    $roleLower = $role ? strtolower(trim((string)$role)) : '';
+    if (!in_array($roleLower, ['admin', 'staff', 'supervisor'], true)) {
+        throw new Exception('FORBIDDEN');
+    }
+
+    // Update status
+    $upd = $db->prepare("UPDATE orders SET status = ? WHERE id = ?");
+    $upd->execute([$status, $orderId]);
+
+    // Notify order owner (if available)
+    try {
+        $stmt = $db->prepare("SELECT user_id FROM orders WHERE id = ?");
+        $stmt->execute([$orderId]);
+        $ownerId = $stmt->fetchColumn();
+        if ($ownerId) {
+            _notifyUser((int)$ownerId, 'تحديث حالة الطلب', "تم تحديث حالة الطلب #{$orderId} إلى: {$status}", 'order', $orderId, 'order', [
+                'orderId' => $orderId,
+                'status' => $status,
+            ]);
+        }
+    } catch (\Exception $e) {
+        // Optional, don't fail status update if notification fails
+    }
+
+    return ['success' => true];
 }
 
 // ─── Helper ────────────────────────────────────────────────────

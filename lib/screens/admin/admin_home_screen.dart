@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -34,12 +35,31 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   bool _loadingStats = true;
   int _unreadNotifs = 0;
   bool _sidebarExpanded = false;
+  Timer? _statsTimer;
+  Timer? _notifsTimer;
 
   @override
   void initState() {
     super.initState();
     _loadStats();
     _loadUnreadCount();
+    _startPolling();
+  }
+
+  void _startPolling() {
+    // Periodically refresh because this screen can remain open for long periods.
+    _statsTimer?.cancel();
+    _notifsTimer?.cancel();
+
+    _statsTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted) return;
+      _loadStats();
+    });
+
+    _notifsTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      _loadUnreadCount();
+    });
   }
 
   Future<void> _loadUnreadCount() async {
@@ -64,6 +84,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     } catch (e) {
       setState(() => _loadingStats = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _statsTimer?.cancel();
+    _notifsTimer?.cancel();
+    super.dispose();
   }
 
   @override

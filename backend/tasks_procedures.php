@@ -943,10 +943,114 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
     $role = $role ? strtolower(trim((string)$role)) : '';
     if (!in_array($role, ['admin', 'supervisor', 'staff'], true)) throw new Exception('FORBIDDEN');
 
-    $db->prepare("UPDATE quotations SET purchase_request_status = 'accepted', purchase_accepted_at = NOW() WHERE id = ?")
-        ->execute([$id]);
-
     $dealerId = isset($q['created_by']) ? (int)$q['created_by'] : 0;
+
+    // If purchase_items weren't stored during requestPurchase (or were empty),
+    // compute them now using the dealer's discount rules so the dealer can sync cart.
+    $purchaseItemsExisting = $q['purchase_items'] ?? null;
+    $needComputeItems = true;
+    if ($purchaseItemsExisting !== null) {
+        try {
+            $tmp = json_decode($purchaseItemsExisting, true);
+            if (is_array($tmp) && count($tmp) > 0) $needComputeItems = false;
+        } catch (\Exception $e) { /* ignore */ }
+    }
+
+    $purchaseItems = null;
+    $purchaseTotal = (float)($q['purchase_total_amount'] ?? 0);
+
+    if ($needComputeItems) {
+        $items = $q['items'] ? json_decode($q['items'], true) : [];
+        if (!is_array($items)) $items = [];
+
+        $purchaseItems = [];
+        $purchaseTotal = 0.0;
+
+        $prodStmt = $db->prepare('SELECT id, category_id, stock FROM products WHERE id = ?');
+
+        foreach ($items as $item) {
+            if (!is_array($item)) continue;
+
+            $productId = (int)($item['productId'] ?? 0);
+            $productName = $item['productName'] ?? null;
+            $qty = (int)($item['quantity'] ?? $item['qty'] ?? 1);
+            $officialUnitPrice = (float)($item['unitPrice'] ?? 0);
+
+            $dealerUnitPrice = $officialUnitPrice;
+            $appliedPercent = 0.0;
+            $appliedAmount = 0.0;
+            $waitingMessage = null;
+
+            if ($productId > 0) {
+                $prodStmt->execute([$productId]);
+                $pr = $prodStmt->fetch();
+
+                if ($pr) {
+                    $rowForDiscount = [
+                        'id' => $pr['id'],
+                        'category_id' => $pr['category_id'] ?? null,
+                        'stock' => $pr['stock'] ?? 0,
+                    ];
+
+                    // IMPORTANT: calculate using the dealer as ctx.userId
+                    $dealerCtx = ['userId' => $dealerId];
+                    $userRule = _applyUserDiscount($rowForDiscount, $dealerCtx);
+                    $waitingMessage = $userRule['waitingMessage'] ?? null;
+                    $appliedPercent = (float)($userRule['percent'] ?? 0);
+                    $appliedAmount = (float)($userRule['amount'] ?? 0);
+
+                    if ($waitingMessage == null) {
+                        $discountValue = 0.0;
+                        if ($appliedPercent > 0) {
+                            $discountValue = $officialUnitPrice * $appliedPercent / 100.0;
+                        } elseif ($appliedAmount > 0) {
+                            $discountValue = $appliedAmount;
+                        }
+                        $dealerUnitPrice = $officialUnitPrice - $discountValue;
+                        if ($dealerUnitPrice < 0) $dealerUnitPrice = 0.0;
+                        $appliedAmount = $discountValue; // store applied money discount
+                    }
+                }
+            }
+
+            $dealerTotal = $dealerUnitPrice * $qty;
+            $purchaseTotal += $dealerTotal;
+
+            $purchaseItems[] = [
+                'productId' => $productId,
+                'productName' => $productName,
+                'qty' => $qty,
+                'officialUnitPrice' => $officialUnitPrice,
+                'dealerUnitPrice' => $dealerUnitPrice,
+                'dealerTotalPrice' => $dealerTotal,
+                'discountPercent' => $appliedPercent,
+                'discountAmount' => $appliedAmount,
+                'discountWaitingMessage' => $waitingMessage,
+            ];
+        }
+    } else {
+        // If items exist, use them for saving.
+        try {
+            $purchaseItems = json_decode($purchaseItemsExisting, true);
+        } catch (\Exception $e) {
+            $purchaseItems = null;
+        }
+    }
+
+    $purchaseItemsJson = $purchaseItems !== null ? json_encode($purchaseItems, JSON_UNESCAPED_UNICODE) : ($q['purchase_items'] ?? '[]');
+
+    $db->prepare("UPDATE quotations
+        SET purchase_request_status = 'accepted',
+            purchase_accepted_at = NOW(),
+            purchase_items = ?,
+            purchase_total_amount = ?
+        WHERE id = ?")
+        ->execute([
+            $purchaseItemsJson,
+            $purchaseTotal,
+            $id
+        ]);
+
     if ($dealerId > 0) {
         $ref = $q['ref_number'] ?? ('QT-' . $id);
         $purchaseTotal = (float)($q['purchase_total_amount'] ?? 0);

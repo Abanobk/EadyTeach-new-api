@@ -146,6 +146,8 @@ class _OrderCard extends StatelessWidget {
         return 'فيزا';
       case 'apple_pay':
         return 'Apple Pay';
+      case 'transfer':
+        return 'تحويل';
       default:
         return method;
     }

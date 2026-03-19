@@ -827,6 +827,7 @@ class _ProductCard extends StatelessWidget {
                                   productId: product['id'],
                                   name: name,
                                   price: price,
+                                  originalPrice: hasDiscount ? originalPrice : null,
                                   image: image,
                                 ))
                             : null,

@@ -6,6 +6,7 @@ class CartItem {
   final int productId;
   final String name;
   final double price;
+  final double? originalPrice;
   final String? image;
   final String? variant;
   int quantity;
@@ -14,6 +15,7 @@ class CartItem {
     required this.productId,
     required this.name,
     required this.price,
+    this.originalPrice,
     this.image,
     this.variant,
     this.quantity = 1,
@@ -23,6 +25,7 @@ class CartItem {
         'productId': productId,
         'name': name,
         'price': price,
+        'originalPrice': originalPrice,
         'image': image,
         'variant': variant,
         'quantity': quantity,
@@ -32,6 +35,7 @@ class CartItem {
         productId: json['productId'],
         name: json['name'],
         price: (json['price'] as num).toDouble(),
+        originalPrice: json['originalPrice'] != null ? (json['originalPrice'] as num).toDouble() : null,
         image: json['image'],
         variant: json['variant'],
         quantity: json['quantity'] ?? 1,

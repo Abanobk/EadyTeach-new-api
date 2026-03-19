@@ -462,6 +462,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   productId: p['id'],
                                   name: p['name'] ?? '',
                                   price: _currentPrice,
+                                  originalPrice: originalPrice > 0 ? originalPrice : null,
                                   image: images.isNotEmpty ? images[0] : null,
                                   quantity: _qty,
                                   variant: selectedVariant,

@@ -245,10 +245,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       final qty = int.tryParse(raw['qty']?.toString() ?? '') ?? 1;
       final unitPrice = double.tryParse(raw['dealerUnitPrice']?.toString() ?? '') ?? 0.0;
       final name = raw['productName']?.toString() ?? 'منتج';
+      final officialPrice = double.tryParse(raw['officialUnitPrice']?.toString() ?? '') ?? 0.0;
       cart.addItem(CartItem(
         productId: pid,
         name: name,
         price: unitPrice,
+        originalPrice: officialPrice > 0 ? officialPrice : null,
         image: raw['imageUrl']?.toString(),
         quantity: qty,
       ));

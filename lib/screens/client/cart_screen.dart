@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -14,11 +16,16 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   String _paymentMethod = 'cash';
+  String? _transferProofUrl;
+  bool _uploadingProof = false;
   bool _submitting = false;
   String? _shippingName;
   String? _shippingPhone;
   String? _shippingAddress;
   bool _loadingProfile = false;
+
+  // Put your Instapay link here (from your message).
+  static const String _instapayUrl = 'https://ipn.eg/S/abanob.mousa5861/instapay/0sN2g0';
 
   @override
   void initState() {
@@ -108,12 +115,40 @@ class _CartScreenState extends State<CartScreen> {
                                       style: const TextStyle(
                                           color: AppColors.text,
                                           fontWeight: FontWeight.w600)),
+                                  if (item.variant != null && item.variant!.toString().isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        item.variant!,
+                                        style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                                      ),
+                                    ),
                                   const SizedBox(height: 4),
-                                  Text(
-                                      '${item.price.toStringAsFixed(2)} ج.م',
-                                      style: const TextStyle(
-                                          color: AppColors.primary,
-                                          fontWeight: FontWeight.bold)),
+                                  Builder(builder: (_) {
+                                    final original = item.originalPrice;
+                                    final hasOriginal = original != null && original > item.price;
+                                    return Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        if (hasOriginal)
+                                          Text(
+                                            '${original!.toStringAsFixed(2)} ج.م',
+                                            style: const TextStyle(
+                                              color: AppColors.muted,
+                                              decoration: TextDecoration.lineThrough,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        Text(
+                                          '${item.price.toStringAsFixed(2)} ج.م',
+                                          style: const TextStyle(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }),
                                 ],
                               ),
                             ),
@@ -155,84 +190,6 @@ class _CartScreenState extends State<CartScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('بيانات التوصيل:',
-                          style: TextStyle(
-                              color: AppColors.text,
-                              fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppThemeDecorations.pageBackground(context),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: _loadingProfile
-                            ? const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: AppColors.primary),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Text('جاري تحميل بياناتك...',
-                                      style: TextStyle(
-                                          color: AppColors.muted,
-                                          fontSize: 13)),
-                                ],
-                              )
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _shippingName?.isNotEmpty == true
-                                        ? _shippingName!
-                                        : 'الاسم: غير مُدخل',
-                                    style: const TextStyle(
-                                        color: AppColors.text, fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _shippingPhone?.isNotEmpty == true
-                                        ? 'الهاتف: $_shippingPhone'
-                                        : 'الهاتف: غير مُدخل',
-                                    style: const TextStyle(
-                                        color: AppColors.text, fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _shippingAddress?.isNotEmpty == true
-                                        ? 'العنوان: $_shippingAddress'
-                                        : 'العنوان: غير مُدخل',
-                                    style: const TextStyle(
-                                        color: AppColors.text, fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: TextButton.icon(
-                                      onPressed: _submitting
-                                          ? null
-                                          : () => _editShippingInfo(),
-                                      icon: const Icon(Icons.edit_location_alt,
-                                          size: 18),
-                                      label: Text(
-                                        _shippingAddress?.isNotEmpty == true
-                                            ? 'تعديل بيانات التوصيل'
-                                            : 'إضافة بيانات التوصيل',
-                                        style: const TextStyle(fontSize: 13),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
-                      const SizedBox(height: 16),
                       const Text('طريقة الدفع:',
                           style: TextStyle(
                               color: AppColors.text,
@@ -260,6 +217,16 @@ class _CartScreenState extends State<CartScreen> {
                               selected: _paymentMethod == 'apple_pay',
                               onTap: () =>
                                   setState(() => _paymentMethod = 'apple_pay')),
+                          const SizedBox(width: 8),
+                          _PaymentBtn(
+                              label: 'تحويل',
+                              icon: Icons.account_balance_wallet_outlined,
+                              selected: _paymentMethod == 'transfer',
+                              onTap: () {
+                                setState(() => _paymentMethod = 'transfer');
+                                // Open link + upload receipt right away for transfer.
+                                _openTransferProofDialog();
+                              }),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -308,12 +275,20 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _placeOrder(CartProvider cart) async {
-    // تأكد من وجود بيانات التوصيل (خاصة العنوان)
-    final hasAddress =
-        _shippingAddress != null && _shippingAddress!.trim().isNotEmpty;
-    if (!hasAddress) {
-      final ok = await _editShippingInfo();
-      if (!ok) return;
+    // Step 1: confirm shipping/contact data after pressing order.
+    final ok = await _editShippingInfo();
+    if (!ok) return;
+
+    // Step 2: validate transfer receipt if needed.
+    if (_paymentMethod == 'transfer' && (_transferProofUrl == null || _transferProofUrl!.isEmpty)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('من فضلك ارفع صورة إيصال التحويل أولاً'), backgroundColor: AppColors.error),
+        );
+      }
+      // Force user to upload receipt flow.
+      await _openTransferProofDialog();
+      return;
     }
 
     setState(() => _submitting = true);
@@ -332,6 +307,7 @@ class _CartScreenState extends State<CartScreen> {
         'totalAmount': cart.total.toString(),
         if (_shippingAddress != null && _shippingAddress!.isNotEmpty)
           'shippingAddress': _shippingAddress,
+        if (_transferProofUrl != null && _transferProofUrl!.isNotEmpty) 'paymentProofUrl': _transferProofUrl,
       });
 
       cart.clear();
@@ -373,6 +349,89 @@ class _CartScreenState extends State<CartScreen> {
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _openTransferProofDialog() async {
+    if (!mounted) return;
+    // Open Instapay link
+    try {
+      final uri = Uri.parse(_instapayUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {}
+
+    final picker = ImagePicker();
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppThemeDecorations.cardColor(context),
+        title: const Text('تحويل بنكي - رفع إيصال', style: TextStyle(color: AppColors.text)),
+        content: StatefulBuilder(
+          builder: (ctx2, setModalState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('اضغط على InstaPay للتحويل ثم ارفع صورة الإيصال هنا.', style: TextStyle(color: AppColors.muted)),
+                const SizedBox(height: 12),
+                if (_transferProofUrl != null && _transferProofUrl!.isNotEmpty)
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    clipBehavior: Clip.hardEdge,
+                    child: Image.network(ApiService.proxyImageUrl(_transferProofUrl!), fit: BoxFit.cover),
+                  ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: _uploadingProof
+                      ? null
+                      : () async {
+                          setModalState(() => _uploadingProof = true);
+                          try {
+                            final xfile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+                            if (xfile == null) {
+                              setModalState(() => _uploadingProof = false);
+                              return;
+                            }
+                            final bytes = await xfile.readAsBytes();
+                            final url = await ApiService.uploadFile(
+                              xfile.path,
+                              bytes: bytes,
+                              filename: xfile.name,
+                            );
+                            setState(() => _transferProofUrl = url);
+                            setModalState(() => _uploadingProof = false);
+                            if (ctx.mounted) {
+                              Navigator.pop(ctx, url);
+                            }
+                          } catch (e) {
+                            setModalState(() => _uploadingProof = false);
+                          }
+                        },
+                  icon: _uploadingProof
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.upload_file),
+                  label: Text(_uploadingProof ? 'جاري الرفع...' : 'رفع صورة التحويل', style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, _transferProofUrl),
+                  child: const Text('تم', style: TextStyle(color: AppColors.primary)),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      setState(() => _transferProofUrl = result);
     }
   }
 

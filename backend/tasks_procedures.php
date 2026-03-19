@@ -1162,6 +1162,8 @@ function _ensureOrdersTable() {
         items LONGTEXT,
         total DECIMAL(12,2) DEFAULT 0,
         status VARCHAR(50) DEFAULT "pending",
+        payment_method VARCHAR(30) DEFAULT "cash",
+        payment_proof_url TEXT NULL,
         shipping_address TEXT NULL,
         notes TEXT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1179,9 +1181,15 @@ function orders_create($input, $ctx) {
     $address = $input['shippingAddress'] ?? null;
     $notes = $input['notes'] ?? null;
     $status = $input['status'] ?? 'pending';
+    $paymentMethod = $input['paymentMethod'] ?? 'cash';
+    $paymentProofUrl = $input['paymentProofUrl'] ?? null;
 
-    $stmt = $db->prepare('INSERT INTO orders (user_id, items, total, status, shipping_address, notes) VALUES (?, ?, ?, ?, ?, ?)');
-    $stmt->execute([$userId, $items, $total, $status, $address, $notes]);
+    // Ensure new columns exist for older deployments.
+    try { $db->exec('ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method VARCHAR(30) DEFAULT "cash"'); } catch (\Exception $e) {}
+    try { $db->exec('ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_proof_url TEXT NULL'); } catch (\Exception $e) {}
+
+    $stmt = $db->prepare('INSERT INTO orders (user_id, items, total, status, payment_method, payment_proof_url, shipping_address, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$userId, $items, $total, $status, $paymentMethod, $paymentProofUrl, $address, $notes]);
     $orderId = (int)$db->lastInsertId();
 
     try {
@@ -1204,6 +1212,8 @@ function orders_getMyOrders($ctx) {
             'items' => $r['items'] ? json_decode($r['items'], true) : [],
             'total' => $r['total'] ?? 0,
             'status' => $r['status'] ?? 'pending',
+            'paymentMethod' => $r['payment_method'] ?? 'cash',
+            'paymentProofUrl' => $r['payment_proof_url'] ?? null,
             'shippingAddress' => $r['shipping_address'] ?? null,
             'notes' => $r['notes'] ?? null,
             'createdAt' => $r['created_at'] ? strtotime($r['created_at']) * 1000 : null,

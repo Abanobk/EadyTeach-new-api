@@ -4,37 +4,12 @@
  * Main entry point for all API requests.
  */
 
-// ─── CORS ──────────────────────────────────────────────────────
-// عند استخدام Cookie يجب إرجاع Origin الفعلي وليس * (المتصفح يرفض * مع credentials)
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$allowedOrigins = [
-    'http://localhost',
-    'http://127.0.0.1',
-    'https://api.easytecheg.net',
-    'https://easytecheg.net',
-];
-$allowOrigin = '*';
-if ($origin !== '') {
-    foreach ($allowedOrigins as $allowed) {
-        if (strpos($origin, $allowed) === 0) {
-            $allowOrigin = $origin;
-            break;
-        }
-    }
-}
-header('Access-Control-Allow-Origin: ' . $allowOrigin);
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Accept, Cookie, Authorization');
-header('Access-Control-Allow-Credentials: true');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
-
-// ─── Image Proxy (before JSON content-type) ──────────────────
+// ─── Image Proxy (before CORS / JSON) ────────────────────────
+// يدعم طريقتين:
+//  - /api/image-proxy?url=...
+//  - backend/router.php?image-proxy=1&url=...
 $_imgProxyUri = $_SERVER['REQUEST_URI'] ?? '';
-if (strpos($_imgProxyUri, '/api/image-proxy') !== false) {
+if (strpos($_imgProxyUri, '/api/image-proxy') !== false || isset($_GET['image-proxy'])) {
     $imgUrl = $_GET['url'] ?? '';
     if (empty($imgUrl)) {
         http_response_code(400);
@@ -67,6 +42,34 @@ if (strpos($_imgProxyUri, '/api/image-proxy') !== false) {
     header('Cache-Control: public, max-age=86400');
     header('Access-Control-Allow-Origin: *');
     echo $imgData;
+    exit;
+}
+
+// ─── CORS ──────────────────────────────────────────────────────
+// عند استخدام Cookie يجب إرجاع Origin الفعلي وليس * (المتصفح يرفض * مع credentials)
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$allowedOrigins = [
+    'http://localhost',
+    'http://127.0.0.1',
+    'https://api.easytecheg.net',
+    'https://easytecheg.net',
+];
+$allowOrigin = '*';
+if ($origin !== '') {
+    foreach ($allowedOrigins as $allowed) {
+        if (strpos($origin, $allowed) === 0) {
+            $allowOrigin = $origin;
+            break;
+        }
+    }
+}
+header('Access-Control-Allow-Origin: ' . $allowOrigin);
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Accept, Cookie, Authorization');
+header('Access-Control-Allow-Credentials: true');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
     exit;
 }
 

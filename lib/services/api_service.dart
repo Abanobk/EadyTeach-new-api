@@ -61,13 +61,14 @@ class ApiService {
     final host = uri?.host.toLowerCase() ?? '';
 
     if (kIsWeb) {
-      // على الويب: نمرّر Firebase و /uploads عبر proxy لتفادي CORS
+      // على الويب: نمرّر Firebase و /uploads عبر proxy (router.php) لتفادي CORS
       if (host.contains('firebasestorage.googleapis.com') ||
           url.startsWith('/uploads') ||
           host == Uri.tryParse(_apiOrigin)?.host) {
         final absolute = url.startsWith('http') ? url : _absoluteUrl(url);
         final encoded = Uri.encodeComponent(absolute);
-        return '$_apiOrigin/api/image-proxy?url=$encoded';
+        // نستخدم router.php مباشرة لضمان عمله بدون إعدادات خاصة في Apache
+        return '$_apiOrigin/backend/router.php?image-proxy=1&url=$encoded';
       }
       // أي دومينات خارجية أخرى نستخدمها مباشرة
       return url;

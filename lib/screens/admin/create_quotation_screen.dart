@@ -4,7 +4,14 @@ import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
 class CreateQuotationScreen extends StatefulWidget {
-  const CreateQuotationScreen({super.key});
+  final int? preselectedClientUserId;
+  final String? preselectedClientName;
+
+  const CreateQuotationScreen({
+    super.key,
+    this.preselectedClientUserId,
+    this.preselectedClientName,
+  });
 
   @override
   State<CreateQuotationScreen> createState() => _CreateQuotationScreenState();
@@ -48,6 +55,12 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
   @override
   void initState() {
     super.initState();
+    // If opened from a dealer account, preselect "registered client" as the current user.
+    if (widget.preselectedClientUserId != null) {
+      _clientType = 'registered';
+      _selectedClientId = widget.preselectedClientUserId;
+      _selectedClientName = widget.preselectedClientName;
+    }
     _loadCategories();
     _loadClients();
   }

@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import 'client_quotations_screen.dart';
+import '../admin/create_quotation_screen.dart';
 
 class MyTasksScreen extends StatefulWidget {
   const MyTasksScreen({super.key});
@@ -95,7 +96,8 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final canViewQuotations = auth.hasPermission('quotations.view');
+    final isDealer = auth.user?.role == 'dealer' || auth.user?.role == 'reseller';
+    final canViewQuotations = auth.hasPermission('quotations.view') && isDealer;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
@@ -150,15 +152,16 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
                   },
                 ),
                 const SizedBox(width: 8),
-                _TabChip(
-                  label: 'عروض الأسعار',
-                  icon: Icons.request_quote_outlined,
-                  selected: _tab == 'quotations',
-                  onTap: () {
-                    setState(() => _tab = 'quotations');
-                    _loadQuotations();
-                  },
-                ),
+                if (canViewQuotations)
+                  _TabChip(
+                    label: 'عروض الأسعار',
+                    icon: Icons.request_quote_outlined,
+                    selected: _tab == 'quotations',
+                    onTap: () {
+                      setState(() => _tab = 'quotations');
+                      _loadQuotations();
+                    },
+                  ),
               ],
             ),
           ),
@@ -173,6 +176,11 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
       return _buildSurveysTab();
     }
     if (_tab == 'quotations') {
+      if (!canViewQuotations) {
+        return const Center(
+          child: Text('عروض الأسعار متاحة للتجار فقط'),
+        );
+      }
       return _buildQuotationsTab();
     }
 
@@ -297,6 +305,37 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        final user = context.read<AuthProvider>().user;
+                        if (user == null) return;
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CreateQuotationScreen(
+                              preselectedClientUserId: user.id,
+                              preselectedClientName: user.name,
+                            ),
+                          ),
+                        ).then((_) => _loadQuotations());
+                      },
+                      icon: const Icon(Icons.add, color: Colors.black),
+                      label: const Text(
+                        'إضافة عرض سعر جديد',
+                        style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary.withOpacity(0.95),
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       _QuotationStatChip(label: 'مرفوض', count: _quotationStats['rejected'] ?? 0, color: Colors.red),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
@@ -38,6 +40,52 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       }
     } catch (e) {
       setState(() => _loaded = true);
+    }
+  }
+
+  Future<void> _fillCurrentLocation() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      final placemarks =
+          await placemarkFromCoordinates(pos.latitude, pos.longitude);
+      final place = placemarks.isNotEmpty ? placemarks.first : null;
+
+      final buffer = StringBuffer();
+      if (place != null) {
+        if ((place.street ?? '').isNotEmpty) {
+          buffer.write(place.street);
+        }
+        if ((place.subAdministrativeArea ?? '').isNotEmpty) {
+          if (buffer.isNotEmpty) buffer.write(', ');
+          buffer.write(place.subAdministrativeArea);
+        }
+        if ((place.administrativeArea ?? '').isNotEmpty) {
+          if (buffer.isNotEmpty) buffer.write(', ');
+          buffer.write(place.administrativeArea);
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _addressCtrl.text = buffer.isNotEmpty
+              ? buffer.toString()
+              : 'الموقع الحالي: (${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)})';
+        });
+      }
+    } catch (_) {
+      // فشل تحديد الموقع بصمت بدون كسر الشاشة
     }
   }
 
@@ -135,11 +183,29 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                       keyboardType: TextInputType.phone,
                     ),
                     const SizedBox(height: 14),
-                    _buildField(
-                      controller: _addressCtrl,
-                      label: 'العنوان',
-                      icon: Icons.location_on_outlined,
-                      maxLines: 3,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _buildField(
+                            controller: _addressCtrl,
+                            label: 'العنوان',
+                            icon: Icons.location_on_outlined,
+                            maxLines: 3,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Column(
+                          children: [
+                            IconButton(
+                              tooltip: 'تحديد موقعي تلقائياً',
+                              icon: const Icon(Icons.my_location,
+                                  color: AppColors.primary),
+                              onPressed: _fillCurrentLocation,
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 24),
 

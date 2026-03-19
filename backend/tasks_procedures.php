@@ -751,7 +751,7 @@ function quotations_requestPurchase($input, $ctx) {
     $purchaseItems = [];
     $purchaseTotal = 0.0;
 
-    $prodStmt = $db->prepare('SELECT id, category_id, stock, main_image_url, images FROM products WHERE id = ?');
+    $prodStmt = $db->prepare('SELECT id, category_id, stock, price, original_price, main_image_url, images FROM products WHERE id = ?');
 
     foreach ($items as $item) {
         if (!is_array($item)) continue;
@@ -759,7 +759,7 @@ function quotations_requestPurchase($input, $ctx) {
         $productId = (int)($item['productId'] ?? 0);
         $productName = $item['productName'] ?? null;
         $qty = (int)($item['quantity'] ?? $item['qty'] ?? 1);
-        $officialUnitPrice = (float)($item['unitPrice'] ?? 0);
+        $officialUnitPrice = 0.0;
 
         $dealerUnitPrice = $officialUnitPrice;
         $appliedPercent = 0.0;
@@ -772,6 +772,9 @@ function quotations_requestPurchase($input, $ctx) {
             $pr = $prodStmt->fetch();
 
             if ($pr) {
+                // Dealer purchase pricing must be based on the official product base price
+                // (ignore quotation-level installation/discount that may affect item totals).
+                $officialUnitPrice = (float)($pr['original_price'] ?? $pr['price'] ?? 0);
                 // ImageUrl for dealer cart sync.
                 $imageUrl = $pr['main_image_url'] ?? null;
                 if (empty($imageUrl) && !empty($pr['images'])) {
@@ -859,7 +862,7 @@ function quotations_previewDealerPurchase($input, $ctx) {
     $purchaseItems = [];
     $purchaseTotal = 0.0;
 
-    $prodStmt = $db->prepare('SELECT id, category_id, stock, main_image_url, images FROM products WHERE id = ?');
+    $prodStmt = $db->prepare('SELECT id, category_id, stock, price, original_price, main_image_url, images FROM products WHERE id = ?');
 
     foreach ($items as $item) {
         if (!is_array($item)) continue;
@@ -867,7 +870,7 @@ function quotations_previewDealerPurchase($input, $ctx) {
         $productId = (int)($item['productId'] ?? 0);
         $productName = $item['productName'] ?? null;
         $qty = (int)($item['quantity'] ?? $item['qty'] ?? 1);
-        $officialUnitPrice = (float)($item['unitPrice'] ?? 0);
+        $officialUnitPrice = 0.0;
 
         $dealerUnitPrice = $officialUnitPrice;
         $appliedPercent = 0.0;
@@ -880,6 +883,8 @@ function quotations_previewDealerPurchase($input, $ctx) {
             $pr = $prodStmt->fetch();
 
             if ($pr) {
+                // Dealer purchase pricing must be based on the official product base price.
+                $officialUnitPrice = (float)($pr['original_price'] ?? $pr['price'] ?? 0);
                 // ImageUrl for dealer cart sync.
                 $imageUrl = $pr['main_image_url'] ?? null;
                 if (empty($imageUrl) && !empty($pr['images'])) {
@@ -989,6 +994,10 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
         } catch (\Exception $e) { /* ignore */ }
     }
 
+    // Always recompute on accept to ensure correct official base pricing
+    // (independent from quotation-level installation/discount and from older stored payloads).
+    $needComputeItems = true;
+
     $purchaseItems = null;
     $purchaseTotal = (float)($q['purchase_total_amount'] ?? 0);
 
@@ -1005,7 +1014,7 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
         $purchaseItems = [];
         $purchaseTotal = 0.0;
 
-        $prodStmt = $db->prepare('SELECT id, category_id, stock, main_image_url, images FROM products WHERE id = ?');
+        $prodStmt = $db->prepare('SELECT id, category_id, stock, price, original_price, main_image_url, images FROM products WHERE id = ?');
 
         foreach ($items as $item) {
             if (!is_array($item)) continue;
@@ -1013,7 +1022,7 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
             $productId = (int)($item['productId'] ?? 0);
             $productName = $item['productName'] ?? null;
             $qty = (int)($item['quantity'] ?? $item['qty'] ?? 1);
-            $officialUnitPrice = (float)($item['unitPrice'] ?? 0);
+            $officialUnitPrice = 0.0;
 
             $dealerUnitPrice = $officialUnitPrice;
             $appliedPercent = 0.0;
@@ -1026,6 +1035,8 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
                 $pr = $prodStmt->fetch();
 
                 if ($pr) {
+                    // Official base must come from products table.
+                    $officialUnitPrice = (float)($pr['original_price'] ?? $pr['price'] ?? 0);
                     // ImageUrl for dealer cart sync.
                     $imageUrl = $pr['main_image_url'] ?? null;
                     if (empty($imageUrl) && !empty($pr['images'])) {

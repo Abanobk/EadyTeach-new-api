@@ -24,6 +24,9 @@ class _CartScreenState extends State<CartScreen> {
   String? _shippingAddress;
   bool _loadingProfile = false;
 
+  final ScrollController _itemsScrollController = ScrollController();
+  int _lastItemsLen = -1;
+
   // Put your Instapay link here (from your message).
   static const String _instapayUrl = 'https://ipn.eg/S/abanob.mousa5861/instapay/0sN2g0';
 
@@ -31,6 +34,12 @@ class _CartScreenState extends State<CartScreen> {
   void initState() {
     super.initState();
     _loadProfile();
+  }
+
+  @override
+  void dispose() {
+    _itemsScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadProfile() async {
@@ -52,6 +61,18 @@ class _CartScreenState extends State<CartScreen> {
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
+
+    // If cart sync updates items after this screen was built, ensure we show them from top.
+    final currentLen = cart.items.length;
+    if (_lastItemsLen != currentLen) {
+      _lastItemsLen = currentLen;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_itemsScrollController.hasClients) {
+          _itemsScrollController.jumpTo(0);
+        }
+      });
+    }
 
     return Scaffold(
       backgroundColor: AppThemeDecorations.pageBackground(context),
@@ -83,8 +104,34 @@ class _CartScreenState extends State<CartScreen> {
                     style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 12),
                   ),
                 ),
+                // Debug: show first item outside ListView to ensure rendering isn't blocked.
+                if (cart.items.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.redAccent, width: 2),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.shopping_bag_outlined, color: Colors.redAccent),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'DEBUG first card: ${cart.items.first.name} (${cart.items.first.quantity}) - ${cart.items.first.price.toStringAsFixed(0)} ج.م',
+                              style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w800, fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 Expanded(
                   child: ListView.builder(
+                    controller: _itemsScrollController,
                     padding: const EdgeInsets.all(16),
                     itemCount: cart.items.length,
                     itemBuilder: (ctx, i) {

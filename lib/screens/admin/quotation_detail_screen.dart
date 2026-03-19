@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
@@ -11,6 +12,7 @@ import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/cart_provider.dart';
 import '../../utils/pdf_saver_stub.dart'
     if (dart.library.html) '../../utils/pdf_saver_web.dart' as pdf_saver;
 
@@ -32,10 +34,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   bool _loadingDealerPreview = false;
   bool _requestingPurchase = false;
   bool _acceptingPurchase = false;
+  bool _finishingOrder = false;
 
   Map<String, dynamic>? _dealerPurchasePreview;
   bool _dealerPreviewLoadedForCurrentQuotation = false;
   String? _dealerPurchasePreviewError;
+
+  Timer? _dealerPollTimer;
+  bool _cartSyncedForThisQuote = false;
 
   final _statusLabels = {
     'draft': 'مسودة',
@@ -70,25 +76,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   }
 
   Future<void> _maybeLoadDealerPurchasePreview() async {
-    if (_quotation == null) return;
-    if (_loadingDealerPreview) return;
-    if (_dealerPreviewLoadedForCurrentQuotation) return;
-
-    final auth = context.read<AuthProvider>();
-    final role = auth.user?.role ?? '';
-    final dealerId = auth.user?.id;
-    final quoteCreatedBy = _quotation?['createdBy'];
-    final quoteCreatedById = quoteCreatedBy == null ? null : int.tryParse(quoteCreatedBy.toString());
-
-    // Prefer strict check based on which dealer created the quotation.
-    // Fallback to role-string for backward compatibility if createdBy isn't present.
-    if (dealerId != null && quoteCreatedById != null) {
-      if (dealerId != quoteCreatedById) return;
-    } else {
-      if (!_isDealerRole(role)) return;
-    }
-
-    await _loadDealerPurchasePreview();
+    // Deprecated for this flow:
+    // Dealer pricing must come from stored `purchaseItems/purchaseTotalAmount`
+    // to avoid backend `FORBIDDEN` from `previewDealerPurchase`.
+    return;
   }
 
   Future<void> _loadQuotation() async {
@@ -100,12 +91,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         _loading = false;
         _dealerPreviewLoadedForCurrentQuotation = false;
         _dealerPurchasePreviewError = null;
+        _cartSyncedForThisQuote = false;
       });
-      // Load dealer preview now (don't depend on `AuthProvider` finishing first).
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _loadDealerPurchasePreview();
-      });
+      // Dealer pricing will be computed from stored purchase values.
+      _maybeStartDealerPolling();
     } catch (e) {
       setState(() => _loading = false);
     }
@@ -201,6 +190,138 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     } finally {
       if (mounted) setState(() => _acceptingPurchase = false);
     }
+  }
+
+  bool get _isDealerForCurrentQuote {
+    final auth = context.read<AuthProvider>();
+    final dealerId = auth.user?.id;
+    final createdBy = _quotation?['createdBy'];
+    final createdById = createdBy == null ? null : int.tryParse(createdBy.toString());
+    return dealerId != null && createdById != null && dealerId == createdById;
+  }
+
+  void _maybeStartDealerPolling() {
+    // Cancel old timer
+    _dealerPollTimer?.cancel();
+    _dealerPollTimer = null;
+
+    if (!_isDealerForCurrentQuote) return;
+    final purchaseStatus = _quotation?['purchaseRequestStatus'] ?? 'none';
+
+    if (purchaseStatus == 'accepted') {
+      _syncCartFromPurchaseItemsIfNeeded();
+      return;
+    }
+
+    if (purchaseStatus != 'requested') return;
+
+    // Poll until admin accepts.
+    _dealerPollTimer = Timer.periodic(const Duration(seconds: 4), (t) async {
+      if (!mounted) return;
+      try {
+        await _loadQuotation();
+      } catch (_) {
+        // ignore
+      }
+    });
+  }
+
+  Future<void> _syncCartFromPurchaseItemsIfNeeded() async {
+    if (_cartSyncedForThisQuote) return;
+    final purchaseStatus = _quotation?['purchaseRequestStatus'] ?? 'none';
+    if (purchaseStatus != 'accepted') return;
+
+    final purchaseItems = _quotation?['purchaseItems'] as List? ?? [];
+    if (purchaseItems.isEmpty) return;
+
+    final cart = context.read<CartProvider>();
+    await cart.loadCart();
+    cart.clear();
+
+    for (final raw in purchaseItems) {
+      if (raw is! Map) continue;
+      final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
+      if (pid <= 0) continue;
+      final qty = int.tryParse(raw['qty']?.toString() ?? '') ?? 1;
+      final unitPrice = double.tryParse(raw['dealerUnitPrice']?.toString() ?? '') ?? 0.0;
+      final name = raw['productName']?.toString() ?? 'منتج';
+      cart.addItem(CartItem(
+        productId: pid,
+        name: name,
+        price: unitPrice,
+        image: raw['imageUrl']?.toString(),
+        quantity: qty,
+      ));
+    }
+
+    if (mounted) {
+      setState(() => _cartSyncedForThisQuote = true);
+    } else {
+      _cartSyncedForThisQuote = true;
+    }
+  }
+
+  Future<void> _finishOrderFromCart() async {
+    setState(() => _finishingOrder = true);
+    try {
+      final cart = context.read<CartProvider>();
+      if (cart.items.isEmpty) {
+        await _syncCartFromPurchaseItemsIfNeeded();
+      }
+      if (cart.items.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('السلة فارغة'), backgroundColor: AppColors.error),
+          );
+        }
+        return;
+      }
+
+      final purchaseStatus = _quotation?['purchaseRequestStatus'] ?? 'none';
+      if (purchaseStatus != 'accepted') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('لا يمكن إنهاء الطلب قبل اعتماد الإدارة'), backgroundColor: AppColors.error),
+          );
+        }
+        return;
+      }
+
+      final items = cart.items
+          .map((i) => {
+                'productId': i.productId,
+                'quantity': i.quantity,
+                'unitPrice': i.price.toString(),
+              })
+          .toList();
+
+      await ApiService.mutate('orders.create', input: {
+        'items': items,
+        'totalAmount': cart.total.toString(),
+        'notes': 'طلب تجهيز من عرض سعر: ${_quotation?['refNumber'] ?? ''}',
+      });
+
+      cart.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ تم إرسال طلب التجهيز للإدارة'), backgroundColor: AppColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في إنهاء الطلب: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _finishingOrder = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _dealerPollTimer?.cancel();
+    super.dispose();
   }
 
   /// فتح واتساب برسالة جاهزة (مع أو بدون رابط PDF)
@@ -549,8 +670,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     final qInstallationAmount = double.tryParse(_quotation?['installationAmount']?.toString() ?? '0') ?? 0.0;
     final qOriginalTotal = qSubtotal + qInstallationAmount;
     final qFinalTotal = double.tryParse(_quotation?['totalAmount']?.toString() ?? '0') ?? 0.0;
-    final dealerTotalRaw = _dealerPurchasePreview?['purchaseTotalAmount'] ?? _quotation?['purchaseTotalAmount'];
-    final qDealerTotal = double.tryParse(dealerTotalRaw?.toString() ?? '0') ?? 0.0;
+    final dealerTotalRaw = _quotation?['purchaseTotalAmount'];
+    final qDealerTotal = (dealerTotalRaw == null) ? 0.0 : (double.tryParse(dealerTotalRaw.toString()) ?? 0.0);
     final qProfit = qFinalTotal - qDealerTotal;
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -753,20 +874,16 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                     style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14),
                                   ),
                                   const SizedBox(height: 8),
-                                  if (_loadingDealerPreview)
-                                    const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: AppColors.primary)))
+                                  if (purchaseRequestStatus != 'accepted')
+                                    const Text(
+                                      'بانتظار اعتماد الإدارة لسعر التاجر...',
+                                      style: TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600, fontSize: 12),
+                                    )
                                   else ...[
-                                    if (_dealerPurchasePreviewError != null)
-                                      Text(
-                                        'تعذر حساب سعر التاجر: $_dealerPurchasePreviewError',
-                                        style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600, fontSize: 12),
-                                      )
-                                    else ...[
-                                      _TotalRow(label: 'السعر الأصلي', value: '${qOriginalTotal.toStringAsFixed(0)} ج.م'),
-                                      _TotalRow(label: 'سعر التاجر', value: '${qDealerTotal.toStringAsFixed(0)} ج.م'),
-                                      _TotalRow(label: 'بعد خصم التاجر لعميله', value: '${qFinalTotal.toStringAsFixed(0)} ج.م'),
-                                      _TotalRow(label: 'مكسبك', value: '${qProfit.toStringAsFixed(0)} ج.م'),
-                                    ],
+                                    _TotalRow(label: 'السعر الأصلي', value: '${qOriginalTotal.toStringAsFixed(0)} ج.م'),
+                                    _TotalRow(label: 'سعر التاجر', value: '${qDealerTotal.toStringAsFixed(0)} ج.م'),
+                                    _TotalRow(label: 'بعد خصم التاجر لعميله', value: '${qFinalTotal.toStringAsFixed(0)} ج.م'),
+                                    _TotalRow(label: 'مكسبك', value: '${qProfit.toStringAsFixed(0)} ج.م'),
                                   ],
                                 ],
                               ),
@@ -834,6 +951,24 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                               ),
                             ),
                             const SizedBox(height: 10),
+                            if (purchaseRequestStatus == 'accepted') ...[
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: _finishingOrder ? null : _finishOrderFromCart,
+                                  icon: _finishingOrder
+                                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                      : const Icon(Icons.done_all),
+                                  label: Text(_finishingOrder ? 'جاري الإنهاء...' : 'إنهاء الطلب وإرسال للتجهيز'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                            ],
                           ],
                           // Admin/staff: accept purchase request
                           if (canAcceptPurchase && purchaseRequestStatus == 'requested') ...[

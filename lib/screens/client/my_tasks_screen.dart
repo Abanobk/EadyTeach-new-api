@@ -103,9 +103,19 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final role = (auth.user?.role ?? '').toLowerCase();
-    // بعض السيرفرات بتسمي التاجر بشكل مختلف؛ فندعم أكثر من صيغة.
-    final isMerchant =
-        role.contains('dealer') || role.contains('reseller') || role.contains('merchant') || role.contains('tager');
+    // بعض السيرفرات بتسمي التاجر بشكل مختلف؛ فندعم أكثر من صيغة (إنجليزي/عربي).
+    final isMerchant = role.isNotEmpty &&
+        (
+            role.contains('dealer') ||
+            role.contains('reseller') ||
+            role.contains('merchant') ||
+            role.contains('tager') ||
+            role.contains('seller') ||
+            role.contains('vendor') ||
+            role.contains('تاجر') ||
+            role.contains('موزع') ||
+            role.contains('وكيل')
+        );
     final canViewQuotations =
         auth.hasPermission('quotations.view') || isMerchant;
     final theme = Theme.of(context);

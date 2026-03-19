@@ -938,6 +938,10 @@ try {
             $result = quotations_myQuotations($ctx);
             break;
 
+        case 'quotations.myDealerQuotations':
+            $result = quotations_myDealerQuotations($ctx);
+            break;
+
         case 'quotations.respond':
             $result = quotations_respond($input, $ctx);
             break;

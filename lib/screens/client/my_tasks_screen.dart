@@ -6,6 +6,7 @@ import '../../utils/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import 'client_quotations_screen.dart';
 import '../admin/create_quotation_screen.dart';
+import '../admin/quotation_detail_screen.dart';
 
 class MyTasksScreen extends StatefulWidget {
   const MyTasksScreen({super.key});
@@ -47,7 +48,12 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
   Future<void> _loadQuotations() async {
     setState(() => _loadingQuotations = true);
     try {
-      final res = await ApiService.query('quotations.myQuotations');
+      final auth = context.read<AuthProvider>();
+      final role = (auth.user?.role ?? '').toLowerCase();
+      final isDealer =
+          role.contains('dealer') || role.contains('reseller') || role.contains('merchant') || role.contains('tager');
+      final proc = isDealer ? 'quotations.myDealerQuotations' : 'quotations.myQuotations';
+      final res = await ApiService.query(proc);
       setState(() {
         _quotations = res['data'] ?? [];
         _loadingQuotations = false;
@@ -319,8 +325,7 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => CreateQuotationScreen(
-                              preselectedClientUserId: user.id,
-                              preselectedClientName: user.name,
+                              forceExternalClient: true,
                             ),
                           ),
                         ).then((_) => _loadQuotations());
@@ -406,7 +411,13 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => ClientQuotationDetailScreen(quotationId: q['id'] as int),
+                          builder: (_) {
+                            final role = (context.read<AuthProvider>().user?.role ?? '').toLowerCase();
+                            final isDealer = role.contains('dealer') || role.contains('reseller') || role.contains('merchant') || role.contains('tager');
+                            return isDealer
+                                ? QuotationDetailScreen(quotationId: q['id'] as int)
+                                : ClientQuotationDetailScreen(quotationId: q['id'] as int);
+                          },
                         ),
                       ).then((_) => _loadQuotations()),
                       borderRadius: BorderRadius.circular(12),

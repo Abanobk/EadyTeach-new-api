@@ -6,11 +6,13 @@ import '../../utils/app_theme.dart';
 class CreateQuotationScreen extends StatefulWidget {
   final int? preselectedClientUserId;
   final String? preselectedClientName;
+  final bool forceExternalClient;
 
   const CreateQuotationScreen({
     super.key,
     this.preselectedClientUserId,
     this.preselectedClientName,
+    this.forceExternalClient = false,
   });
 
   @override
@@ -55,14 +57,19 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
   @override
   void initState() {
     super.initState();
-    // If opened from a dealer account, preselect "registered client" as the current user.
-    if (widget.preselectedClientUserId != null) {
+    if (widget.forceExternalClient) {
+      // التاجر لازم يبقى عميل خارجي فقط (بدون اختيار مسجلين).
+      _clientType = 'external';
+      _selectedClientId = null;
+      _selectedClientName = null;
+    } else if (widget.preselectedClientUserId != null) {
+      // دعم قديم: لو تم فتح الشاشة preselected لعميل مسجل.
       _clientType = 'registered';
       _selectedClientId = widget.preselectedClientUserId;
       _selectedClientName = widget.preselectedClientName;
     }
     _loadCategories();
-    _loadClients();
+    if (!widget.forceExternalClient) _loadClients();
   }
 
   @override
@@ -761,25 +768,26 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
             padding: const EdgeInsets.all(12),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _TypeBtn(
-                        label: 'عميل مسجل',
-                        selected: _clientType == 'registered',
-                        onTap: () => setState(() => _clientType = 'registered'),
+                if (!widget.forceExternalClient)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _TypeBtn(
+                          label: 'عميل مسجل',
+                          selected: _clientType == 'registered',
+                          onTap: () => setState(() => _clientType = 'registered'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _TypeBtn(
-                        label: 'عميل خارجي',
-                        selected: _clientType == 'external',
-                        onTap: () => setState(() => _clientType = 'external'),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _TypeBtn(
+                          label: 'عميل خارجي',
+                          selected: _clientType == 'external',
+                          onTap: () => setState(() => _clientType = 'external'),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                 const SizedBox(height: 12),
                 if (_clientType == 'registered') ...[
                   if (_clients.isEmpty)

@@ -593,6 +593,7 @@ function _ensureQuotationsTable() {
     $db->exec('CREATE TABLE IF NOT EXISTS quotations (
         id INT AUTO_INCREMENT PRIMARY KEY,
         ref_number VARCHAR(50) NULL,
+        created_by INT NULL,
         client_user_id INT NULL,
         client_name VARCHAR(255) NULL,
         client_email VARCHAR(255) NULL,
@@ -612,6 +613,7 @@ function _ensureQuotationsTable() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
     // migrate old table if needed
     try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS ref_number VARCHAR(50) NULL'); } catch(\Exception $e) {}
+    try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS created_by INT NULL'); } catch(\Exception $e) {}
     try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS client_user_id INT NULL'); } catch(\Exception $e) {}
     try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS client_name VARCHAR(255) NULL'); } catch(\Exception $e) {}
     try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS client_email VARCHAR(255) NULL'); } catch(\Exception $e) {}
@@ -639,6 +641,7 @@ function quotations_create($input, $ctx) {
     global $db;
     _ensureQuotationsTable();
 
+    $createdBy = isset($ctx['userId']) ? (int)$ctx['userId'] : null;
     $clientUserId = isset($input['clientUserId']) ? (int)$input['clientUserId'] : null;
     $clientName = $input['clientName'] ?? null;
     $clientEmail = $input['clientEmail'] ?? null;
@@ -672,8 +675,8 @@ function quotations_create($input, $ctx) {
     try { $db->exec('ALTER TABLE quotations ADD COLUMN discount_percent DECIMAL(10,2) DEFAULT 0'); } catch (\Exception $e) {}
     try { $db->exec('ALTER TABLE quotations ADD COLUMN discount_amount DECIMAL(10,2) DEFAULT 0'); } catch (\Exception $e) {}
 
-    $stmt = $db->prepare('INSERT INTO quotations (ref_number, client_user_id, client_name, client_email, client_phone, items, subtotal, installation_percent, installation_amount, discount_percent, discount_amount, total_amount, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    $stmt->execute([$refNumber, $clientUserId, $clientName, $clientEmail, $clientPhone, json_encode($items), $subtotal, $installPct, $installAmt, $discountPct, $discountAmt, $totalAmt, $notes]);
+    $stmt = $db->prepare('INSERT INTO quotations (ref_number, created_by, client_user_id, client_name, client_email, client_phone, items, subtotal, installation_percent, installation_amount, discount_percent, discount_amount, total_amount, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$refNumber, $createdBy, $clientUserId, $clientName, $clientEmail, $clientPhone, json_encode($items), $subtotal, $installPct, $installAmt, $discountPct, $discountAmt, $totalAmt, $notes]);
     return ['id' => (int)$db->lastInsertId()];
 }
 
@@ -697,6 +700,17 @@ function quotations_myQuotations($ctx) {
     _ensureQuotationsTable();
     if (!$ctx['userId']) throw new Exception('UNAUTHORIZED');
     $stmt = $db->prepare('SELECT * FROM quotations WHERE client_user_id = ? ORDER BY created_at DESC');
+    $stmt->execute([$ctx['userId']]);
+    $result = [];
+    foreach ($stmt->fetchAll() as $r) $result[] = _formatQuotation($r);
+    return $result;
+}
+
+function quotations_myDealerQuotations($ctx) {
+    global $db;
+    _ensureQuotationsTable();
+    if (!$ctx['userId']) throw new Exception('UNAUTHORIZED');
+    $stmt = $db->prepare('SELECT * FROM quotations WHERE created_by = ? ORDER BY created_at DESC');
     $stmt->execute([$ctx['userId']]);
     $result = [];
     foreach ($stmt->fetchAll() as $r) $result[] = _formatQuotation($r);

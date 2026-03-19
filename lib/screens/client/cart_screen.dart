@@ -93,12 +93,22 @@ class _CartScreenState extends State<CartScreen> {
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppThemeDecorations.cardColor(context),
+                          // Debug-friendly styling: make items clearly visible.
+                          color: AppColors.primary.withOpacity(0.10),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: Colors.redAccent, width: 2),
                         ),
                         child: Row(
                           children: [
+                            // Quick debug label to confirm rendering.
+                            if (i == 0)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(
+                                  'DEBUG item0: id=${item.productId} name=${item.name}',
+                                  style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w900, fontSize: 12),
+                                ),
+                              ),
                             // Image
                             ClipRRect(
                               borderRadius: BorderRadius.circular(8),

@@ -1139,8 +1139,8 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Image
-          Expanded(
-            flex: 3,
+          AspectRatio(
+            aspectRatio: 4 / 3,
             child: Stack(
               fit: StackFit.expand,
               children: [

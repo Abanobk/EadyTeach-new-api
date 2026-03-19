@@ -87,14 +87,17 @@ class _CartScreenState extends State<CartScreen> {
                             // Image
                             ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: item.image != null && item.image!.isNotEmpty
-                                  ? Image.network(ApiService.proxyImageUrl(item.image!),
-                                      width: 60,
-                                      height: 60,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
-                                          _imgPlaceholder())
-                                  : _imgPlaceholder(),
+                              child: AspectRatio(
+                                aspectRatio: 1,
+                                child: item.image != null &&
+                                        item.image!.isNotEmpty
+                                    ? Image.network(
+                                        ApiService.proxyImageUrl(item.image!),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) =>
+                                            _imgPlaceholder())
+                                    : _imgPlaceholder(),
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(

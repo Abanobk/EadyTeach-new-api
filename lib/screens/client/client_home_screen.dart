@@ -719,7 +719,8 @@ class _ProductCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Image
-            Expanded(
+            AspectRatio(
+              aspectRatio: 4 / 3,
               child: Stack(
                 children: [
                   ClipRRect(

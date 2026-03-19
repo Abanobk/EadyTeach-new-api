@@ -125,25 +125,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ─── صور المنتج ───
-              Stack(
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      if (images.isEmpty) return;
-                      _openImageViewer(images, _selectedImageIndex);
-                    },
-                    child: SizedBox(
-                      height: 300,
-                      width: double.infinity,
-                      child: images.isNotEmpty
-                          ? Image.network(
-                              images[_selectedImageIndex],
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _placeholder(),
-                            )
-                          : _placeholder(),
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Stack(
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        if (images.isEmpty) return;
+                        _openImageViewer(images, _selectedImageIndex);
+                      },
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: images.isNotEmpty
+                            ? Image.network(
+                                images[_selectedImageIndex],
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => _placeholder(),
+                              )
+                            : _placeholder(),
+                      ),
                     ),
-                  ),
                   if (hasDiscount)
                     Positioned(
                       top: 12,
@@ -162,7 +163,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ),
                       ),
                     ),
-                ],
+                  ],
+                ),
               ),
 
               // ─── صور مصغرة ───

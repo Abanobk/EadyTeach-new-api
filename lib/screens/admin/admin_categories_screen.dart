@@ -307,20 +307,22 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Container(
-                              width: 72,
-                              height: 72,
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(16),
+                            AspectRatio(
+                              aspectRatio: 1,
+                              child: Container(
+                                width: 72,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: imgUrl != null && imgUrl.isNotEmpty
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: Image.network(imgUrl, fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => const Icon(Icons.category, color: AppColors.primary, size: 36)),
+                                      )
+                                    : const Icon(Icons.category, color: AppColors.primary, size: 36),
                               ),
-                              child: imgUrl != null && imgUrl.isNotEmpty
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Image.network(imgUrl, fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => const Icon(Icons.category, color: AppColors.primary, size: 36)),
-                                    )
-                                  : const Icon(Icons.category, color: AppColors.primary, size: 36),
                             ),
                             const SizedBox(height: 10),
                             Padding(

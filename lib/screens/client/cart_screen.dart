@@ -139,104 +139,90 @@ class _CartScreenState extends State<CartScreen> {
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(12),
+                        height: 120, // force visible height for debugging
                         decoration: BoxDecoration(
                           // Debug-friendly styling: make items clearly visible.
                           color: AppColors.primary.withOpacity(0.10),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: Colors.redAccent, width: 2),
                         ),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Quick debug label to confirm rendering.
-                            if (i == 0)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Text(
-                                  'DEBUG item0: id=${item.productId} name=${item.name}',
-                                  style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w900, fontSize: 12),
-                                ),
+                            Text(
+                              'DEBUG list card index=$i | id=${item.productId} | name=${item.name}',
+                              style: const TextStyle(
+                                color: Colors.redAccent,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12,
                               ),
-                            // Image
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: AspectRatio(
-                                aspectRatio: 1,
-                                child: item.image != null &&
-                                        item.image!.isNotEmpty
-                                    ? Image.network(
-                                        ApiService.proxyImageUrl(item.image!),
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) =>
-                                            _imgPlaceholder())
-                                    : _imgPlaceholder(),
-                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(height: 8),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              child: Row(
                                 children: [
-                                  Text(item.name,
-                                      style: const TextStyle(
-                                          color: AppColors.text,
-                                          fontWeight: FontWeight.w600)),
-                                  if (item.variant != null && item.variant!.toString().isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 4),
-                                      child: Text(
-                                        item.variant!,
-                                        style: const TextStyle(color: AppColors.muted, fontSize: 12),
-                                      ),
+                                  // Image
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: AspectRatio(
+                                      aspectRatio: 1,
+                                      child: item.image != null && item.image!.isNotEmpty
+                                          ? Image.network(
+                                              ApiService.proxyImageUrl(item.image!),
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => _imgPlaceholder(),
+                                            )
+                                          : _imgPlaceholder(),
                                     ),
-                                  const SizedBox(height: 4),
-                                  Builder(builder: (_) {
-                                    final original = item.originalPrice;
-                                    final hasOriginal = original != null && original > item.price;
-                                    return Column(
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        if (hasOriginal)
-                                          Text(
-                                            '${original!.toStringAsFixed(2)} ج.م',
-                                            style: const TextStyle(
-                                              color: AppColors.muted,
-                                              decoration: TextDecoration.lineThrough,
-                                              fontSize: 12,
-                                            ),
+                                        Text(
+                                          item.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: AppColors.text,
+                                            fontWeight: FontWeight.w700,
                                           ),
+                                        ),
+                                        const SizedBox(height: 4),
                                         Text(
                                           '${item.price.toStringAsFixed(2)} ج.م',
                                           style: const TextStyle(
                                             color: AppColors.primary,
-                                            fontWeight: FontWeight.bold,
+                                            fontWeight: FontWeight.w800,
                                           ),
                                         ),
                                       ],
-                                    );
-                                  }),
+                                    ),
+                                  ),
+                                  // Qty controls
+                                  Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.remove_circle_outline, color: AppColors.muted, size: 20),
+                                        onPressed: () => cart.decrementItem(item.productId),
+                                      ),
+                                      Text(
+                                        '${item.quantity}',
+                                        style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 20),
+                                        onPressed: () => cart.incrementItem(item.productId),
+                                      ),
+                                    ],
+                                  ),
                                 ],
                               ),
-                            ),
-                            // Qty controls
-                            Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline,
-                                      color: AppColors.muted, size: 20),
-                                  onPressed: () =>
-                                      cart.decrementItem(item.productId),
-                                ),
-                                Text('${item.quantity}',
-                                    style: const TextStyle(
-                                        color: AppColors.text,
-                                        fontWeight: FontWeight.bold)),
-                                IconButton(
-                                  icon: const Icon(Icons.add_circle_outline,
-                                      color: AppColors.primary, size: 20),
-                                  onPressed: () =>
-                                      cart.incrementItem(item.productId),
-                                ),
-                              ],
                             ),
                           ],
                         ),

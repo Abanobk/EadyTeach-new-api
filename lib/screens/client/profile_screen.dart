@@ -19,6 +19,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
+  String _locationValue = '';
   bool _saving = false;
   bool _loaded = false;
 
@@ -36,6 +37,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         _nameCtrl.text = data['name'] ?? '';
         _phoneCtrl.text = data['phone'] ?? '';
         _addressCtrl.text = data['address'] ?? '';
+        _locationValue = data['location'] ?? '';
         setState(() => _loaded = true);
       }
     } catch (e) {
@@ -82,6 +84,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           _addressCtrl.text = buffer.isNotEmpty
               ? buffer.toString()
               : 'الموقع الحالي: (${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)})';
+          _locationValue = '${pos.latitude},${pos.longitude}';
         });
       }
     } catch (_) {
@@ -97,6 +100,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         'name': _nameCtrl.text,
         'phone': _phoneCtrl.text,
         'address': _addressCtrl.text,
+        'location': _locationValue,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

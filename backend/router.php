@@ -184,6 +184,7 @@ require_once __DIR__ . '/discounts_procedures.php';
 require_once __DIR__ . '/accounting_procedures.php';
 require_once __DIR__ . '/permissions_procedures.php';
 require_once __DIR__ . '/notifications_procedures.php';
+require_once __DIR__ . '/users_procedures.php';
 
 // ─── Helper functions ──────────────────────────────────────────
 
@@ -1143,6 +1144,15 @@ try {
             break;
         case 'users.saveFcmToken':
             $result = notif_saveFcmToken($input, $ctx);
+            break;
+
+        // ── Client Profile ───────────────────────────────────
+        case 'users.getProfile':
+            $result = users_getProfile($ctx);
+            break;
+
+        case 'users.updateProfile':
+            $result = users_updateProfile($input, $ctx);
             break;
 
         // ── Unknown ────────────────────────────────────────────

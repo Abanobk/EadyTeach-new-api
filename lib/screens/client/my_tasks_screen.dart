@@ -96,8 +96,12 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final isDealer = auth.user?.role == 'dealer' || auth.user?.role == 'reseller';
-    final canViewQuotations = auth.hasPermission('quotations.view') && isDealer;
+    final role = (auth.user?.role ?? '').toLowerCase();
+    // بعض السيرفرات بتسمي التاجر بشكل مختلف؛ فندعم أكثر من صيغة.
+    final isMerchant =
+        role.contains('dealer') || role.contains('reseller') || role.contains('merchant') || role.contains('tager');
+    final canViewQuotations =
+        auth.hasPermission('quotations.view') || isMerchant;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 

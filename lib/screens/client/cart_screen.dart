@@ -109,9 +109,10 @@ class _CartScreenState extends State<CartScreen> {
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: AppThemeDecorations.cardColor(context),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.border),
+                            // Ensure high contrast so the card content is always visible.
+                            color: AppColors.primary.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.redAccent, width: 2),
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -134,6 +135,7 @@ class _CartScreenState extends State<CartScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // Product title
                                     Text(
                                       item.name,
                                       maxLines: 1,
@@ -155,9 +157,11 @@ class _CartScreenState extends State<CartScreen> {
                                         ),
                                       ),
                                     const SizedBox(height: 10),
+
+                                    // Original price (before discount)
                                     if (hasOriginal)
                                       Text(
-                                        '${item.originalPrice!.toStringAsFixed(2)} ج.م',
+                                        'السعر الاساسي: ${item.originalPrice!.toStringAsFixed(2)} ج.م',
                                         style: const TextStyle(
                                           color: AppColors.muted,
                                           decoration: TextDecoration.lineThrough,
@@ -165,27 +169,24 @@ class _CartScreenState extends State<CartScreen> {
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
+
+                                    // Current price (after discount)
+                                    const SizedBox(height: 4),
                                     Text(
-                                      '${item.price.toStringAsFixed(2)} ج.م',
+                                      'السعر بعد الخصم: ${item.price.toStringAsFixed(2)} ج.م',
                                       style: const TextStyle(
                                         color: AppColors.primary,
                                         fontWeight: FontWeight.w900,
                                         fontSize: 14,
                                       ),
                                     ),
-                                    if (hasOriginal) ...[
-                                      const SizedBox(height: 2),
-                                      const Text(
-                                        'السعر الاساسي / السعر بعد الخصم',
-                                        style: TextStyle(color: AppColors.muted, fontSize: 11, fontWeight: FontWeight.w600),
-                                      ),
-                                    ],
                                   ],
                                 ),
                               ),
                               Column(
                                 mainAxisAlignment: MainAxisAlignment.start,
                                 children: [
+                                  // Qty controls
                                   IconButton(
                                     icon: const Icon(Icons.remove_circle_outline, color: AppColors.muted, size: 20),
                                     onPressed: () => cart.decrementItem(item.productId),

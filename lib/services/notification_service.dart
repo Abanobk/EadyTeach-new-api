@@ -49,8 +49,16 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         ?.createNotificationChannel(bgChannel);
 
     final notification = message.notification;
-    final title = notification?.title ?? message.data['title'] ?? 'Easy Tech';
-    final body = notification?.body ?? message.data['body'] ?? '';
+    final title = notification?.title ??
+        message.data['title']?.toString() ??
+        message.data['subject']?.toString() ??
+        'Easy Tech';
+    final body = notification?.body?.toString() ??
+        message.data['body']?.toString() ??
+        message.data['message']?.toString() ??
+        message.data['content']?.toString() ??
+        message.data['text']?.toString() ??
+        '';
     if (body.isEmpty) return;
 
     final notifId = message.hashCode.abs() % 2147483647;
@@ -148,6 +156,13 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationTap,
       onDidReceiveBackgroundNotificationResponse: _onBackgroundNotificationTap,
     );
+
+    // Android 13+ (API 33): لازم طلب صلاحية الإشعارات صراحةً وإلا قد لا تظهر في الخلفية/المغلق
+    final androidPlugin = _localNotifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    if (androidPlugin != null) {
+      await androidPlugin.requestNotificationsPermission();
+    }
 
     // 3. Create Android notification channel (HIGH importance = sound + heads-up)
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
@@ -271,7 +286,17 @@ class NotificationService {
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
     debugPrint('[FCM Foreground] ${message.notification?.title}');
     final notification = message.notification;
-    if (notification == null) return;
+    final title = notification?.title ??
+        message.data['title']?.toString() ??
+        message.data['subject']?.toString() ??
+        'Easy Tech';
+    final body = notification?.body?.toString() ??
+        message.data['body']?.toString() ??
+        message.data['message']?.toString() ??
+        message.data['content']?.toString() ??
+        message.data['text']?.toString() ??
+        '';
+    if (body.isEmpty) return;
 
     // Increment badge count
     await incrementBadge();
@@ -280,8 +305,8 @@ class NotificationService {
 
     await _localNotifications.show(
       notifId,
-      notification.title ?? 'Easy Tech',
-      notification.body ?? '',
+      title,
+      body,
       NotificationDetails(
         android: AndroidNotificationDetails(
           _channelId,
@@ -297,9 +322,9 @@ class NotificationService {
           fullScreenIntent: true,
           number: _badgeCount,
           styleInformation: BigTextStyleInformation(
-            notification.body ?? '',
+            body,
             htmlFormatBigText: false,
-            contentTitle: notification.title,
+            contentTitle: title,
           ),
         ),
         iOS: DarwinNotificationDetails(

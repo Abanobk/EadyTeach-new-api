@@ -53,7 +53,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
     _statsTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted) return;
-      _loadStats();
+      _loadStats(silent: true);
     });
 
     _notifsTimer = Timer.periodic(const Duration(seconds: 5), (_) {
@@ -73,16 +73,23 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     } catch (_) {}
   }
 
-  Future<void> _loadStats() async {
-    setState(() => _loadingStats = true);
+  /// [silent]: تحديث دوري بدون إخفاء الجرافيك وإظهار مؤشر التحميل (كان يبدو كـ refresh للشاشة).
+  Future<void> _loadStats({bool silent = false}) async {
+    if (!silent) {
+      setState(() => _loadingStats = true);
+    }
     try {
       final res = await ApiService.query('admin.getDashboardStats');
+      if (!mounted) return;
       setState(() {
         _stats = res['data'];
         _loadingStats = false;
       });
     } catch (e) {
-      setState(() => _loadingStats = false);
+      if (!mounted) return;
+      setState(() {
+        if (!silent) _loadingStats = false;
+      });
     }
   }
 
@@ -499,52 +506,15 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'نظرة عامة',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-                const SizedBox(height: 12),
                 if (_loadingStats)
-                  Center(child: Padding(padding: const EdgeInsets.all(20), child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary)))
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 32),
+                      child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
+                    ),
+                  )
                 else
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.85,
-                    children: [
-                      _StatCard(
-                        title: 'العملاء',
-                        value: '${_stats?['totalCustomers'] ?? 0}',
-                        icon: Icons.people_outline,
-                        color: const Color(0xFF2E7D32),
-                      ),
-                      _StatCard(
-                        title: 'الطلبات',
-                        value: '${_stats?['totalOrders'] ?? 0}',
-                        icon: Icons.receipt_long_outlined,
-                        color: const Color(0xFF1565C0),
-                      ),
-                      _StatCard(
-                        title: 'المهام',
-                        value: '${_stats?['totalTasks'] ?? 0}',
-                        icon: Icons.build_outlined,
-                        color: const Color(0xFF6A1B9A),
-                      ),
-                      _StatCard(
-                        title: 'المنتجات',
-                        value: '${_stats?['totalProducts'] ?? 0}',
-                        icon: Icons.inventory_2_outlined,
-                        color: const Color(0xFFE65100),
-                      ),
-                    ],
-                  ),
+                  _PerformanceInsightsCard(stats: _stats),
                 const SizedBox(height: 24),
                 Text(
                   'الأنظمة المتقدمة',
@@ -558,6 +528,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 Builder(builder: (_) {
                   final p = auth;
                   final cards = <Widget>[
+                    if (p.hasPermission('orders.view'))
+                      _DashboardCard(
+                        icon: Icons.receipt_long_outlined,
+                        title: 'إدارة الطلبات',
+                        color: const Color(0xFF1565C0),
+                        onTap: () => _navigate(context, const AdminOrdersScreen()),
+                      ),
                     if (p.hasPermission('quotations.view'))
                       _DashboardCard(
                         icon: Icons.request_quote_outlined,
@@ -727,65 +704,358 @@ class _DashboardCard extends StatelessWidget {
   }
 }
 
-class _StatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-  const _StatCard({required this.title, required this.value, required this.icon, required this.color});
+int _dashboardInt(Map<String, dynamic>? s, String key) {
+  final raw = s?[key];
+  if (raw is int) return raw;
+  return int.tryParse('${raw ?? 0}') ?? 0;
+}
+
+/// بطاقة واحدة كبيرة: مهام (إجمالي / منجز / نسبة / متاحة) + ملخص طلبات وعملاء ومنتجات
+class _PerformanceInsightsCard extends StatelessWidget {
+  final Map<String, dynamic>? stats;
+
+  const _PerformanceInsightsCard({required this.stats});
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final totalTasks = _dashboardInt(stats, 'totalTasks');
+    final taskBreakdownReady = stats != null && stats!.containsKey('tasksCompleted');
+    final tasksCompleted = _dashboardInt(stats, 'tasksCompleted');
+    final tasksActive = _dashboardInt(stats, 'tasksActive');
+    final tasksCancelled = _dashboardInt(stats, 'tasksCancelled');
+    final completionPct = !taskBreakdownReady
+        ? 0.0
+        : (totalTasks > 0 ? ((tasksCompleted * 100.0) / totalTasks).clamp(0.0, 100.0) : 0.0);
+    final completionRatio = completionPct / 100.0;
+
+    final totalOrders = _dashboardInt(stats, 'totalOrders');
+    final ordersPending = _dashboardInt(stats, 'ordersPending');
+    final totalCustomers = _dashboardInt(stats, 'totalCustomers');
+    final totalProducts = _dashboardInt(stats, 'totalProducts');
+
+    final opsMax = [totalOrders, totalCustomers, totalProducts, 1].reduce((a, b) => a > b ? a : b);
+    final orderRatio = (totalOrders / opsMax).clamp(0.0, 1.0);
+    final customerRatio = (totalCustomers / opsMax).clamp(0.0, 1.0);
+    final productRatio = (totalProducts / opsMax).clamp(0.0, 1.0);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(22),
+        color: scheme.surface,
+        border: Border.all(color: scheme.outlineVariant.withOpacity(0.35)),
         boxShadow: isDark
             ? null
             : [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
               ],
       ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: scheme.primary.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(Icons.insights_outlined, color: scheme.primary, size: 30),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'تحليل سريع للأداء',
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 21,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'ملخص المهام والعمليات — يتحدث تلقائياً كل بضع ثوانٍ',
+                      style: TextStyle(
+                        color: scheme.onSurfaceVariant,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          Text(
+            'المهام',
+            style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w900, fontSize: 15),
+          ),
+          if (!taskBreakdownReady) ...[
+            const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.all(8),
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10),
+                color: scheme.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface,
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              title,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 11,
+              child: Text(
+                'لعرض نسبة الإنجاز والمهام المتاحة: حدّث ملف السيرفر tasks_procedures.php (admin.getDashboardStats) لآخر نسخة.',
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12, height: 1.35),
               ),
             ),
           ],
-        ),
+          const SizedBox(height: 12),
+          if (!taskBreakdownReady)
+            _BigStatPill(
+              label: 'إجمالي المهام',
+              value: '$totalTasks',
+              scheme: scheme,
+              accent: const Color(0xFF6A1B9A),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, c) {
+                final pill1 = _BigStatPill(
+                  label: 'إجمالي المهام',
+                  value: '$totalTasks',
+                  scheme: scheme,
+                  accent: const Color(0xFF6A1B9A),
+                );
+                final pill2 = _BigStatPill(
+                  label: 'منجزة',
+                  value: '$tasksCompleted',
+                  scheme: scheme,
+                  accent: const Color(0xFF2E7D32),
+                );
+                final pill3 = _BigStatPill(
+                  label: 'نسبة الإنجاز',
+                  value: '${completionPct.toStringAsFixed(0)}٪',
+                  scheme: scheme,
+                  accent: scheme.primary,
+                );
+                if (c.maxWidth >= 340) {
+                  return Row(
+                    children: [
+                      Expanded(child: pill1),
+                      const SizedBox(width: 10),
+                      Expanded(child: pill2),
+                      const SizedBox(width: 10),
+                      Expanded(child: pill3),
+                    ],
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: pill1),
+                        const SizedBox(width: 8),
+                        Expanded(child: pill2),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    pill3,
+                  ],
+                );
+              },
+            ),
+          const SizedBox(height: 14),
+          if (taskBreakdownReady)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                minHeight: 14,
+                value: completionRatio,
+                backgroundColor: scheme.surfaceContainerHighest.withOpacity(0.7),
+                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2E7D32)),
+              ),
+            ),
+          if (taskBreakdownReady) const SizedBox(height: 10),
+          if (taskBreakdownReady)
+            Text(
+              'مهام متاحة أو قيد التنفيذ: $tasksActive\n(معلقة، مُسندة، أو جاري العمل — غير المكتملة وغير الملغاة)',
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13, height: 1.4),
+            ),
+          if (taskBreakdownReady && tasksCancelled > 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              'مهام ملغاة: $tasksCancelled',
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12.5, fontWeight: FontWeight.w600),
+            ),
+          ],
+          if (taskBreakdownReady) ...[
+            const SizedBox(height: 8),
+            Text(
+              'من أصل $totalTasks مهمة، تم إنجاز ${completionPct.toStringAsFixed(0)}٪',
+              style: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w700, fontSize: 13.5),
+            ),
+          ],
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 18),
+            child: Divider(height: 1),
+          ),
+          Text(
+            'ملخص العمليات',
+            style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w900, fontSize: 15),
+          ),
+          const SizedBox(height: 12),
+          _OpsRow(
+            icon: Icons.receipt_long_outlined,
+            label: 'الطلبات',
+            main: 'إجمالي الطلبات: $totalOrders',
+            sub: ordersPending > 0 ? 'قيد المعالجة (معلقة / تحت التجهيز): $ordersPending' : 'لا توجد طلبات عالقة حالياً',
+            color: const Color(0xFF1565C0),
+            ratio: orderRatio,
+            scheme: scheme,
+          ),
+          const SizedBox(height: 14),
+          _OpsRow(
+            icon: Icons.people_outline,
+            label: 'العملاء',
+            main: 'عملاء نشطون في النظام: $totalCustomers',
+            sub: 'حسابات بدور عميل / مستخدم',
+            color: const Color(0xFF2E7D32),
+            ratio: customerRatio,
+            scheme: scheme,
+          ),
+          const SizedBox(height: 14),
+          _OpsRow(
+            icon: Icons.inventory_2_outlined,
+            label: 'المنتجات',
+            main: 'منتجات في الكتالوج: $totalProducts',
+            sub: 'إجمالي الأصناف المسجلة',
+            color: const Color(0xFFE65100),
+            ratio: productRatio,
+            scheme: scheme,
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _BigStatPill extends StatelessWidget {
+  final String label;
+  final String value;
+  final ColorScheme scheme;
+  final Color accent;
+
+  const _BigStatPill({
+    required this.label,
+    required this.value,
+    required this.scheme,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: accent.withOpacity(0.11),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withOpacity(0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: scheme.onSurface),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600, height: 1.2),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OpsRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String main;
+  final String sub;
+  final Color color;
+  final double ratio;
+  final ColorScheme scheme;
+
+  const _OpsRow({
+    required this.icon,
+    required this.label,
+    required this.main,
+    required this.sub,
+    required this.color,
+    required this.ratio,
+    required this.scheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.14),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: scheme.onSurface),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                main,
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: scheme.onSurface),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                sub,
+                style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant, height: 1.35),
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  minHeight: 7,
+                  value: ratio,
+                  backgroundColor: scheme.surfaceContainerHighest.withOpacity(0.55),
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

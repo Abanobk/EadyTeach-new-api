@@ -77,23 +77,28 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   }
 
   Future<void> _maybeLoadDealerPurchasePreview() async {
-    // Deprecated for this flow:
-    // Dealer pricing must come from stored `purchaseItems/purchaseTotalAmount`
-    // to avoid backend `FORBIDDEN` from `previewDealerPurchase`.
-    return;
+    // Load dealer pricing preview so the dealer sees totals even before admin acceptance.
+    if (!_isDealerForCurrentQuote) return;
+    await _loadDealerPurchasePreview();
   }
 
-  Future<void> _loadQuotation() async {
-    setState(() => _loading = true);
+  /// [silent]: background refresh (e.g. polling) — لا يظهر شاشة التحميل الكاملة ولا يعيد ضبط مزامنة السلة.
+  Future<void> _loadQuotation({bool silent = false}) async {
+    if (!silent) {
+      setState(() => _loading = true);
+    }
     try {
       final res = await ApiService.query('quotations.getById', input: {'id': widget.quotationId});
+      if (!mounted) return;
       setState(() {
         _quotation = res['data'];
-        _loading = false;
-        _dealerPreviewLoadedForCurrentQuotation = false;
-        _dealerPurchasePreviewError = null;
-        _cartSyncedForThisQuote = false;
-        _didAutoRecomputeRequestedPricing = false;
+        if (!silent) {
+          _loading = false;
+          _dealerPreviewLoadedForCurrentQuotation = false;
+          _dealerPurchasePreviewError = null;
+        }
+        // لا نعيد _cartSyncedForThisQuote ولا _didAutoRecomputeRequestedPricing هنا — كان يسبب
+        // إعادة مزامنة السلة وطلبات شراء متكررة مع كل poll + وميض الشاشة.
       });
 
       // If dealer opened a quotation that is still "requested" but dealerTotal is 0 (old payload),
@@ -108,17 +113,31 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           await ApiService.mutate('quotations.requestPurchase', input: {'id': widget.quotationId});
           if (!mounted) return;
           // Reload quotation to reflect updated purchase_total_amount and purchase_items.
-          await _loadQuotation();
-          return;
+          if (mounted) {
+            setState(() => _dealerPreviewLoadedForCurrentQuotation = false);
+          }
+          await _loadQuotation(silent: true);
         } catch (_) {
           // Ignore; UI will keep showing waiting state.
+        } finally {
+          // التحميل بدأ بـ !silent؛ إعادة التحميل الداخلية silent ولا تطفئ _loading.
+          if (mounted) setState(() => _loading = false);
         }
+        return;
       }
 
       // Dealer pricing will be computed from stored purchase values.
       _maybeStartDealerPolling();
+
+      // مع silent: نحدّث الـ preview فقط إذا لم يُحمَّل بعد (تجنب طلبات متكررة كل 4 ثواني).
+      if (_isDealerForCurrentQuote && (!silent || !_dealerPreviewLoadedForCurrentQuotation)) {
+        await _loadDealerPurchasePreview();
+      }
     } catch (e) {
-      setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() {
+        if (!silent) _loading = false;
+      });
     }
   }
 
@@ -239,10 +258,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     if (purchaseStatusNorm != 'requested') return;
 
     // Poll until admin accepts (then we sync cart).
-    _dealerPollTimer = Timer.periodic(const Duration(seconds: 4), (t) async {
+    _dealerPollTimer = Timer.periodic(const Duration(seconds: 8), (t) async {
       if (!mounted) return;
       try {
-        await _loadQuotation();
+        await _loadQuotation(silent: true);
       } catch (_) {
         // ignore
       }
@@ -702,11 +721,32 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     // For dealer admin pricing we must exclude "تركيبات/installation" and exclude client-wide discount effects
     // except the manual discount the dealer entered for their client (discountAmount).
     final qDiscountAmount = double.tryParse(_quotation?['discountAmount']?.toString() ?? '0') ?? 0.0;
+    final qInstallationAmount = double.tryParse(_quotation?['installationAmount']?.toString() ?? '0') ?? 0.0;
     final qOriginalTotal = qSubtotal; // official product-only total (no installation)
     final qFinalTotal = (qSubtotal - qDiscountAmount).clamp(0.0, double.infinity); // after dealer's discount to client (no installation)
-    final dealerTotalRaw = _quotation?['purchaseTotalAmount'];
-    final qDealerTotal = (dealerTotalRaw == null) ? 0.0 : (double.tryParse(dealerTotalRaw.toString()) ?? 0.0);
-    final qProfit = qFinalTotal - qDealerTotal;
+    // Dealer total:
+    // - when accepted -> use stored purchase_total_amount
+    // - otherwise -> use preview calculation so it shows before admin approval too.
+    double qDealerTotal = 0.0;
+    if (purchaseRequestStatusNorm == 'accepted') {
+      final dealerTotalRaw = _quotation?['purchaseTotalAmount'];
+      qDealerTotal = (dealerTotalRaw == null) ? 0.0 : (double.tryParse(dealerTotalRaw.toString()) ?? 0.0);
+    } else {
+      final previewTotalRaw = _dealerPurchasePreview?['purchaseTotalAmount'];
+      qDealerTotal = (previewTotalRaw == null) ? 0.0 : (double.tryParse(previewTotalRaw.toString()) ?? 0.0);
+    }
+    // Profit = (client-facing total without product cost from admin) + installation revenue.
+    // Installation is extra revenue for dealer because it is not included in dealer purchase price.
+    final qProfit = (qFinalTotal + qInstallationAmount) - qDealerTotal;
+    final isDealerPriceLoading = purchaseRequestStatusNorm != 'accepted' && _loadingDealerPreview && !_dealerPreviewLoadedForCurrentQuotation;
+    final hasDealerPreviewError = purchaseRequestStatusNorm != 'accepted' &&
+        (_dealerPurchasePreviewError != null && _dealerPurchasePreviewError!.toString().trim().isNotEmpty);
+    final dealerPriceValue = isDealerPriceLoading
+        ? 'جاري الحساب...'
+        : (hasDealerPreviewError ? 'تعذر حساب سعر التاجر' : '${qDealerTotal.toStringAsFixed(0)} ج.م');
+    final dealerProfitValue = isDealerPriceLoading
+        ? 'جاري الحساب...'
+        : (hasDealerPreviewError ? 'تعذر حساب مكسبك' : '${qProfit.toStringAsFixed(0)} ج.م');
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -923,10 +963,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                       style: TextStyle(color: AppColors.muted, fontWeight: FontWeight.w900, fontSize: 14),
                                     ),
                                   _TotalRow(label: 'السعر الأصلي', value: '${qOriginalTotal.toStringAsFixed(0)} ج.م'),
-                                  _TotalRow(label: 'سعر التاجر', value: '${qDealerTotal.toStringAsFixed(0)} ج.م'),
+                                  _TotalRow(label: 'سعر التاجر', value: dealerPriceValue),
                                   _TotalRow(
                                       label: 'بعد خصم التاجر لعميله', value: '${qFinalTotal.toStringAsFixed(0)} ج.م'),
-                                  _TotalRow(label: 'مكسبك', value: '${qProfit.toStringAsFixed(0)} ج.م'),
+                                  _TotalRow(label: 'مكسبك', value: dealerProfitValue),
                                 ],
                               ),
                             ),

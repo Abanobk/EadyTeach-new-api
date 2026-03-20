@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart' show FirebaseMessaging;
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'controllers/theme_controller.dart';
 import 'providers/auth_provider.dart';
 import 'providers/cart_provider.dart';
@@ -35,6 +35,18 @@ void main() async {
         ),
       );
 
+  // FCM: تسجيل معالج الخلفية + تهيئة Firebase قبل runApp (مطلوب لسلوك موثوق عند إغلاق التطبيق)
+  if (!kIsWeb) {
+    try {
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp();
+      }
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    } catch (e) {
+      debugPrint('Firebase early init failed: $e');
+    }
+  }
+
   runApp(
     MultiProvider(
       providers: [
@@ -46,30 +58,24 @@ void main() async {
     ),
   );
 
-  Future(() async {
-    // Skip Firebase/FCM on web when no options are configured
-    if (kIsWeb) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        NotificationService().setNavigatorKey(navigatorKey);
-        NotificationService().processPendingNotification();
-      });
-      return;
-    }
-    try {
-      if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp();
-      }
-      // استخدم الهاندلر الموحد من NotificationService لعرض الإشعارات في الخلفية
-      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-      await NotificationService().initialize();
-    } catch (e) {
-      debugPrint('Firebase/Notification init failed: $e');
-    }
+  if (kIsWeb) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       NotificationService().setNavigatorKey(navigatorKey);
       NotificationService().processPendingNotification();
     });
-  });
+  } else {
+    unawaited(Future(() async {
+      try {
+        await NotificationService().initialize();
+      } catch (e) {
+        debugPrint('NotificationService init failed: $e');
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        NotificationService().setNavigatorKey(navigatorKey);
+        NotificationService().processPendingNotification();
+      });
+    }));
+  }
 }
 
 class EasyTechApp extends StatelessWidget {

@@ -1241,8 +1241,19 @@ function admin_getDashboardStats($input, $ctx) {
     } catch (\Exception $e) {}
 
     $totalTasks = 0;
+    $tasksCompleted = 0;
+    $tasksActive = 0;
+    $tasksCancelled = 0;
     try {
         $totalTasks = (int)$db->query("SELECT COUNT(*) FROM tasks")->fetchColumn();
+        $tasksCompleted = (int)$db->query("SELECT COUNT(*) FROM tasks WHERE LOWER(TRIM(COALESCE(status,''))) = 'completed'")->fetchColumn();
+        $tasksCancelled = (int)$db->query("SELECT COUNT(*) FROM tasks WHERE LOWER(TRIM(COALESCE(status,''))) = 'cancelled'")->fetchColumn();
+        $tasksActive = (int)$db->query("SELECT COUNT(*) FROM tasks WHERE LOWER(TRIM(COALESCE(status,''))) NOT IN ('completed','cancelled')")->fetchColumn();
+    } catch (\Exception $e) {}
+
+    $ordersPending = 0;
+    try {
+        $ordersPending = (int)$db->query("SELECT COUNT(*) FROM orders WHERE LOWER(TRIM(COALESCE(status,''))) IN ('pending','processing','new','preparing')")->fetchColumn();
     } catch (\Exception $e) {}
 
     $totalProducts = 0;
@@ -1258,9 +1269,13 @@ function admin_getDashboardStats($input, $ctx) {
 
     return [
         'totalOrders' => $totalOrders,
+        'ordersPending' => $ordersPending,
         'totalCustomers' => $totalCustomers,
         'totalProducts' => $totalProducts,
         'totalTasks' => $totalTasks,
+        'tasksCompleted' => $tasksCompleted,
+        'tasksActive' => $tasksActive,
+        'tasksCancelled' => $tasksCancelled,
     ];
 }
 

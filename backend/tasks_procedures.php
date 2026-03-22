@@ -228,6 +228,15 @@ function tasks_create($input, $ctx) {
         } catch (\Exception $e) { /* ignore notification errors */ }
     }
 
+    // إشعار الإدارة/المشرفين/الموظفين بأي مهمة جديدة.
+    // سابقاً: إذا أُنشئت المهمة من الويب بدون فني لم يُرسل أي FCM — فيظن المستخدم أن الإشعارات معطلة.
+    try {
+        $adminBody = $technicianId
+            ? "تم إنشاء المهمة «{$title}» وتم تعيين فني لها."
+            : "تم إنشاء المهمة «{$title}» وهي في انتظار تعيين فني.";
+        _notifyAdminsAndSupervisors('مهمة جديدة في النظام', $adminBody, 'task', $taskId, 'task');
+    } catch (\Exception $e) { /* ignore notification errors */ }
+
     return ['id' => $taskId];
 }
 

@@ -53,12 +53,15 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         message.data['title']?.toString() ??
         message.data['subject']?.toString() ??
         'Easy Tech';
-    final body = notification?.body?.toString() ??
+    var body = notification?.body?.toString() ??
         message.data['body']?.toString() ??
         message.data['message']?.toString() ??
         message.data['content']?.toString() ??
         message.data['text']?.toString() ??
         '';
+    if (body.isEmpty && title.isNotEmpty) {
+      body = 'اضغط للتفاصيل';
+    }
     if (body.isEmpty) return;
 
     final notifId = message.hashCode.abs() % 2147483647;
@@ -161,7 +164,8 @@ class NotificationService {
     final androidPlugin = _localNotifications
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     if (androidPlugin != null) {
-      await androidPlugin.requestNotificationsPermission();
+      final granted = await androidPlugin.requestNotificationsPermission();
+      debugPrint('[FCM] Android POST_NOTIFICATIONS granted: $granted');
     }
 
     // 3. Create Android notification channel (HIGH importance = sound + heads-up)

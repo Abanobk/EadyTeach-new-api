@@ -116,7 +116,15 @@ function _getFcmAccessToken() {
     return $data['access_token'] ?? null;
 }
 
-function _sendFcmMessage($token, $title, $body, $data = []) {
+/**
+ * @param string $platform من جدول fcm_tokens: android | ios | web
+ *
+ * أندرويد: نرسل رسالة data-only بأولوية HIGH حتى يُستدعى firebaseMessagingBackgroundHandler
+ * ويعرض flutter_local_notifications — عرض إشعار النظام من FCM وحده غالباً لا يستدعي الـ Dart isolate
+ * وقد يختفي بسبب القناة/الـ OEM.
+ * iOS / Web: نبقي notification + data كالسابق.
+ */
+function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
     static $accessToken = null;
     if ($accessToken === null) {
         $accessToken = _getFcmAccessToken();
@@ -131,37 +139,62 @@ function _sendFcmMessage($token, $title, $body, $data = []) {
     $sa = json_decode(file_get_contents($saPath), true);
     $projectId = $sa['project_id'] ?? 'easytech2';
 
-    $message = [
-        'message' => [
-            'token' => $token,
-            'notification' => [
-                'title' => $title,
-                'body' => $body,
-            ],
-            'data' => array_map('strval', $data),
-            'android' => [
-                'priority' => 'high',
-                'notification' => [
-                    'channel_id' => 'easy_tech_v2',
-                    'sound' => 'default',
-                    'default_vibrate_timings' => true,
+    $platformNorm = strtolower(trim((string)$platform));
+
+    // دمج العنوان والنص في data (كل القيم نصوص كما يتطلبه FCM)
+    $dataMerged = array_merge(is_array($data) ? $data : [], [
+        'title' => (string)$title,
+        'body' => (string)$body,
+    ]);
+    $dataStr = [];
+    foreach ($dataMerged as $k => $v) {
+        $dataStr[(string)$k] = (string)$v;
+    }
+
+    if ($platformNorm === 'android') {
+        // data-only + HIGH → يشغّل onBackgroundHandler في Flutter ويعرض إشعاراً محلياً
+        $message = [
+            'message' => [
+                'token' => $token,
+                'data' => $dataStr,
+                'android' => [
+                    'priority' => 'HIGH',
                 ],
             ],
-            'apns' => [
-                'payload' => [
-                    'aps' => [
+        ];
+    } else {
+        $message = [
+            'message' => [
+                'token' => $token,
+                'notification' => [
+                    'title' => $title,
+                    'body' => $body,
+                ],
+                'data' => array_map('strval', $data),
+                'android' => [
+                    'priority' => 'HIGH',
+                    'notification' => [
+                        'channel_id' => 'easy_tech_v2',
                         'sound' => 'default',
-                        'badge' => 1,
+                        'default_vibrate_timings' => true,
+                    ],
+                ],
+                'apns' => [
+                    'payload' => [
+                        'aps' => [
+                            'sound' => 'default',
+                            'badge' => 1,
+                        ],
+                    ],
+                ],
+                'webpush' => [
+                    'notification' => [
+                        'icon' => '/app/icons/Icon-192.png',
                     ],
                 ],
             ],
-            'webpush' => [
-                'notification' => [
-                    'icon' => '/app/icons/Icon-192.png',
-                ],
-            ],
-        ],
-    ];
+        ];
+    }
 
     $url = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
     $ch = curl_init($url);
@@ -202,12 +235,12 @@ function _notifyUser($userId, $title, $body, $type = 'general', $refId = null, $
     $stmt = $db->prepare("INSERT INTO notifications (user_id, title, body, type, ref_id, ref_type, data) VALUES (?, ?, ?, ?, ?, ?, ?)");
     $stmt->execute([$userId, $title, $body, $type, $refId, $refType, json_encode($data)]);
 
-    $tokenStmt = $db->prepare("SELECT token FROM fcm_tokens WHERE user_id = ?");
+    $tokenStmt = $db->prepare("SELECT token, COALESCE(platform, 'web') AS platform FROM fcm_tokens WHERE user_id = ?");
     $tokenStmt->execute([$userId]);
     $tokens = $tokenStmt->fetchAll();
 
     foreach ($tokens as $t) {
-        _sendFcmMessage($t['token'], $title, $body, $data);
+        _sendFcmMessage($t['token'], $title, $body, $data, $t['platform'] ?? 'web');
     }
 }
 

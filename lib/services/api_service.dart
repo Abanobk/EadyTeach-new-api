@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -237,10 +237,25 @@ class ApiService {
     throw Exception('Request failed: ${response.statusCode}');
   }
 
-  /// Save FCM token to server
+  /// Save FCM token to server (يجب إرسال [platform] الصحيح — كان يُحفظ كـ web فيُرسل للأندرويد payload خاطئ)
   Future<void> saveFcmToken(String token) async {
     try {
-      await mutate('users.saveFcmToken', input: {'fcmToken': token});
+      final String platform;
+      if (kIsWeb) {
+        platform = 'web';
+      } else {
+        switch (defaultTargetPlatform) {
+          case TargetPlatform.android:
+            platform = 'android';
+            break;
+          case TargetPlatform.iOS:
+            platform = 'ios';
+            break;
+          default:
+            platform = 'unknown';
+        }
+      }
+      await mutate('users.saveFcmToken', input: {'fcmToken': token, 'platform': platform});
     } catch (e) {
       // Ignore errors - token save is non-critical
     }

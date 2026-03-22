@@ -142,6 +142,10 @@ function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
     $projectId = $sa['project_id'] ?? 'easytech2';
 
     $platformNorm = strtolower(trim((string)$platform));
+    // أجهزة قديمة قد تُحفظ كـ unknown — عاملها مثل أندرويد لعرض الإشعار في الشريط
+    if ($platformNorm === 'unknown' || $platformNorm === '') {
+        $platformNorm = 'android';
+    }
 
     // دمج العنوان والنص في data (كل القيم نصوص كما يتطلبه FCM)
     $dataMerged = array_merge(is_array($data) ? $data : [], [
@@ -245,8 +249,19 @@ function _notifyUser($userId, $title, $body, $type = 'general', $refId = null, $
     $tokenStmt->execute([$userId]);
     $tokens = $tokenStmt->fetchAll();
 
+    if (empty($tokens)) {
+        error_log('[FCM] notify skip push: user_id=' . (int)$userId . ' has NO rows in fcm_tokens (DB notification was saved). Title=' . $title);
+    }
+
     foreach ($tokens as $t) {
-        _sendFcmMessage($t['token'], $title, $body, $data, $t['platform'] ?? 'web');
+        $plat = strtolower(trim((string)($t['platform'] ?? 'web')));
+        if ($plat === 'unknown' || $plat === '') {
+            $plat = 'android';
+        }
+        $ok = _sendFcmMessage($t['token'], $title, $body, $data, $plat);
+        if (!$ok) {
+            error_log('[FCM] notify send failed user_id=' . (int)$userId . ' platform=' . $plat);
+        }
     }
 }
 

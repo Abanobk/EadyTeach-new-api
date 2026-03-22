@@ -1,9 +1,29 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:app_badge_plus/app_badge_plus.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+
+/// مفتاح حفظ عدد الشارة (يُستخدم أيضاً من معالج الخلفية)
+const String _kBadgePrefsKey = 'app_icon_badge_count';
+
+/// زيادة عدد الشارة على أيقونة التطبيق عند وصول إشعار في الخلفية (بدون اتصال بالخادم)
+Future<void> _incrementBadgeInBackground() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final n = (prefs.getInt(_kBadgePrefsKey) ?? 0) + 1;
+    await prefs.setInt(_kBadgePrefsKey, n);
+    if (kIsWeb) return;
+    await AppBadgePlus.updateBadge(n);
+  } catch (e) {
+    debugPrint('[Badge] Background increment failed: $e');
+  }
+}
 
 /// توجيه عند فتح الإشعار — يحتاج مفتاح الـ Navigator (يُعيَّن من main بعد بناء الشجرة)
 GlobalKey<NavigatorState>? _navigatorKey;
@@ -90,6 +110,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       ),
       payload: jsonEncode(message.data),
     );
+    await _incrementBadgeInBackground();
   } catch (e) {
     debugPrint('[FCM Background] Error: $e');
   }
@@ -122,8 +143,16 @@ class NotificationService {
   // Badge count tracker
   static int _badgeCount = 0;
 
+  static Future<void> _loadBadgeFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _badgeCount = prefs.getInt(_kBadgePrefsKey) ?? 0;
+    } catch (_) {}
+  }
+
   /// Initialize notifications - call once at app start
   Future<void> initialize() async {
+    await _loadBadgeFromPrefs();
     if (_fcm == null) {
       debugPrint('[NotificationService] FCM not available (e.g. web without Firebase options).');
       return;
@@ -264,13 +293,15 @@ class NotificationService {
     }
   }
 
-  /// Set badge count - stored locally, shown in notification number field
-  /// Note: Android badge count is shown via notification's 'number' field
-  /// True app icon badge requires launcher support (Samsung, Xiaomi, etc.)
+  /// تعيين عدد الشارة على أيقونة التطبيق (Android/iOS عبر app_badge_plus) + مزامنة محلية
   static Future<void> setBadgeCount(int count) async {
     try {
       _badgeCount = count < 0 ? 0 : count;
       debugPrint('[Badge] Badge count set to $_badgeCount');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_kBadgePrefsKey, _badgeCount);
+      if (kIsWeb) return;
+      await AppBadgePlus.updateBadge(_badgeCount);
     } catch (e) {
       debugPrint('[Badge] Failed to set badge: $e');
     }
@@ -373,13 +404,13 @@ class NotificationService {
 
   void _handleMessageOpenedApp(RemoteMessage message) {
     debugPrint('[FCM Opened] ${message.notification?.title}');
-    clearBadge();
+    unawaited(updateBadgeFromServer());
     _navigateToNotificationData(message.data);
   }
 
   void _onNotificationTap(NotificationResponse response) {
     debugPrint('[Notification Tap] payload: ${response.payload}');
-    clearBadge();
+    unawaited(updateBadgeFromServer());
     if (response.payload != null && response.payload!.isNotEmpty) {
       try {
         final data = jsonDecode(response.payload!) as Map<String, dynamic>?;

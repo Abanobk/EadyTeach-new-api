@@ -257,7 +257,8 @@ class ApiService {
       }
       await mutate('users.saveFcmToken', input: {'fcmToken': token, 'platform': platform});
     } catch (e) {
-      // Ignore errors - token save is non-critical
+      // بدون توكن على السيرفر لن يصل أي push في الخلفية — سجّل للتشخيص
+      print('[FCM] saveFcmToken failed: $e');
     }
   }
 

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
+import '../../services/notification_service.dart';
 
 class AdminNotificationsScreen extends StatefulWidget {
   const AdminNotificationsScreen({super.key});
@@ -45,14 +48,16 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   Future<void> _markRead(dynamic id) async {
     try {
       await ApiService.mutate('notifications.markRead', input: {'id': id});
-      _loadNotifications();
+      await _loadNotifications();
+      unawaited(NotificationService().updateBadgeFromServer());
     } catch (_) {}
   }
 
   Future<void> _markAllRead() async {
     try {
       await ApiService.mutate('notifications.markAllRead');
-      _loadNotifications();
+      await _loadNotifications();
+      unawaited(NotificationService().updateBadgeFromServer());
     } catch (_) {}
   }
 

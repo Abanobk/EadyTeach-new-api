@@ -119,10 +119,12 @@ function _getFcmAccessToken() {
 /**
  * @param string $platform من جدول fcm_tokens: android | ios | web
  *
- * أندرويد: نرسل رسالة data-only بأولوية HIGH حتى يُستدعى firebaseMessagingBackgroundHandler
- * ويعرض flutter_local_notifications — عرض إشعار النظام من FCM وحده غالباً لا يستدعي الـ Dart isolate
- * وقد يختفي بسبب القناة/الـ OEM.
- * iOS / Web: نبقي notification + data كالسابق.
+ * أندرويد: نرسل notification + data بأولوية HIGH وقناة easy_tech_v2 — النظام يعرض الإشعار في الشريط
+ * حتى والتطبيق مغلق (لا يعتمد على Dart background isolate). رسالة data-only كانت تفشل غالباً
+ * في الظهور في الخلفية على كثير من الأجهزة.
+ * iOS / Web: notification + data كما سبق.
+ *
+ * ملاحظة: حقول android.notification في FCM HTTP v1 تستخدم camelCase (channelId، defaultVibrateTimings).
  */
 function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
     static $accessToken = null;
@@ -151,15 +153,26 @@ function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
         $dataStr[(string)$k] = (string)$v;
     }
 
+    // كتلة android.notification المشتركة (FCM v1 JSON = camelCase)
+    $androidNotifExtras = [
+        'priority' => 'HIGH',
+        'notification' => [
+            'channelId' => 'easy_tech_v2',
+            'sound' => 'default',
+            'defaultVibrateTimings' => true,
+        ],
+    ];
+
     if ($platformNorm === 'android') {
-        // data-only + HIGH → يشغّل onBackgroundHandler في Flutter ويعرض إشعاراً محلياً
         $message = [
             'message' => [
                 'token' => $token,
-                'data' => $dataStr,
-                'android' => [
-                    'priority' => 'HIGH',
+                'notification' => [
+                    'title' => $title,
+                    'body' => $body,
                 ],
+                'data' => $dataStr,
+                'android' => $androidNotifExtras,
             ],
         ];
     } else {
@@ -170,15 +183,8 @@ function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
                     'title' => $title,
                     'body' => $body,
                 ],
-                'data' => array_map('strval', $data),
-                'android' => [
-                    'priority' => 'HIGH',
-                    'notification' => [
-                        'channel_id' => 'easy_tech_v2',
-                        'sound' => 'default',
-                        'default_vibrate_timings' => true,
-                    ],
-                ],
+                'data' => $dataStr,
+                'android' => $androidNotifExtras,
                 'apns' => [
                     'payload' => [
                         'aps' => [

@@ -1568,7 +1568,28 @@ function appointments_create($input, $ctx) {
     $stmt = $db->prepare("INSERT INTO appointments (title, type, appointment_date, notes, created_by, assigned_to, color) VALUES (?, ?, ?, ?, ?, ?, ?)");
     $stmt->execute([$title, $type, $dateStr, $notes, $createdBy, $assignedTo, $color]);
 
-    return ['success' => true, 'id' => (int)$db->lastInsertId()];
+    $newId = (int)$db->lastInsertId();
+
+    // إشعارات FCM + سجل notifications (نفس سلوك المهام)
+    try {
+        $dateLabel = strlen($dateStr) > 32 ? substr($dateStr, 0, 32) : $dateStr;
+        if ($assignedTo) {
+            _notifyUser(
+                $assignedTo,
+                'موعد جديد (سكرتارية)',
+                "تم تعيينك لموعد: {$title} — {$dateLabel}",
+                'appointment',
+                $newId,
+                'appointment'
+            );
+        }
+        $adminBody = $assignedTo
+            ? "موعد «{$title}» — {$dateLabel} (معيّن لموظف)."
+            : "موعد «{$title}» — {$dateLabel}.";
+        _notifyAdminsAndSupervisors('موعد جديد في السكرتارية', $adminBody, 'appointment', $newId, 'appointment');
+    } catch (\Exception $e) { /* ignore notification errors */ }
+
+    return ['success' => true, 'id' => $newId];
 }
 
 function appointments_delete($input, $ctx) {

@@ -914,6 +914,14 @@ try {
             $result = taskNotes_delete($input, $ctx);
             break;
 
+        case 'taskItemMessages.listByTask':
+            $result = taskItemMessages_listByTask($input, $ctx);
+            break;
+
+        case 'taskItemMessages.add':
+            $result = taskItemMessages_add($input, $ctx);
+            break;
+
         // ── Technician Location ───────────────────────────────
         case 'technicianLocation.update':
             $result = technicianLocation_update($input, $ctx);

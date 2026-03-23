@@ -1,5 +1,21 @@
 # استكشاف أخطاء إشعارات الخلفية (FCM) — Easy Tech
 
+## أول خطوة على السيرفر (SSH)
+
+بعد `git pull` قد **لا يوجد** ملف `backend/firebase-service-account.json` (ملف سري وغالباً غير مرفوع لـ Git). **بدون هذا الملف لن يُرسل أي Push من السيرفر.**
+
+على السيرفر:
+
+```bash
+ls -la /mnt/marichia/files/easytech-new-api/backend/firebase-service-account.json
+php /mnt/marichia/files/easytech-new-api/backend/fcm_cli_check.php
+```
+
+- إذا `ls` قال **No such file** → ارفع الملف يدوياً من Firebase Console (Project settings → Service accounts → Generate new private key).
+- سكربت `fcm_cli_check.php` يتحقق من الملف + token Google + عدد صفوف `fcm_tokens`.
+
+---
+
 ## مهم: الفرق بين «ظهر في التطبيق» و«Push في الشريط»
 
 - **ظهر داخل التطبيق** = السيرفر سجّل الإشعار في جدول `notifications` بنجاح.

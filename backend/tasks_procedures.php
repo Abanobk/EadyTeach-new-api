@@ -473,13 +473,22 @@ function taskNotes_list($input, $ctx) {
     global $db;
     _ensureTaskNotesTable();
     $taskId = (int)($input['taskId'] ?? 0);
-    $stmt = $db->prepare('SELECT * FROM task_notes WHERE task_id = ? ORDER BY created_at DESC');
+    $stmt = $db->prepare('
+        SELECT n.*, u.name AS author_name, u.role AS author_role
+        FROM task_notes n
+        LEFT JOIN users u ON u.id = n.author_id
+        WHERE n.task_id = ?
+        ORDER BY n.created_at ASC
+    ');
     $stmt->execute([$taskId]);
     $rows = $stmt->fetchAll();
     $result = [];
     foreach ($rows as $r) {
         $result[] = [
             'id' => (int)$r['id'],
+            'authorId' => $r['author_id'] ? (int)$r['author_id'] : null,
+            'authorName' => $r['author_name'] ?? null,
+            'authorRole' => $r['author_role'] ?? null,
             'content' => $r['content'] ?? '',
             'mediaUrls' => $r['media_urls'] ? json_decode($r['media_urls'], true) : [],
             'mediaTypes' => $r['media_types'] ? json_decode($r['media_types'], true) : [],
@@ -499,7 +508,7 @@ function taskNotes_listForClient($input, $ctx) {
         FROM task_notes n
         LEFT JOIN users u ON u.id = n.author_id
         WHERE n.task_id = ? AND n.is_visible_to_client = 1
-        ORDER BY n.created_at DESC
+        ORDER BY n.created_at ASC
     ');
     $stmt->execute([$taskId]);
     $rows = $stmt->fetchAll();
@@ -560,6 +569,160 @@ function taskNotes_delete($input, $ctx) {
     _ensureTaskNotesTable();
     $id = (int)($input['id'] ?? 0);
     $db->prepare('DELETE FROM task_notes WHERE id = ?')->execute([$id]);
+    return ['success' => true];
+}
+
+// ─── taskItemMessages (محادثة تعليقات التقدم لكل بند) ───────────
+
+function _ensureTaskItemMessagesTable() {
+    global $db;
+    $db->exec('CREATE TABLE IF NOT EXISTS task_item_messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        task_item_id INT NOT NULL,
+        author_id INT NOT NULL,
+        body TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_task_item_messages_item (task_item_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+}
+
+function _taskAccessForTaskId($db, $taskId, $userId) {
+    if (!$taskId || !$userId) {
+        return null;
+    }
+    $stmt = $db->prepare('SELECT technician_id FROM tasks WHERE id = ?');
+    $stmt->execute([$taskId]);
+    $t = $stmt->fetch();
+    if (!$t) {
+        return null;
+    }
+    $stmt = $db->prepare('SELECT role FROM users WHERE id = ?');
+    $stmt->execute([$userId]);
+    $role = $stmt->fetchColumn();
+    if (!$role) {
+        return null;
+    }
+    $techId = !empty($t['technician_id']) ? (int)$t['technician_id'] : null;
+    $ok = in_array($role, ['admin', 'staff'], true)
+        || ($role === 'technician' && $techId && (int)$userId === $techId);
+    if (!$ok) {
+        return null;
+    }
+    return ['technicianId' => $techId, 'role' => $role];
+}
+
+function _taskAccessForItemId($db, $itemId, $userId) {
+    $stmt = $db->prepare('SELECT task_id FROM task_items WHERE id = ?');
+    $stmt->execute([$itemId]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        return null;
+    }
+    return _taskAccessForTaskId($db, (int)$row['task_id'], $userId);
+}
+
+function taskItemMessages_listByTask($input, $ctx) {
+    global $db;
+    _ensureTaskItemMessagesTable();
+    $taskId = (int)($input['taskId'] ?? 0);
+    $userId = $ctx['userId'] ?? null;
+    if (!_taskAccessForTaskId($db, $taskId, $userId)) {
+        throw new Exception('غير مصرح بعرض محادثة البنود');
+    }
+
+    $stmt = $db->prepare('
+        SELECT m.id, m.task_item_id, m.author_id, m.body, m.created_at,
+               u.name AS author_name, u.role AS author_role
+        FROM task_item_messages m
+        INNER JOIN task_items ti ON ti.id = m.task_item_id
+        LEFT JOIN users u ON u.id = m.author_id
+        WHERE ti.task_id = ?
+        ORDER BY m.created_at ASC
+    ');
+    $stmt->execute([$taskId]);
+    $rows = $stmt->fetchAll();
+
+    $byItem = [];
+    foreach ($rows as $r) {
+        $iid = (int)$r['task_item_id'];
+        if (!isset($byItem[$iid])) {
+            $byItem[$iid] = [];
+        }
+        $byItem[$iid][] = [
+            'id' => (int)$r['id'],
+            'itemId' => $iid,
+            'authorId' => (int)$r['author_id'],
+            'authorName' => $r['author_name'] ?? '',
+            'authorRole' => $r['author_role'] ?? '',
+            'body' => $r['body'] ?? '',
+            'createdAt' => $r['created_at'] ?? '',
+        ];
+    }
+
+    $legacyStmt = $db->prepare('SELECT id, progress_note FROM task_items WHERE task_id = ?');
+    $legacyStmt->execute([$taskId]);
+    $legacyByItem = [];
+    foreach ($legacyStmt->fetchAll() as $row) {
+        $pn = trim((string)($row['progress_note'] ?? ''));
+        if ($pn !== '') {
+            $legacyByItem[(int)$row['id']] = $pn;
+        }
+    }
+
+    return ['byItem' => $byItem, 'legacyByItem' => $legacyByItem];
+}
+
+function taskItemMessages_add($input, $ctx) {
+    global $db;
+    _ensureTaskItemMessagesTable();
+    $itemId = (int)($input['itemId'] ?? 0);
+    $body = trim((string)($input['body'] ?? ''));
+    $userId = (int)($ctx['userId'] ?? 0);
+    if ($itemId <= 0 || $body === '' || !$userId) {
+        throw new Exception('بيانات الرسالة غير كافية');
+    }
+    $acc = _taskAccessForItemId($db, $itemId, $userId);
+    if (!$acc) {
+        throw new Exception('غير مصرح بإرسال رسالة على هذا البند');
+    }
+
+    $stmt = $db->prepare('INSERT INTO task_item_messages (task_item_id, author_id, body) VALUES (?, ?, ?)');
+    $stmt->execute([$itemId, $userId, $body]);
+
+    try {
+        $stmt = $db->prepare("SELECT ti.description, t.id AS task_id, t.title AS task_title, t.technician_id
+            FROM task_items ti JOIN tasks t ON t.id = ti.task_id WHERE ti.id = ?");
+        $stmt->execute([$itemId]);
+        $row = $stmt->fetch();
+        if ($row) {
+            $uStmt = $db->prepare('SELECT name, role FROM users WHERE id = ?');
+            $uStmt->execute([$userId]);
+            $u = $uStmt->fetch();
+            $name = $u['name'] ?? '';
+            $role = $u['role'] ?? '';
+            $taskId = (int)$row['task_id'];
+            $snippet = mb_strlen($body) > 120 ? mb_substr($body, 0, 120) . '…' : $body;
+            if ($role === 'technician') {
+                _notifyAdminsAndSupervisors(
+                    'تعليق على بند مهمة',
+                    "{$name}: {$snippet}",
+                    'task',
+                    $taskId,
+                    'task'
+                );
+            } elseif (!empty($row['technician_id'])) {
+                _notifyUser(
+                    (int)$row['technician_id'],
+                    'رد على تعليقك',
+                    "{$name}: {$snippet}",
+                    'task',
+                    $taskId,
+                    'task'
+                );
+            }
+        }
+    } catch (\Exception $e) { /* ignore */ }
+
     return ['success' => true];
 }
 

@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
+import '../../widgets/task_chat_bubble.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // شاشة تفاصيل المهمة - مطابقة للويب
@@ -59,6 +60,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   List<String> _noteMediaTypes = [];
   bool _noteVisibleToClient = true;
   bool _uploadingNoteMedia = false;
+
+  /// رسائل محادثة التقدم لكل بند (itemId → قائمة)
+  Map<int, List<Map<String, dynamic>>> _itemChatByItemId = {};
+  /// نصوص progress_note القديمة قبل جدول الرسائل
+  Map<int, String> _legacyItemNotes = {};
 
   @override
   void initState() {
@@ -193,6 +199,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       // تحميل الملاحظات
       final idInt = id is int ? id : int.tryParse(id.toString()) ?? 0;
       await _loadNotes(idInt);
+      await _loadItemChats(idInt);
     } catch (e) {
       setState(() {
         _fullTask = Map<String, dynamic>.from(widget.task);
@@ -213,6 +220,51 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       }
     } catch (_) {}
     setState(() => _loadingNotes = false);
+  }
+
+  void _applyItemChatData(dynamic data) {
+    if (data is! Map) return;
+    final by = data['byItem'];
+    final leg = data['legacyByItem'];
+    final Map<int, List<Map<String, dynamic>>> next = {};
+    if (by is Map) {
+      by.forEach((k, v) {
+        final id = int.tryParse(k.toString()) ?? 0;
+        if (id <= 0) return;
+        if (v is List) {
+          next[id] = v.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      });
+    }
+    final Map<int, String> legacy = {};
+    if (leg is Map) {
+      leg.forEach((k, v) {
+        final id = int.tryParse(k.toString()) ?? 0;
+        if (id <= 0) return;
+        final s = v?.toString().trim() ?? '';
+        if (s.isNotEmpty) legacy[id] = s;
+      });
+    }
+    _itemChatByItemId = next;
+    _legacyItemNotes = legacy;
+  }
+
+  Future<void> _loadItemChats(int taskId) async {
+    if (taskId <= 0) return;
+    try {
+      final res = await ApiService.query('taskItemMessages.listByTask', input: {'taskId': taskId});
+      if (mounted) {
+        setState(() => _applyItemChatData(res['data']));
+      }
+    } catch (_) {}
+  }
+
+  bool _isTechnicianRole(String? role) => role == 'technician';
+
+  bool _isTaskNoteClientVisible(dynamic v) {
+    if (v == true) return true;
+    if (v == 1 || v == '1') return true;
+    return false;
   }
 
   Future<void> _pickNoteMedia({bool isVideo = false}) async {
@@ -435,7 +487,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   void _showProgressEditor(Map<String, dynamic> item) {
     final currentProgress = item['progress'] as int? ?? 0;
     double sliderVal = currentProgress.toDouble();
-    final noteCtrl = TextEditingController(text: item['progressNote']?.toString() ?? '');
+    final noteCtrl = TextEditingController();
+    final itemId = item['id'] is int ? item['id'] as int : int.tryParse(item['id'].toString()) ?? 0;
+    final sheetMsgs = List<Map<String, dynamic>>.from(_itemChatByItemId[itemId] ?? []);
+    final legacySheet = _legacyItemNotes[itemId] ?? '';
 
     showModalBottomSheet(
       context: context,
@@ -452,173 +507,215 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               left: 20, right: 20, top: 20,
               bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40, height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  item['description']?.toString() ?? '',
-                  style: const TextStyle(color: AppColors.text, fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    const Text('نسبة الإنجاز', style: TextStyle(color: AppColors.muted, fontSize: 13)),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _progressColor(sliderVal.round()).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${sliderVal.round()}%',
-                        style: TextStyle(
-                          color: _progressColor(sliderVal.round()),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                SliderTheme(
-                  data: SliderThemeData(
-                    activeTrackColor: _progressColor(sliderVal.round()),
-                    inactiveTrackColor: AppColors.border,
-                    thumbColor: _progressColor(sliderVal.round()),
-                    overlayColor: _progressColor(sliderVal.round()).withOpacity(0.2),
-                    trackHeight: 8,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
-                  ),
-                  child: Slider(
-                    value: sliderVal,
-                    min: 0,
-                    max: 100,
-                    divisions: 20,
-                    onChanged: (v) => setSheetState(() => sliderVal = v),
-                  ),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [0, 25, 50, 75, 100].map((v) => GestureDetector(
-                    onTap: () => setSheetState(() => sliderVal = v.toDouble()),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      width: 40, height: 4,
                       decoration: BoxDecoration(
-                        color: sliderVal.round() == v
-                            ? _progressColor(v).withOpacity(0.2)
-                            : AppThemeDecorations.pageBackground(context),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: sliderVal.round() == v
-                              ? _progressColor(v)
-                              : AppColors.border,
-                        ),
-                      ),
-                      child: Text(
-                        '$v%',
-                        style: TextStyle(
-                          color: sliderVal.round() == v
-                              ? _progressColor(v)
-                              : AppColors.muted,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                  )).toList(),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('ملاحظات العمل',
-                        style: TextStyle(color: AppColors.muted, fontSize: 13, fontWeight: FontWeight.w600)),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.primary),
-                      tooltip: 'إضافة ملاحظة جديدة مع تاريخ الآن',
-                      onPressed: () {
-                        final text = noteCtrl.text.trim();
-                        if (text.isEmpty) return;
-                        final now = DateTime.now();
-                        final ts =
-                            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} '
-                            '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-                        final existing = noteCtrl.text.trim().isEmpty ? '' : '${noteCtrl.text.trim()}\n\n';
-                        noteCtrl.text = '$existing[$ts] $text';
-                        noteCtrl.selection = TextSelection.fromPosition(
-                          TextPosition(offset: noteCtrl.text.length),
-                        );
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    item['description']?.toString() ?? '',
+                    style: const TextStyle(color: AppColors.text, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'محادثة التقدم (فني ↔ مشرف) — التاريخ والوقت يُسجَّلان تلقائياً',
+                    style: TextStyle(color: AppColors.muted, fontSize: 11),
+                  ),
+                  const SizedBox(height: 12),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 220),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppThemeDecorations.pageBackground(context),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: sheetMsgs.isEmpty && legacySheet.isEmpty
+                          ? const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Text('لا رسائل بعد', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+                              ),
+                            )
+                          : ListView(
+                              padding: const EdgeInsets.all(10),
+                              shrinkWrap: true,
+                              children: [
+                                if (legacySheet.isNotEmpty)
+                                  TaskLegacyNoteBox(
+                                    title: 'سجل قديم (قبل المحادثة)',
+                                    content: legacySheet,
+                                  ),
+                                ...sheetMsgs.map((m) {
+                                  final role = m['authorRole']?.toString();
+                                  final tech = _isTechnicianRole(role);
+                                  return TaskChatBubble(
+                                    authorName: m['authorName']?.toString().isNotEmpty == true
+                                        ? m['authorName'].toString()
+                                        : '—',
+                                    authorRole: role,
+                                    dateTimeText: formatTaskChatDateTime(m['createdAt']?.toString()),
+                                    body: m['body']?.toString() ?? '',
+                                    alignEnd: tech,
+                                    accent: tech ? const Color(0xFF2E7D32) : const Color(0xFF1565C0),
+                                  );
+                                }),
+                              ],
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      const Text('نسبة الإنجاز', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _progressColor(sliderVal.round()).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${sliderVal.round()}%',
+                          style: TextStyle(
+                            color: _progressColor(sliderVal.round()),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SliderTheme(
+                    data: SliderThemeData(
+                      activeTrackColor: _progressColor(sliderVal.round()),
+                      inactiveTrackColor: AppColors.border,
+                      thumbColor: _progressColor(sliderVal.round()),
+                      overlayColor: _progressColor(sliderVal.round()).withOpacity(0.2),
+                      trackHeight: 8,
+                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+                    ),
+                    child: Slider(
+                      value: sliderVal,
+                      min: 0,
+                      max: 100,
+                      divisions: 20,
+                      onChanged: (v) => setSheetState(() => sliderVal = v),
+                    ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [0, 25, 50, 75, 100].map((v) => GestureDetector(
+                      onTap: () => setSheetState(() => sliderVal = v.toDouble()),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: sliderVal.round() == v
+                              ? _progressColor(v).withOpacity(0.2)
+                              : AppThemeDecorations.pageBackground(context),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: sliderVal.round() == v
+                                ? _progressColor(v)
+                                : AppColors.border,
+                          ),
+                        ),
+                        child: Text(
+                          '$v%',
+                          style: TextStyle(
+                            color: sliderVal.round() == v
+                                ? _progressColor(v)
+                                : AppColors.muted,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    )).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('رسالة جديدة', style: TextStyle(color: AppColors.muted, fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: noteCtrl,
+                    maxLines: 4,
+                    style: const TextStyle(color: AppColors.text, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'اكتب تعليقاً أو رداً للمشرف/الفني… (اختياري)',
+                      hintStyle: const TextStyle(color: AppColors.muted, fontSize: 12),
+                      filled: true,
+                      fillColor: AppThemeDecorations.pageBackground(context),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final newProgress = sliderVal.round();
+                        final msg = noteCtrl.text.trim();
+                        final tid = (_fullTask ?? widget.task)['id'];
+                        final taskIdInt = tid is int ? tid : int.tryParse(tid.toString()) ?? 0;
+                        try {
+                          await ApiService.mutate('tasks.updateItem', input: {
+                            'id': item['id'],
+                            'progress': newProgress,
+                            'isCompleted': newProgress >= 100,
+                          });
+                          if (msg.isNotEmpty) {
+                            await ApiService.mutate('taskItemMessages.add', input: {
+                              'itemId': itemId,
+                              'body': msg,
+                            });
+                          }
+                          if (!mounted) return;
+                          setState(() {
+                            item['progress'] = newProgress;
+                            item['isCompleted'] = newProgress >= 100;
+                          });
+                          await _loadItemChats(taskIdInt);
+                        } catch (e) {
+                          if (mounted) {
+                            _showSnack('فشل الحفظ: $e', Colors.red);
+                          }
+                          return;
+                        }
+                        if (ctx.mounted) Navigator.pop(ctx);
                       },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: noteCtrl,
-                  maxLines: 5,
-                  style: const TextStyle(color: AppColors.text, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'اكتب ملاحظة ثم اضغط علامة + لإضافتها مع التاريخ...',
-                    hintStyle: const TextStyle(color: AppColors.muted, fontSize: 12),
-                    filled: true,
-                    fillColor: AppThemeDecorations.pageBackground(context),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: AppColors.border),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: AppColors.border),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('حفظ التقدم وإرسال الرسالة', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      final newProgress = sliderVal.round();
-                      setState(() {
-                        item['progress'] = newProgress;
-                        item['isCompleted'] = newProgress >= 100;
-                        item['progressNote'] = noteCtrl.text;
-                      });
-                      try {
-                        await ApiService.mutate('tasks.updateItem', input: {
-                          'id': item['id'],
-                          'progress': newProgress,
-                          'progressNote': noteCtrl.text,
-                        });
-                      } catch (_) {}
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('حفظ التقدم', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -1077,10 +1174,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     collectionType == 'cash' ? '💵 نقدي' : collectionType == 'transfer' ? '🏦 تحويل' : '—',
                   )),
                 ]),
-                if (notes != null && notes.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  _labelValue('ملاحظات', notes),
-                ],
               ],
             ),
             const SizedBox(height: 16),
@@ -1158,7 +1251,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                   ..._items.map((item) {
                     final done = item['isCompleted'] as bool? ?? false;
                     final progress = item['progress'] as int? ?? (done ? 100 : 0);
-                    final progressNote = item['progressNote']?.toString() ?? '';
                     final itemId = item['id'] is int ? item['id'] as int : int.tryParse(item['id'].toString()) ?? 0;
                     final mediaUrls = item['mediaUrls'] is List ? (item['mediaUrls'] as List).cast<String>() : <String>[];
                     final mediaTypes = item['mediaTypes'] is List ? (item['mediaTypes'] as List).cast<String>() : <String>[];
@@ -1246,26 +1338,51 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                 minHeight: 6,
                               ),
                             ),
-                            if (progressNote.isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: AppThemeDecorations.cardColor(context),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: AppColors.border.withOpacity(0.5)),
-                                ),
-                                child: Text(
-                                  progressNote,
-                                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
-                                ),
-                              ),
-                            ],
+                            const SizedBox(height: 8),
+                            Builder(builder: (ctx) {
+                              final msgs = _itemChatByItemId[itemId] ?? [];
+                              final leg = _legacyItemNotes[itemId] ??
+                                  (item['progressNote']?.toString().trim().isNotEmpty == true
+                                      ? item['progressNote'].toString()
+                                      : '');
+                              if (msgs.isEmpty && leg.isEmpty) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    'لا تعليقات بعد — اضغط لتحديث التقدم أو إرسال رسالة',
+                                    style: TextStyle(color: AppColors.muted.withOpacity(0.9), fontSize: 11),
+                                  ),
+                                );
+                              }
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (leg.isNotEmpty)
+                                    TaskLegacyNoteBox(
+                                      title: 'سجل قديم (قبل المحادثة)',
+                                      content: leg,
+                                    ),
+                                  ...msgs.map((m) {
+                                    final role = m['authorRole']?.toString();
+                                    final tech = _isTechnicianRole(role);
+                                    return TaskChatBubble(
+                                      authorName: m['authorName']?.toString().isNotEmpty == true
+                                          ? m['authorName'].toString()
+                                          : '—',
+                                      authorRole: role,
+                                      dateTimeText: formatTaskChatDateTime(m['createdAt']?.toString()),
+                                      body: m['body']?.toString() ?? '',
+                                      alignEnd: tech,
+                                      accent: tech ? const Color(0xFF2E7D32) : const Color(0xFF1565C0),
+                                    );
+                                  }),
+                                ],
+                              );
+                            }),
                             if (!_isCompleted && progress < 100) ...[
                               const SizedBox(height: 4),
                               Text(
-                                'اضغط لتحديث التقدم',
+                                'اضغط لتحديث التقدم أو المحادثة',
                                 style: TextStyle(color: AppColors.primary.withOpacity(0.6), fontSize: 10),
                               ),
                             ],
@@ -1527,7 +1644,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               final taskId = (_fullTask ?? widget.task)['id'];
               final id = taskId is int ? taskId : int.tryParse(taskId.toString()) ?? 0;
               return _sectionCard(
-                label: '📝 ملاحظات الفني',
+                label: '📝 ملاحظات ومتابعة (شات)',
                 children: [
                   // إضافة ملاحظة جديدة
                   TextField(
@@ -1605,69 +1722,51 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       ),
                   ]),
                   const Divider(color: AppColors.border),
-                  // عرض الملاحظات
                   if (_loadingNotes)
                     const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                  else if (_notes.isEmpty)
-                    const Text('لا توجد ملاحظات بعد',
-                        style: TextStyle(color: AppColors.muted, fontSize: 13))
                   else
-                    ..._notes.map((note) {
-                      final noteId = note['id'] is int ? note['id'] as int : int.tryParse(note['id'].toString()) ?? 0;
-                      final urls = note['mediaUrls'];
-                      final types = note['mediaTypes'];
-                      final mediaList = urls is List ? urls.cast<String>() : <String>[];
-                      final typeList = types is List ? types.cast<String>() : <String>[];
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppThemeDecorations.pageBackground(context),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Row(children: [
-                            Expanded(child: Text(
-                              note['content']?.toString() ?? '',
-                              style: const TextStyle(color: AppColors.text, fontSize: 13),
-                            )),
-                            if (note['isVisibleToClient'] == true)
-                              const Icon(Icons.visibility, color: Colors.green, size: 14)
-                            else
-                              const Icon(Icons.visibility_off, color: AppColors.muted, size: 14),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: () => _deleteNote(noteId, id),
-                              child: const Icon(Icons.delete_outline, color: Colors.red, size: 16),
-                            ),
-                          ]),
-                          if (mediaList.isNotEmpty) ...
-                            mediaList.asMap().entries.map((e) => Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: GestureDetector(
-                                onTap: () => launchUrl(Uri.parse(e.value)),
-                                child: typeList.length > e.key && typeList[e.key] == 'image'
-                                    ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Image.network(ApiService.proxyImageUrl(e.value), height: 120, fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)))
-                                    : Row(children: [
-                                        const Icon(Icons.play_circle, color: AppColors.primary),
-                                        const SizedBox(width: 6),
-                                        Text('فيديو ${e.key + 1}',
-                                            style: const TextStyle(color: AppColors.primary, fontSize: 12)),
-                                      ]),
-                              ),
-                            )).toList(),
+                    Builder(builder: (innerCtx) {
+                      final notesList = List<Map<String, dynamic>>.from(this._notes);
+                      final team = notesList.where((n) => !_isTaskNoteClientVisible(n['isVisibleToClient'])).toList();
+                      final client = notesList.where((n) => _isTaskNoteClientVisible(n['isVisibleToClient'])).toList();
+                      final taskLevelNotes = notes;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '💬 محادثة الفريق (فني ↔ مشرف)',
+                            style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w800, fontSize: 14),
+                          ),
                           const SizedBox(height: 4),
                           Text(
-                            note['createdAt']?.toString().substring(0, 16) ?? '',
-                            style: const TextStyle(color: AppColors.muted, fontSize: 10),
+                            'رسائل داخلية — لا تظهر في تطبيق العميل',
+                            style: TextStyle(color: AppColors.muted, fontSize: 11),
                           ),
-                        ]),
+                          const SizedBox(height: 10),
+                          if (team.isEmpty)
+                            Text('لا رسائل بعد', style: TextStyle(color: AppColors.muted, fontSize: 12))
+                          else
+                            ...team.map((n) => _buildTaskNoteBubble(n, id, context)),
+                          const SizedBox(height: 20),
+                          Text(
+                            '👤 ملاحظات تظهر للعميل',
+                            style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w800, fontSize: 14),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'فعّل «ظاهر للعميل» عند الإضافة. تظهر هنا بالترتيب مع اسم الكاتب والتاريخ.',
+                            style: TextStyle(color: AppColors.muted, fontSize: 11),
+                          ),
+                          const SizedBox(height: 10),
+                          if (taskLevelNotes != null && taskLevelNotes.isNotEmpty)
+                            TaskLegacyNoteBox(title: 'ملاحظة مع المهمة (عند الإنشاء)', content: taskLevelNotes),
+                          if (client.isEmpty && (taskLevelNotes == null || taskLevelNotes.isEmpty))
+                            Text('لا ملاحظات للعميل بعد', style: TextStyle(color: AppColors.muted, fontSize: 12))
+                          else
+                            ...client.map((n) => _buildTaskNoteBubble(n, id, context)),
+                        ],
                       );
-                    }).toList(),
+                    }),
                 ],
               );
             }),
@@ -1680,6 +1779,89 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   }
 
   // ── UI Helpers ────────────────────────────────────────────────────────────
+
+  Widget _buildTaskNoteBubble(Map<String, dynamic> noteRow, int taskId, BuildContext context) {
+    final noteId = noteRow['id'] is int ? noteRow['id'] as int : int.tryParse(noteRow['id'].toString()) ?? 0;
+    final urls = noteRow['mediaUrls'];
+    final types = noteRow['mediaTypes'];
+    final mediaList = urls is List ? urls.cast<String>() : <String>[];
+    final typeList = types is List ? types.cast<String>() : <String>[];
+    final role = noteRow['authorRole']?.toString();
+    final tech = _isTechnicianRole(role);
+    final name = noteRow['authorName']?.toString().trim().isNotEmpty == true
+        ? noteRow['authorName'].toString()
+        : 'مستخدم';
+
+    Widget? mediaFooter;
+    if (mediaList.isNotEmpty) {
+      mediaFooter = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: mediaList.asMap().entries.map((e) {
+          final url = e.value;
+          final isImage = typeList.length > e.key && typeList[e.key] == 'image';
+          return Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: GestureDetector(
+              onTap: () => launchUrl(Uri.parse(url)),
+              child: isImage
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        ApiService.proxyImageUrl(url),
+                        height: 120,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
+                      ),
+                    )
+                  : Row(
+                      children: [
+                        const Icon(Icons.play_circle, color: AppColors.primary),
+                        const SizedBox(width: 6),
+                        Text('فيديو ${e.key + 1}', style: const TextStyle(color: AppColors.primary, fontSize: 12)),
+                      ],
+                    ),
+            ),
+          );
+        }).toList(),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TaskChatBubble(
+            authorName: name,
+            authorRole: role,
+            dateTimeText: formatTaskChatDateTime(noteRow['createdAt']?.toString()),
+            body: noteRow['content']?.toString() ?? '',
+            alignEnd: tech,
+            accent: tech ? const Color(0xFF6A1B9A) : const Color(0xFF00695C),
+            footer: mediaFooter,
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Icon(
+                  _isTaskNoteClientVisible(noteRow['isVisibleToClient']) ? Icons.visibility : Icons.visibility_off,
+                  size: 18,
+                  color: _isTaskNoteClientVisible(noteRow['isVisibleToClient']) ? Colors.green : AppColors.muted,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                onPressed: () => _deleteNote(noteId, taskId),
+                tooltip: 'حذف',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _sectionCard({required String label, required List<Widget> children, Widget? trailing}) {
     return Container(

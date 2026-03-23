@@ -8,6 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import '../screens/admin/admin_secretary_screen.dart';
 
 /// مفتاح حفظ عدد الشارة (يُستخدم أيضاً من معالج الخلفية)
 const String _kBadgePrefsKey = 'app_icon_badge_count';
@@ -457,6 +458,12 @@ class NotificationService {
           break;
         case 'crm':
           nav.pushNamed('/admin', arguments: 'crm');
+          break;
+        case 'appointment':
+        case 'secretary':
+          nav.push(MaterialPageRoute<void>(
+            builder: (ctx) => const AdminSecretaryScreen(),
+          ));
           break;
         default:
           if (refId != null) {

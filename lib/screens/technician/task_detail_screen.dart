@@ -3,12 +3,14 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
 import '../../widgets/task_chat_bubble.dart';
+import '../../providers/auth_provider.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // شاشة تفاصيل المهمة - مطابقة للويب
@@ -915,6 +917,60 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     );
   }
 
+  bool _canShowDeferTask(String status, BuildContext context) {
+    if (status == 'completed' || status == 'cancelled') return false;
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      return auth.canAccessAdmin;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  DateTime? _parseTaskDateTimeLocal(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return DateTime.parse(raw).toLocal();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _openDeferTaskSheet(Map<String, dynamic> task) {
+    final id = task['id'];
+    final tid = id is int ? id : int.tryParse(id.toString()) ?? 0;
+    if (tid <= 0) return;
+
+    final fromSched = _parseTaskDateTimeLocal(task['scheduledAt']?.toString());
+    final fromEst = _parseTaskDateTimeLocal(task['estimatedArrivalAt']?.toString());
+    final initialDay = fromSched ?? fromEst ?? DateTime.now();
+    final initialTime = fromEst != null
+        ? TimeOfDay(hour: fromEst.hour, minute: fromEst.minute)
+        : (fromSched != null
+            ? TimeOfDay(hour: fromSched.hour, minute: fromSched.minute)
+            : TimeOfDay.now());
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppThemeDecorations.cardColor(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _DeferTaskScheduleSheet(
+        taskId: tid,
+        initialDate: initialDay,
+        initialTime: initialTime,
+        onSuccess: () async {
+          if (!mounted) return;
+          await _loadFullTask();
+          widget.onTaskUpdated?.call();
+          _showSnack('تم ترحيل موعد المهمة وإشعار الفني', Colors.green);
+        },
+      ),
+    );
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -992,6 +1048,12 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
             ],
           ),
           actions: [
+            if (_canShowDeferTask(status, context))
+              IconButton(
+                icon: const Icon(Icons.event_repeat, color: AppColors.primary),
+                tooltip: 'ترحيل المهمة',
+                onPressed: () => _openDeferTaskSheet(task),
+              ),
             Container(
               margin: const EdgeInsets.only(left: 16, right: 4),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -1159,6 +1221,28 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     ),
                   ),
                 ]),
+                if (_canShowDeferTask(status, context)) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _openDeferTaskSheet(task),
+                      icon: const Icon(Icons.event_repeat, color: AppColors.primary, size: 20),
+                      label: const Text(
+                        'ترحيل المهمة (موعد جديد)',
+                        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.primary),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const Text(
+                    'للمشرفين والمسؤولين: عند عدم إنجاز المهمة في اليوم المحدد، حدّد تاريخاً ووقتاً جديدين للفني.',
+                    style: TextStyle(color: AppColors.muted, fontSize: 11),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 Row(children: [
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1939,6 +2023,161 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                   color: selected ? Colors.black : AppColors.muted,
                   fontWeight: FontWeight.bold,
                   fontSize: 14)),
+        ),
+      ),
+    );
+  }
+}
+
+/// نافذة ترحيل موعد المهمة (تاريخ + وقت) — للمشرفين فقط من الشاشة الأم.
+class _DeferTaskScheduleSheet extends StatefulWidget {
+  final int taskId;
+  final DateTime initialDate;
+  final TimeOfDay initialTime;
+  final Future<void> Function() onSuccess;
+
+  const _DeferTaskScheduleSheet({
+    required this.taskId,
+    required this.initialDate,
+    required this.initialTime,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_DeferTaskScheduleSheet> createState() => _DeferTaskScheduleSheetState();
+}
+
+class _DeferTaskScheduleSheetState extends State<_DeferTaskScheduleSheet> {
+  late DateTime _day;
+  late TimeOfDay _time;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _day = widget.initialDate;
+    _time = widget.initialTime;
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      final schedIso = DateTime(_day.year, _day.month, _day.day).toIso8601String();
+      final estIso = DateTime(
+        _day.year,
+        _day.month,
+        _day.day,
+        _time.hour,
+        _time.minute,
+      ).toIso8601String();
+      await ApiService.mutate('tasks.update', input: {
+        'id': widget.taskId,
+        'scheduledAt': schedIso,
+        'estimatedArrivalAt': estIso,
+      });
+      if (!mounted) return;
+      Navigator.pop(context);
+      await widget.onSuccess();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل الترحيل: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'ترحيل المهمة',
+                style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'حدد تاريخاً جديداً ووقت الوصول المتوقع للفني.',
+                style: TextStyle(color: AppColors.muted, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('تاريخ الزيارة', style: TextStyle(color: AppColors.text)),
+                subtitle: Text(
+                  '${_day.year}/${_day.month}/${_day.day}',
+                  style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
+                ),
+                trailing: const Icon(Icons.calendar_month, color: AppColors.primary),
+                onTap: () async {
+                  final d = await showDatePicker(
+                    context: context,
+                    initialDate: _day,
+                    firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                  );
+                  if (d != null) setState(() => _day = d);
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('وقت الوصول المتوقع', style: TextStyle(color: AppColors.text)),
+                subtitle: Text(
+                  _time.format(context),
+                  style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
+                ),
+                trailing: const Icon(Icons.access_time, color: AppColors.primary),
+                onTap: () async {
+                  final t = await showTimePicker(
+                    context: context,
+                    initialTime: _time,
+                  );
+                  if (t != null) setState(() => _time = t);
+                },
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _saving ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: _saving
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                      )
+                    : const Text('تأكيد الترحيل', style: TextStyle(fontWeight: FontWeight.w900)),
+              ),
+            ],
+          ),
         ),
       ),
     );

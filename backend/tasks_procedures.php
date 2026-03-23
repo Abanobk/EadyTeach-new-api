@@ -3,6 +3,97 @@
  * Tasks, TaskNotes, TechnicianLocation, Quotations, Orders procedures
  */
 
+/**
+ * عمود آخر إشعار تأخير — يُستخدم لمنع تكرار الإشعارات في نفس الدقيقة.
+ */
+function _ensureTaskOverdueNotifyColumn() {
+    global $db;
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    try {
+        $db->exec('ALTER TABLE tasks ADD COLUMN overdue_last_notified_at DATETIME NULL DEFAULT NULL');
+    } catch (\Exception $e) {
+        // العمود موجود مسبقاً
+    }
+    $done = true;
+}
+
+/**
+ * مهام تجاوزت الموعد (لم تُنجز / لم تُلغَ) مع فني معيّن — تذكير الفني والمشرفين بفاصل زمني.
+ * يُستدعى من task_overdue_cron.php عبر cron كل 15–30 دقيقة.
+ *
+ * @param int $intervalMinutes أقل فاصل بين تذكيرين لنفس المهمة (افتراضي 90 دقيقة)
+ * @return array{sent:int,tasks:int}
+ */
+function tasks_runOverdueReminders($intervalMinutes = 90) {
+    global $db;
+    $intervalMinutes = max(15, min(1440, (int) $intervalMinutes));
+
+    _ensureTaskOverdueNotifyColumn();
+    if (!function_exists('_notifyUser')) {
+        require_once __DIR__ . '/notifications_procedures.php';
+    }
+    _ensureNotificationsSchema();
+
+    // موعد نهائي: estimated_arrival أولاً؛ وإلا scheduled_at (يوم كامل إن كان الوقت 00:00:00، وإلا مقارنة فورية)
+    $sql = "
+        SELECT id, title, technician_id, scheduled_at, estimated_arrival_at
+        FROM tasks
+        WHERE status NOT IN ('completed', 'cancelled')
+          AND technician_id IS NOT NULL
+          AND (
+            (estimated_arrival_at IS NOT NULL AND estimated_arrival_at < NOW())
+            OR (
+              estimated_arrival_at IS NULL
+              AND scheduled_at IS NOT NULL
+              AND (
+                (TIME(scheduled_at) <> '00:00:00' AND scheduled_at < NOW())
+                OR (TIME(scheduled_at) = '00:00:00' AND DATE(scheduled_at) < CURDATE())
+              )
+            )
+          )
+          AND (
+            overdue_last_notified_at IS NULL
+            OR overdue_last_notified_at < DATE_SUB(NOW(), INTERVAL " . (int) $intervalMinutes . " MINUTE)
+          )
+    ";
+
+    $rows = $db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    $sent = 0;
+    foreach ($rows as $r) {
+        $tid = (int) $r['id'];
+        $title = $r['title'] ?? 'مهمة';
+        $techId = (int) $r['technician_id'];
+        try {
+            _notifyUser(
+                $techId,
+                'مهمة متأخرة',
+                "تجاوزت المهمة \"{$title}\" الموعد المحدد. يرجى الإنجاز أو طلب ترحيل الموعد من المشرف.",
+                'task',
+                $tid,
+                'task',
+                ['reason' => 'task_overdue']
+            );
+            _notifyAdminsAndSupervisors(
+                'مهمة متأخرة',
+                "المهمة \"{$title}\" (#{$tid}) تجاوزت الموعد ولم تُنجَز بعد. يرجى المتابعة أو الترحيل.",
+                'task',
+                $tid,
+                'task',
+                ['reason' => 'task_overdue']
+            );
+            $db->prepare('UPDATE tasks SET overdue_last_notified_at = NOW() WHERE id = ?')->execute([$tid]);
+            $sent++;
+        } catch (\Exception $e) {
+            error_log('tasks_runOverdueReminders: ' . $e->getMessage());
+        }
+    }
+
+    return ['sent' => $sent, 'tasks' => count($rows)];
+}
+
 // ─── tasks.list ────────────────────────────────────────────────
 function tasks_list($ctx) {
     global $db;
@@ -246,8 +337,8 @@ function tasks_update($input, $ctx) {
     $id = (int)($input['id'] ?? 0);
     if (!$id) throw new Exception('Task ID required');
 
-    // Check previous status before updating
-    $prevStmt = $db->prepare('SELECT status, technician_id, amount, title FROM tasks WHERE id = ?');
+    // Check previous status before updating (نحتاج مواعيد سابقة لمقارنة الترحيل)
+    $prevStmt = $db->prepare('SELECT status, technician_id, amount, title, scheduled_at, estimated_arrival_at FROM tasks WHERE id = ?');
     $prevStmt->execute([$id]);
     $prevTask = $prevStmt->fetch();
     $prevStatus = $prevTask ? $prevTask['status'] : null;
@@ -269,7 +360,56 @@ function tasks_update($input, $ctx) {
     if (!empty($fields)) {
         $params[] = $id;
         $db->prepare('UPDATE tasks SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+        if (array_key_exists('status', $input)) {
+            $st = (string) ($input['status'] ?? '');
+            if ($st === 'completed' || $st === 'cancelled') {
+                try {
+                    _ensureTaskOverdueNotifyColumn();
+                    $db->prepare('UPDATE tasks SET overdue_last_notified_at = NULL WHERE id = ?')->execute([$id]);
+                } catch (\Exception $e) { /* ignore */ }
+            }
+        }
     }
+
+    // إشعار الفني عند تغيير تاريخ/وقت المهمة (ترحيل)
+    try {
+        if ($prevTask && !empty($prevTask['technician_id'])) {
+            $techId = (int)$prevTask['technician_id'];
+            $taskTitle = $prevTask['title'] ?? 'مهمة';
+            $schedChanged = false;
+            $estChanged = false;
+            if (array_key_exists('scheduledAt', $input)) {
+                $tOld = !empty($prevTask['scheduled_at']) ? strtotime((string)$prevTask['scheduled_at']) : null;
+                $tNew = ($input['scheduledAt'] !== null && $input['scheduledAt'] !== '')
+                    ? strtotime((string)$input['scheduledAt']) : null;
+                if ($tNew !== false && $tNew !== null && $tOld !== $tNew) {
+                    $schedChanged = true;
+                }
+            }
+            if (array_key_exists('estimatedArrivalAt', $input)) {
+                $tOld = !empty($prevTask['estimated_arrival_at']) ? strtotime((string)$prevTask['estimated_arrival_at']) : null;
+                $tNew = ($input['estimatedArrivalAt'] !== null && $input['estimatedArrivalAt'] !== '')
+                    ? strtotime((string)$input['estimatedArrivalAt']) : null;
+                if ($tNew !== false && $tNew !== null && $tOld !== $tNew) {
+                    $estChanged = true;
+                }
+            }
+            if ($schedChanged || $estChanged) {
+                _notifyUser(
+                    $techId,
+                    'تم ترحيل موعد المهمة',
+                    "تم تحديد موعد جديد لمهمة: {$taskTitle}. راجع التفاصيل في التطبيق.",
+                    'task',
+                    $id,
+                    'task'
+                );
+                try {
+                    _ensureTaskOverdueNotifyColumn();
+                    $db->prepare('UPDATE tasks SET overdue_last_notified_at = NULL WHERE id = ?')->execute([$id]);
+                } catch (\Exception $e) { /* ignore */ }
+            }
+        }
+    } catch (\Exception $e) { /* ignore */ }
 
     if (isset($input['items']) && is_array($input['items'])) {
         $db->prepare('DELETE FROM task_items WHERE task_id = ?')->execute([$id]);

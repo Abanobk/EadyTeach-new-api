@@ -408,12 +408,27 @@ function formatProduct(array $row, ?array $ctx = null): array {
         'types'         => $types,
         'sku'           => $row['sku'] ?? null,
         'serialNumber'  => $row['serial_number'] ?? null,
+        'partNumber'    => $row['part_number'] ?? null,
         'discountPercent' => $appliedPercent,
         'discountAmount'  => $appliedAmount,
         'discountSource'  => $discountSource,
         'discountMinStock'=> $discountMinStock,
         'discountWaitingMessage' => $waitingMessage,
     ];
+}
+
+/** يضيف عمود part_number لجدول المنتجات مرة واحدة (للبارت نامبر على مستوى المنتج). */
+function _ensureProductPartNumberColumn(PDO $db): void {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    try {
+        $db->exec('ALTER TABLE products ADD COLUMN part_number VARCHAR(191) NULL DEFAULT NULL');
+    } catch (\Exception $e) {
+        // العمود موجود مسبقاً أو خطأ غير حرج
+    }
+    $done = true;
 }
 
 // ─── Router ────────────────────────────────────────────────────
@@ -653,6 +668,7 @@ try {
 
         // ── Products ───────────────────────────────────────────
         case 'products.list':
+            _ensureProductPartNumberColumn($db);
             $catSel = _hasCategoryDiscountColumns()
                 ? ', c.discount_percent AS cat_discount_percent, c.discount_amount AS cat_discount_amount'
                 : '';
@@ -666,9 +682,9 @@ try {
                 $params[] = (int)$input['categoryId'];
             }
             if (!empty($input['search'])) {
-                $sql .= ' AND (p.name LIKE ? OR p.name_ar LIKE ? OR p.serial_number LIKE ? OR p.sku LIKE ?)';
+                $sql .= ' AND (p.name LIKE ? OR p.name_ar LIKE ? OR p.serial_number LIKE ? OR p.sku LIKE ? OR p.part_number LIKE ?)';
                 $s = '%' . $input['search'] . '%';
-                $params = array_merge($params, [$s, $s, $s, $s]);
+                $params = array_merge($params, [$s, $s, $s, $s, $s]);
             }
             $sql .= ' ORDER BY p.id DESC';
             $stmt = $db->prepare($sql);
@@ -682,6 +698,7 @@ try {
             break;
 
         case 'products.listAdmin':
+            _ensureProductPartNumberColumn($db);
             $catSel = _hasCategoryDiscountColumns()
                 ? ', c.discount_percent AS cat_discount_percent, c.discount_amount AS cat_discount_amount'
                 : '';
@@ -695,9 +712,9 @@ try {
                 $params[] = (int)$input['categoryId'];
             }
             if (!empty($input['search'])) {
-                $where[] = '(p.name LIKE ? OR p.name_ar LIKE ? OR p.serial_number LIKE ? OR p.sku LIKE ?)';
+                $where[] = '(p.name LIKE ? OR p.name_ar LIKE ? OR p.serial_number LIKE ? OR p.sku LIKE ? OR p.part_number LIKE ?)';
                 $s = '%' . $input['search'] . '%';
-                $params = array_merge($params, [$s, $s, $s, $s]);
+                $params = array_merge($params, [$s, $s, $s, $s, $s]);
             }
             if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
             $sql .= ' ORDER BY p.id DESC';
@@ -712,6 +729,7 @@ try {
             break;
 
         case 'products.create':
+            _ensureProductPartNumberColumn($db);
             $name     = $input['name'] ?? '';
             $nameAr   = $input['nameAr'] ?? null;
             $desc     = $input['description'] ?? null;
@@ -730,17 +748,20 @@ try {
             $types    = isset($input['types']) ? json_encode($input['types']) : null;
             $sku      = $input['sku'] ?? null;
             $serial   = $input['serialNumber'] ?? null;
+            $partNumRaw = isset($input['partNumber']) ? trim((string) $input['partNumber']) : '';
+            $partNumber = $partNumRaw === '' ? null : $partNumRaw;
 
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent DECIMAL(5,2) DEFAULT 0'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(12,2) DEFAULT 0'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_min_stock INT DEFAULT 0'); } catch (Exception $e) {}
 
-            $stmt = $db->prepare('INSERT INTO products (name, name_ar, description, description_ar, price, original_price, stock, is_featured, category_id, main_image_url, images, variants, types, sku, serial_number, discount_percent, discount_amount, discount_min_stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial, $discountPercent, $discountAmount, $discountMinStock]);
+            $stmt = $db->prepare('INSERT INTO products (name, name_ar, description, description_ar, price, original_price, stock, is_featured, category_id, main_image_url, images, variants, types, sku, serial_number, part_number, discount_percent, discount_amount, discount_min_stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial, $partNumber, $discountPercent, $discountAmount, $discountMinStock]);
             $result = ['id' => (int) $db->lastInsertId()];
             break;
 
         case 'products.update':
+            _ensureProductPartNumberColumn($db);
             $id       = (int) ($input['id'] ?? 0);
             $name     = $input['name'] ?? '';
             $nameAr   = $input['nameAr'] ?? null;
@@ -760,13 +781,15 @@ try {
             $types    = isset($input['types']) ? json_encode($input['types']) : null;
             $sku      = $input['sku'] ?? null;
             $serial   = $input['serialNumber'] ?? null;
+            $partNumRaw = isset($input['partNumber']) ? trim((string) $input['partNumber']) : '';
+            $partNumber = $partNumRaw === '' ? null : $partNumRaw;
 
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent DECIMAL(5,2) DEFAULT 0'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(12,2) DEFAULT 0'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_min_stock INT DEFAULT 0'); } catch (Exception $e) {}
 
-            $stmt = $db->prepare('UPDATE products SET name = ?, name_ar = ?, description = ?, description_ar = ?, price = ?, original_price = ?, stock = ?, is_featured = ?, category_id = ?, main_image_url = ?, images = ?, variants = ?, types = ?, sku = ?, serial_number = ?, discount_percent = ?, discount_amount = ?, discount_min_stock = ? WHERE id = ?');
-            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial, $discountPercent, $discountAmount, $discountMinStock, $id]);
+            $stmt = $db->prepare('UPDATE products SET name = ?, name_ar = ?, description = ?, description_ar = ?, price = ?, original_price = ?, stock = ?, is_featured = ?, category_id = ?, main_image_url = ?, images = ?, variants = ?, types = ?, sku = ?, serial_number = ?, part_number = ?, discount_percent = ?, discount_amount = ?, discount_min_stock = ? WHERE id = ?');
+            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial, $partNumber, $discountPercent, $discountAmount, $discountMinStock, $id]);
             $result = ['success' => true];
             break;
 

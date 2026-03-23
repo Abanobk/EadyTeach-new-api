@@ -58,8 +58,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
       if (_searchQuery.isNotEmpty) {
         final name = (p['name'] ?? '').toString().toLowerCase();
         final nameAr = (p['nameAr'] ?? '').toString().toLowerCase();
+        final part = (p['partNumber'] ?? '').toString().toLowerCase();
         final q = _searchQuery.toLowerCase();
-        if (!name.contains(q) && !nameAr.contains(q)) return false;
+        if (!name.contains(q) && !nameAr.contains(q) && !part.contains(q)) return false;
       }
       if (_selectedCategoryFilter != null) {
         if (p['categoryId'] != _selectedCategoryFilter) return false;
@@ -140,6 +141,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     final nameArCtrl = TextEditingController(text: product?['nameAr'] ?? '');
     final priceCtrl = TextEditingController(text: product?['price']?.toString() ?? '');
     final stockCtrl = TextEditingController(text: product?['stock']?.toString() ?? '0');
+    final partNumberCtrl = TextEditingController(text: product?['partNumber']?.toString() ?? '');
     final discountPercentCtrl = TextEditingController(
       text: (product?['discountPercent'] ?? '').toString(),
     );
@@ -224,6 +226,14 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   keyboardType: TextInputType.number,
                   style: const TextStyle(color: AppColors.text),
                   decoration: _inputDecoration(hint: 'مثال: 10'),
+                ),
+                const SizedBox(height: 12),
+                const Text('رقم البارت (Part Number)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: partNumberCtrl,
+                  style: const TextStyle(color: AppColors.text),
+                  decoration: _inputDecoration(hint: 'مثال: PN-8821-A (اختياري)'),
                 ),
                 const SizedBox(height: 16),
                 const Divider(color: AppColors.border),
@@ -822,6 +832,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           if (selectedCategoryId != null) 'categoryId': selectedCategoryId,
                           if (variants.isNotEmpty) 'variants': variants,
                           if (types.isNotEmpty) 'types': types,
+                          'partNumber': partNumberCtrl.text.trim(),
                         };
                         final discountPct = double.tryParse(discountPercentCtrl.text.trim());
                         final discountAmt = double.tryParse(discountAmountCtrl.text.trim());
@@ -1180,6 +1191,13 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   ),
                   if (catName.isNotEmpty)
                     Text(catName, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (p['partNumber'] != null && p['partNumber'].toString().isNotEmpty)
+                    Text(
+                      'بارت: ${p['partNumber']}',
+                      style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   const SizedBox(height: 4),
                   Text(
                     '${price.toStringAsFixed(0)} ج.م',
@@ -1315,6 +1333,13 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                 const SizedBox(height: 3),
                 if (catName.isNotEmpty)
                   Text(catName, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+                if (p['partNumber'] != null && p['partNumber'].toString().isNotEmpty)
+                  Text(
+                    'بارت: ${p['partNumber']}',
+                    style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
               ],
             ),
           ),

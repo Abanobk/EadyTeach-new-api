@@ -326,7 +326,9 @@ function tasks_create($input, $ctx) {
     if ($technicianId) {
         try {
             _notifyUser($technicianId, 'مهمة جديدة', "تم تعيينك لمهمة: {$title}", 'task', $taskId, 'task');
-        } catch (\Exception $e) { /* ignore notification errors */ }
+        } catch (\Throwable $e) {
+            error_log('[FCM] tasks.create notify technician: ' . $e->getMessage());
+        }
     }
 
     // إشعار الإدارة/المشرفين/الموظفين بأي مهمة جديدة.
@@ -336,7 +338,9 @@ function tasks_create($input, $ctx) {
             ? "تم إنشاء المهمة «{$title}» وتم تعيين فني لها."
             : "تم إنشاء المهمة «{$title}» وهي في انتظار تعيين فني.";
         _notifyAdminsAndSupervisors('مهمة جديدة في النظام', $adminBody, 'task', $taskId, 'task');
-    } catch (\Exception $e) { /* ignore notification errors */ }
+    } catch (\Throwable $e) {
+        error_log('[FCM] tasks.create notify admins: ' . $e->getMessage());
+    }
 
     return ['id' => $taskId];
 }
@@ -1913,7 +1917,9 @@ function appointments_create($input, $ctx) {
             ? "موعد «{$title}» — {$dateLabel} (معيّن لموظف)."
             : "موعد «{$title}» — {$dateLabel}.";
         _notifyAdminsAndSupervisors('موعد جديد في السكرتارية', $adminBody, 'appointment', $newId, 'appointment');
-    } catch (\Exception $e) { /* ignore notification errors */ }
+    } catch (\Throwable $e) {
+        error_log('[FCM] appointments.create notify: ' . $e->getMessage());
+    }
 
     return ['success' => true, 'id' => $newId];
 }

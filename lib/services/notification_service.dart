@@ -85,7 +85,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     }
     if (body.isEmpty) return;
 
-    final notifId = message.hashCode.abs() % 2147483647;
+    final notifId = (DateTime.now().microsecondsSinceEpoch % 2147483647).abs();
 
     await flutterLocalNotificationsPlugin.show(
       notifId,
@@ -337,7 +337,8 @@ class NotificationService {
     // Increment badge count
     await incrementBadge();
 
-    final notifId = message.hashCode.abs() % 2147483647;
+    // معرّف فريد — استخدام hashCode فقط كان يُكرر ID لرسائل متشابهة فيُستبدل الإشعار بصمت على أندرويد
+    final notifId = (DateTime.now().microsecondsSinceEpoch % 2147483647).abs();
 
     await _localNotifications.show(
       notifId,

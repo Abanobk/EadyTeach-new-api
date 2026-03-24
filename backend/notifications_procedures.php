@@ -280,7 +280,9 @@ function _notifyUser($userId, $title, $body, $type = 'general', $refId = null, $
         if ($result === 'unregistered') {
             $db->prepare('DELETE FROM fcm_tokens WHERE token = ?')->execute([$t['token']]);
             error_log('[FCM] removed unregistered token user_id=' . (int)$userId . ' platform=' . $plat);
-        } elseif ($result !== true) {
+        } elseif ($result === true) {
+            error_log('[FCM] notify push ok user_id=' . (int)$userId . ' platform=' . $plat);
+        } else {
             error_log('[FCM] notify send failed user_id=' . (int)$userId . ' platform=' . $plat);
         }
     }

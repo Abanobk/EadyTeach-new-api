@@ -1,11 +1,14 @@
-# نشر الويب + اختياري Backend (عشان يروح router.php للسيرفر ويختفي 404)
-# Secrets: CF_SERVICE_TOKEN_ID, CF_SERVICE_TOKEN_SECRET, SERVER_SSH_KEY, WEB_DEPLOY_PATH
-# اختياري: CF_TUNNEL_HOST. لرفع الـ API: BACKEND_DEPLOY_PATH = المسار على السيرفر اللي فيه router.php (مثلاً مجلد الـ API)
+# نشر الويب + اختياري Backend
+# Secrets شائعة: SERVER_SSH_KEY, WEB_DEPLOY_PATH
+#
+# طريقتان للرفع:
+# 1) Cloudflare Access + Tunnel: CF_SERVICE_TOKEN_ID, CF_SERVICE_TOKEN_SECRET (+ اختياري CF_TUNNEL_HOST)
+# 2) SSH مباشر (لو السيرفر يقبل بورت 22 من الإنترنت): أضف DIRECT_SSH_HOST (+ اختياري SSH_DEPLOY_USER) — يتجاوز cloudflared ويحل مشاكل websocket bad handshake من CI
 name: Remote Update
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # إعادة تشغيل يدوي من تبويب Actions → Remote Update → Run workflow
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -25,41 +28,41 @@ jobs:
           set -e
           flutter --version
           flutter pub get
-          # --release صريح؛ --no-wasm-dry-run يتجنب فشل/تحذيرات wasm على بعض إصدارات stable على CI
           flutter build web --release --base-href "/app/" --no-wasm-dry-run
           [ -f build/web/index.html ] || { echo "::error::Build failed"; exit 1; }
 
-      - name: Install Cloudflared
+      - name: Install Cloudflared (للنشر عبر Tunnel فقط)
+        env:
+          DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
         run: |
           set -e
+          if [ -n "$DIRECT_SSH_HOST" ]; then
+            echo "Skipping cloudflared (DIRECT_SSH_HOST is set — direct SSH)."
+            exit 0
+          fi
           curl -fLsS -o cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared.deb
           cloudflared --version
 
-      - name: Deploy via Cloudflare Tunnel (SSH over tunnel)
+      - name: Deploy Web
         env:
           CF_TUNNEL_HOST: ${{ secrets.CF_TUNNEL_HOST }}
           CF_SERVICE_TOKEN_ID: ${{ secrets.CF_SERVICE_TOKEN_ID }}
           CF_SERVICE_TOKEN_SECRET: ${{ secrets.CF_SERVICE_TOKEN_SECRET }}
           SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
           WEB_DEPLOY_PATH: ${{ secrets.WEB_DEPLOY_PATH }}
+          DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
+          SSH_DEPLOY_USER: ${{ secrets.SSH_DEPLOY_USER }}
         run: |
           set -e
           DEPLOY_PATH="${WEB_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/app}"
-          CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
           SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6"
+          SSH_USER="${SSH_DEPLOY_USER:-root}"
 
-          if [ -z "$CF_SERVICE_TOKEN_ID" ] || [ -z "$CF_SERVICE_TOKEN_SECRET" ]; then
-            echo "::error::Add CF_SERVICE_TOKEN_ID and CF_SERVICE_TOKEN_SECRET in repo Secrets"
-            exit 1
-          fi
           if [ -z "$SERVER_SSH_KEY" ]; then
             echo "::error::Add SERVER_SSH_KEY in repo Secrets"
             exit 1
           fi
-
-          export TUNNEL_SERVICE_TOKEN_ID="$CF_SERVICE_TOKEN_ID"
-          export TUNNEL_SERVICE_TOKEN_SECRET="$CF_SERVICE_TOKEN_SECRET"
 
           mkdir -p ~/.ssh
           echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
@@ -68,14 +71,33 @@ jobs:
           echo "Creating archive..."
           tar czf /tmp/deploy.tar -C build web
 
-          # لازم -o "ProxyCommand=..." بين علامتي تنصيص؛ لو حطيناها في متغير $PROXY من غير اقتباس، الـ shell يقسّمها وscp يفسر "access" كملف محلي
-          upload_and_extract() {
-            echo "Uploading via Cloudflare Tunnel ($CF_HOST)..."
-            scp $SSH_OPTS -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ${CF_HOST}" /tmp/deploy.tar "root@${CF_HOST}:/tmp/deploy.tar"
-            echo "Extracting on server..."
-            ssh $SSH_OPTS -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ${CF_HOST}" "root@${CF_HOST}" \
-              "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed to $DEPLOY_PATH"
-          }
+          if [ -n "${DIRECT_SSH_HOST:-}" ]; then
+            TARGET="${SSH_USER}@${DIRECT_SSH_HOST}"
+            echo "::notice::Deploy via direct SSH → $TARGET"
+            upload_and_extract() {
+              echo "Uploading (scp)..."
+              scp $SSH_OPTS -i ~/.ssh/id_rsa /tmp/deploy.tar "${TARGET}:/tmp/deploy.tar"
+              echo "Extracting on server..."
+              ssh $SSH_OPTS -i ~/.ssh/id_rsa "${TARGET}" \
+                "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed to $DEPLOY_PATH"
+            }
+          else
+            CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
+            if [ -z "$CF_SERVICE_TOKEN_ID" ] || [ -z "$CF_SERVICE_TOKEN_SECRET" ]; then
+              echo "::error::Either set DIRECT_SSH_HOST (direct SSH) or CF_SERVICE_TOKEN_ID + CF_SERVICE_TOKEN_SECRET (Cloudflare tunnel)."
+              exit 1
+            fi
+            export TUNNEL_SERVICE_TOKEN_ID="$CF_SERVICE_TOKEN_ID"
+            export TUNNEL_SERVICE_TOKEN_SECRET="$CF_SERVICE_TOKEN_SECRET"
+            echo "::notice::Deploy via Cloudflare Access TCP → $CF_HOST"
+            upload_and_extract() {
+              echo "Uploading via Cloudflare Tunnel ($CF_HOST)..."
+              scp $SSH_OPTS -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ${CF_HOST}" /tmp/deploy.tar "root@${CF_HOST}:/tmp/deploy.tar"
+              echo "Extracting on server..."
+              ssh $SSH_OPTS -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ${CF_HOST}" "root@${CF_HOST}" \
+                "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed to $DEPLOY_PATH"
+            }
+          fi
 
           ok=0
           for attempt in 1 2 3; do
@@ -88,7 +110,12 @@ jobs:
             sleep 45
           done
           if [ "$ok" != 1 ]; then
-            echo "::error::Deploy failed after 3 attempts (tunnel/SSH timeout or auth). Check Cloudflare Access token + SERVER_SSH_KEY."
+            echo "::error::Deploy failed after 3 attempts."
+            if [ -n "${DIRECT_SSH_HOST:-}" ]; then
+              echo "::error::Check SERVER_SSH_KEY, DIRECT_SSH_HOST, firewall (port 22), and that this runner IP is allowed if you use allowlists."
+            else
+              echo "::error::Cloudflare: websocket bad handshake = Service Token أو سياسة Access. أنشئ Service Token جديد (Zero Trust → Access → Service Auth) واسمح به في تطبيق الـ SSH، ثم حدّث CF_SERVICE_TOKEN_* في GitHub. أو استخدم DIRECT_SSH_HOST لو السيرفر يقبل SSH مباشرة."
+            fi
             exit 1
           fi
 
@@ -99,26 +126,43 @@ jobs:
           CF_SERVICE_TOKEN_SECRET: ${{ secrets.CF_SERVICE_TOKEN_SECRET }}
           SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
           BACKEND_DEPLOY_PATH: ${{ secrets.BACKEND_DEPLOY_PATH }}
+          DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
+          SSH_DEPLOY_USER: ${{ secrets.SSH_DEPLOY_USER }}
         run: |
           if [ -z "$BACKEND_DEPLOY_PATH" ]; then
-            echo "Skipping backend deploy (BACKEND_DEPLOY_PATH not set). To fix 404: upload backend/ (especially router.php) to your API server or set this secret."
+            echo "Skipping backend deploy (BACKEND_DEPLOY_PATH not set)."
             exit 0
           fi
           set -e
-          CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
           SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6"
-          export TUNNEL_SERVICE_TOKEN_ID="$CF_SERVICE_TOKEN_ID"
-          export TUNNEL_SERVICE_TOKEN_SECRET="$CF_SERVICE_TOKEN_SECRET"
+          SSH_USER="${SSH_DEPLOY_USER:-root}"
           mkdir -p ~/.ssh
           echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           tar czf /tmp/backend.tar -C "$GITHUB_WORKSPACE" backend
+
+          if [ -n "${DIRECT_SSH_HOST:-}" ]; then
+            TARGET="${SSH_USER}@${DIRECT_SSH_HOST}"
+            run_scp_ssh() {
+              scp $SSH_OPTS -i ~/.ssh/id_rsa /tmp/backend.tar "${TARGET}:/tmp/backend.tar" \
+                && ssh $SSH_OPTS -i ~/.ssh/id_rsa "${TARGET}" \
+                  "mkdir -p '$BACKEND_DEPLOY_PATH' && cd '$BACKEND_DEPLOY_PATH' && tar xzf /tmp/backend.tar --strip-components=1 && rm -f /tmp/backend.tar && echo Backend deployed"
+            }
+          else
+            CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
+            export TUNNEL_SERVICE_TOKEN_ID="$CF_SERVICE_TOKEN_ID"
+            export TUNNEL_SERVICE_TOKEN_SECRET="$CF_SERVICE_TOKEN_SECRET"
+            run_scp_ssh() {
+              scp $SSH_OPTS -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ${CF_HOST}" /tmp/backend.tar "root@${CF_HOST}:/tmp/backend.tar" \
+                && ssh $SSH_OPTS -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ${CF_HOST}" "root@${CF_HOST}" \
+                  "mkdir -p '$BACKEND_DEPLOY_PATH' && cd '$BACKEND_DEPLOY_PATH' && tar xzf /tmp/backend.tar --strip-components=1 && rm -f /tmp/backend.tar && echo Backend deployed"
+            }
+          fi
+
           ok=0
           for attempt in 1 2 3; do
             echo "::notice::Backend deploy attempt $attempt/3"
-            if scp $SSH_OPTS -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ${CF_HOST}" /tmp/backend.tar "root@${CF_HOST}:/tmp/backend.tar" \
-              && ssh $SSH_OPTS -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ${CF_HOST}" "root@${CF_HOST}" \
-                "mkdir -p '$BACKEND_DEPLOY_PATH' && cd '$BACKEND_DEPLOY_PATH' && tar xzf /tmp/backend.tar --strip-components=1 && rm -f /tmp/backend.tar && echo Backend deployed"; then
+            if run_scp_ssh; then
               ok=1
               break
             fi
@@ -129,7 +173,7 @@ jobs:
             echo "::error::Backend deploy failed after 3 attempts."
             exit 1
           fi
-          echo "Backend (router.php etc.) deployed to $BACKEND_DEPLOY_PATH"
+          echo "Backend deployed to $BACKEND_DEPLOY_PATH"
 
       - name: Done
         run: echo "✅ Deploy finished. Open https://api.easytecheg.net/app and hard refresh (Ctrl+F5)."

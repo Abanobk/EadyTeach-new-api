@@ -27,12 +27,54 @@
    - `SERVER_SSH_KEY` = المفتاح الخاص لـ SSH
    - `CF_SERVICE_TOKEN_ID` = من الـ Service Token
    - `CF_SERVICE_TOKEN_SECRET` = من الـ Service Token
-3. **لا تضف** `DIRECT_SSH_HOST` — لو موجود الـ workflow يستخدم SSH المباشر فقط.
+3. **لا تضف** `DIRECT_SSH_HOST` إلا لو عايز تتجاوز Cloudflare من GitHub Actions (انظر أدناه).
 
 بعد ضبط الـ Secrets: **push إلى main** → الـ workflow يبني ويرفع تلقائياً.
 افتح **https://api.easytecheg.net/app** واعمل Ctrl+F5.
 
 لو الـ workflow فشل، روح **Actions** → آخر run → شوف أي خطوة وقفت ورسالة الخطأ.
+
+### خطأ: `websocket: bad handshake` أو `Connection closed` مع Cloudflare
+
+ده **مش من كود المشروع**؛ يعني `cloudflared access tcp` ما قدرش يكمّل مصادقة **Cloudflare Access** من عند GitHub.
+
+**اعمل بالترتيب:**
+
+1. **Zero Trust → Access → Service Auth**  
+   أنشئ **Service Token** جديد (أو تأكد إن القديم لسه صالح)، وانسخ **Client ID** و **Client Secret**.
+
+2. **نفس التطبيق (Application)** اللي مربوط بـ `ssh-deploy.easytecheg.net`  
+   في **Policies** لازم يكون مسموح لـ **Service Auth** / الـ token ده (حسب واجهة Cloudflare: تضمين Service Token في السياسة أو تفعيله للتطبيق).
+
+3. **GitHub → Settings → Secrets → Actions**  
+   حدّث:
+   - `CF_SERVICE_TOKEN_ID` = Client ID  
+   - `CF_SERVICE_TOKEN_SECRET` = Client Secret  
+   (من غير مسافات زائدة أو أسطر فاضية في آخر القيمة.)
+
+4. **سياسات إضافية**  
+   لو عندك **IP Access rules** أو WAF يمنع عناوين **GitHub-hosted runners**، ممكن يفشل الاتصال — راجع السجلات في Cloudflare.
+
+5. **اختبار من جهازك** (بنفس الـ token):
+   ```bash
+   export TUNNEL_SERVICE_TOKEN_ID="..."   # نفس CF_SERVICE_TOKEN_ID
+   export TUNNEL_SERVICE_TOKEN_SECRET="..."
+   cloudflared access tcp --hostname ssh-deploy.easytecheg.net
+   ```
+   لو فشل هنا كمان، المشكلة 100% في Cloudflare/التوكن وليس في GitHub.
+
+### خيار سريع: SSH مباشر من GitHub Actions (بدون Tunnel)
+
+لو السيرفر عندك يقبل **SSH على بورت 22** من الإنترنت (أو من نطاق IPs معيّن تضيفه للفايروول):
+
+| Secret | القيمة |
+|--------|--------|
+| `DIRECT_SSH_HOST` | IP أو دومين السيرفر (مثلاً `123.45.67.89`) |
+| `SSH_DEPLOY_USER` | اختياري؛ الافتراضي `root` |
+| `SERVER_SSH_KEY` | نفس المفتاح الخاص |
+| `WEB_DEPLOY_PATH` | مسار مجلد الـ app |
+
+لما **`DIRECT_SSH_HOST` مضبوط**، الـ workflow **ما يستخدمش** `cloudflared` للرفع، وبالتالي يتفادى خطأ `websocket: bad handshake` من الـ tunnel.
 
 ---
 

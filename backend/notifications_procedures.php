@@ -224,9 +224,27 @@ function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
 
     if ($httpCode !== 200) {
         error_log("FCM send failed (HTTP $httpCode): $resp for token: " . substr($token, 0, 20) . '...');
+        if (_fcmResponseIsUnregistered($resp)) {
+            return 'unregistered';
+        }
         return false;
     }
     return true;
+}
+
+/** هل رد FCM يعني أن التوكن لم يعد صالحاً (يجب حذفه من fcm_tokens) */
+function _fcmResponseIsUnregistered($respJson) {
+    $d = json_decode($respJson, true);
+    if (!is_array($d)) {
+        return false;
+    }
+    foreach ($d['error']['details'] ?? [] as $item) {
+        if (is_array($item) && ($item['errorCode'] ?? '') === 'UNREGISTERED') {
+            return true;
+        }
+    }
+    $msg = strtolower((string)($d['error']['message'] ?? ''));
+    return str_contains($msg, 'notregistered') || str_contains($msg, 'requested entity was not found');
 }
 
 /**
@@ -258,8 +276,11 @@ function _notifyUser($userId, $title, $body, $type = 'general', $refId = null, $
         if ($plat === 'unknown' || $plat === '') {
             $plat = 'android';
         }
-        $ok = _sendFcmMessage($t['token'], $title, $body, $data, $plat);
-        if (!$ok) {
+        $result = _sendFcmMessage($t['token'], $title, $body, $data, $plat);
+        if ($result === 'unregistered') {
+            $db->prepare('DELETE FROM fcm_tokens WHERE token = ?')->execute([$t['token']]);
+            error_log('[FCM] removed unregistered token user_id=' . (int)$userId . ' platform=' . $plat);
+        } elseif ($result !== true) {
             error_log('[FCM] notify send failed user_id=' . (int)$userId . ' platform=' . $plat);
         }
     }
@@ -422,15 +443,32 @@ function notif_saveFcmToken($input, $ctx) {
 
     $userId = $ctx['userId'] ?? 0;
     $token = $input['fcmToken'] ?? $input['token'] ?? '';
-    $platform = $input['platform'] ?? 'web';
+    $platform = strtolower(trim((string)($input['platform'] ?? 'web')));
+    if ($platform === 'unknown' || $platform === '') {
+        $platform = 'android';
+    }
 
     if (empty($token) || $userId == 0) {
         return ['success' => false];
     }
 
-    $db->prepare("DELETE FROM fcm_tokens WHERE token = ?")->execute([$token]);
+    // إزالة أي صف بنفس التوكن (مستخدم آخر أو قديم)
+    $db->prepare('DELETE FROM fcm_tokens WHERE token = ?')->execute([$token]);
 
-    $stmt = $db->prepare("INSERT INTO fcm_tokens (user_id, token, platform) VALUES (?, ?, ?)");
+    // توكن واحد نشط لكل منصة لكل مستخدم — يمنع تراكم عشرات التوكنات الميتة (UNREGISTERED)
+    if (in_array($platform, ['android', 'ios'], true)) {
+        $db->prepare(
+            "DELETE FROM fcm_tokens WHERE user_id = ? AND LOWER(COALESCE(TRIM(platform), '')) IN ('android','ios','unknown','')"
+        )->execute([$userId]);
+    } elseif ($platform === 'web') {
+        $db->prepare(
+            "DELETE FROM fcm_tokens WHERE user_id = ? AND LOWER(COALESCE(TRIM(platform), '')) = 'web'"
+        )->execute([$userId]);
+    } else {
+        $db->prepare('DELETE FROM fcm_tokens WHERE user_id = ? AND platform = ?')->execute([$userId, $platform]);
+    }
+
+    $stmt = $db->prepare('INSERT INTO fcm_tokens (user_id, token, platform) VALUES (?, ?, ?)');
     $stmt->execute([$userId, $token, $platform]);
 
     return ['success' => true];

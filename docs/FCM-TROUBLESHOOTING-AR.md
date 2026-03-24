@@ -4,15 +4,18 @@
 
 بعد `git pull` قد **لا يوجد** ملف `backend/firebase-service-account.json` (ملف سري وغالباً غير مرفوع لـ Git). **بدون هذا الملف لن يُرسل أي Push من السيرفر.**
 
-على السيرفر:
+على السيرفر (عدّل المسار لو مختلف):
 
 ```bash
-ls -la /mnt/marichia/files/easytech-new-api/backend/firebase-service-account.json
-php /mnt/marichia/files/easytech-new-api/backend/fcm_cli_check.php
+cd /mnt/marichia/files/easytech-new-api/backend
+php fcm_cli_check.php
 ```
 
-- إذا `ls` قال **No such file** → ارفع الملف يدوياً من Firebase Console (Project settings → Service accounts → Generate new private key).
-- سكربت `fcm_cli_check.php` يتحقق من الملف + token Google + عدد صفوف `fcm_tokens`.
+- إذا فشل اتصال MySQL رغم أن الـ API شغال: عيّن نفس قيم `router.php` كمتغيرات بيئة ثم أعد التشغيل، مثلاً:
+  `EASYTECH_DB_HOST` `EASYTECH_DB_NAME` `EASYTECH_DB_USER` `EASYTECH_DB_PASS`
+- إذا **لا يوجد** `firebase-service-account.json` → ارفعه يدوياً من Firebase (Service accounts → Generate new private key)، ولا ترفعه لـ GitHub.
+
+**لو حابب حد يراجع معاك:** انسخ **كل مخرجات** `php fcm_cli_check.php` والصقها (من غير محتوى ملف JSON ولا كلمات مرور).
 
 ---
 

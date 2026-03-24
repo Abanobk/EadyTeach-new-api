@@ -4,22 +4,7 @@
 
 الـ workflow **Remote Update** يبني الويب ويرفعه على السيرفر مع كل **push إلى main**. تحتاج تضبط الـ Secrets مرة واحدة حسب الطريقة اللي عندك:
 
-### خيار أ: SSH مباشر (لو السيرفر يسمح بـ SSH من النت على بورت 22)
-
-من **GitHub → Repo → Settings → Secrets and variables → Actions** أضف:
-
-| Secret | القيمة |
-|--------|--------|
-| `WEB_DEPLOY_PATH` | مسار مجلد الـ app على السيرفر، مثلاً `/mnt/marichia/files/easytech-new-api/app` |
-| `DIRECT_SSH_HOST` | عنوان السيرفر (دومين مثل `easytecheg.net` أو IP) |
-| `SERVER_SSH_KEY` | المفتاح الخاص (Private Key) اللي بتتصل بيه بالسيرفر عبر SSH |
-
-لو مستخدمش `root`: أضف `SSH_DEPLOY_USER` (مثلاً `deploy`).  
-تأكد إن المفتاح **العام** (Public Key) اللي مقابل `SERVER_SSH_KEY` مضاف في السيرفر في `~/.ssh/authorized_keys` لليوزر اللي بتتصل بيه.
-
-بعدها أي **push إلى main** هيبني ويرفع تلقائياً (بدون رفع يدوي للملف الكبير).
-
-### خيار ب: عبر Cloudflare Tunnel (لو السيرفر وراء Tunnel فقط)
+### خيار أ: عبر Cloudflare Tunnel (الوضع الافتراضي)
 
 1. في **Cloudflare Zero Trust** أنشئ **Service Token** (Access → Service Auth → Create Service Token) واسمح له في سياسة الـ Application الخاصة بـ `ssh-deploy.easytecheg.net`.
 2. في **GitHub → Secrets** أضف:
@@ -27,7 +12,20 @@
    - `SERVER_SSH_KEY` = المفتاح الخاص لـ SSH
    - `CF_SERVICE_TOKEN_ID` = من الـ Service Token
    - `CF_SERVICE_TOKEN_SECRET` = من الـ Service Token
-3. **لا تضف** `DIRECT_SSH_HOST` إلا لو عايز تتجاوز Cloudflare من GitHub Actions (انظر أدناه).
+3. **لا تضف** `USE_DIRECT_SSH_FOR_CI` إلا لو تستخدم **خيار ب**. وجود `DIRECT_SSH_HOST` وحده **لا يفعّل** SSH من CI — يُستخدم **Tunnel** فقط.
+
+### خيار ب: SSH مباشر من GitHub Actions (نادر — لازم السيرفر يقبل SSH من الإنترنت على بورت 22)
+
+من **GitHub → Secrets** أضف **كل** التالي:
+
+| Secret | القيمة |
+|--------|--------|
+| `USE_DIRECT_SSH_FOR_CI` | **`1`** أو **`true`** (بدون هذا الـ Secret لن يُستخدم SSH المباشر حتى لو وُجد `DIRECT_SSH_HOST`) |
+| `DIRECT_SSH_HOST` | عنوان السيرفر (دومين أو IP **عام** يصل إليه GitHub) |
+| `WEB_DEPLOY_PATH` | مسار مجلد الـ app، مثلاً `/mnt/marichia/files/easytech-new-api/app` |
+| `SERVER_SSH_KEY` | المفتاح الخاص (Private Key) |
+
+لو مش `root`: أضف `SSH_DEPLOY_USER`. الـ Public Key المقابل لـ `SERVER_SSH_KEY` لازم يكون في `authorized_keys` على السيرفر.
 
 بعد ضبط الـ Secrets: **push إلى main** → الـ workflow يبني ويرفع تلقائياً.
 افتح **https://api.easytecheg.net/app** واعمل Ctrl+F5.
@@ -62,21 +60,6 @@
    cloudflared access tcp --hostname ssh-deploy.easytecheg.net
    ```
    لو فشل هنا كمان، المشكلة 100% في Cloudflare/التوكن وليس في GitHub.
-
-### خيار سريع: SSH مباشر من GitHub Actions (بدون Tunnel)
-
-لو السيرفر عندك يقبل **SSH على بورت 22** من الإنترنت (أو من نطاق IPs معيّن تضيفه للفايروول):
-
-| Secret | القيمة |
-|--------|--------|
-| `DIRECT_SSH_HOST` | IP أو دومين السيرفر (مثلاً `123.45.67.89`) |
-| `SSH_DEPLOY_USER` | اختياري؛ الافتراضي `root` |
-| `SERVER_SSH_KEY` | نفس المفتاح الخاص |
-| `WEB_DEPLOY_PATH` | مسار مجلد الـ app |
-
-لما **`DIRECT_SSH_HOST` مضبوط**، الـ workflow **ما يستخدمش** `cloudflared` للرفع، وبالتالي يتفادى خطأ `websocket: bad handshake` من الـ tunnel.
-
----
 
 ## التحقق من الاتصال والمسار (قبل أي تعديل)
 

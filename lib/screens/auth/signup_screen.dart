@@ -66,11 +66,21 @@ class _SignupScreenState extends State<SignupScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      final errMsg = e.toString();
+      var errMsg = e.toString();
+      if (errMsg.startsWith('Exception: ')) {
+        errMsg = errMsg.substring('Exception: '.length).trim();
+      }
       if (errMsg.contains('CONFLICT') || errMsg.contains('مسجل مسبقاً')) {
         setState(() => _error = 'هذا البريد الإلكتروني مسجل مسبقاً');
-      } else {
+      } else if (errMsg.contains('فشل الاتصال') ||
+          errMsg.contains('SocketException') ||
+          errMsg.toLowerCase().contains('network') ||
+          errMsg.contains('timeout')) {
         setState(() => _error = 'حدث خطأ. تأكد من الاتصال بالإنترنت.');
+      } else if (errMsg.isNotEmpty) {
+        setState(() => _error = errMsg);
+      } else {
+        setState(() => _error = 'حدث خطأ. حاول مرة أخرى.');
       }
     } finally {
       if (mounted) setState(() => _loading = false);

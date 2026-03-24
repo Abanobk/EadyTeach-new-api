@@ -594,6 +594,64 @@ try {
             ];
             break;
 
+        case 'auth.register':
+            // تسجيل عميل جديد من تطبيق الموبايل (شاشة إنشاء حساب)
+            $name     = trim((string)($input['name'] ?? ''));
+            $email    = trim((string)($input['email'] ?? ''));
+            $phone    = trim((string)($input['phone'] ?? ''));
+            $password = (string)($input['password'] ?? '');
+
+            if ($name === '' || mb_strlen($name) < 2) {
+                throw new Exception('الاسم مطلوب (حرفان على الأقل)');
+            }
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                throw new Exception('بريد إلكتروني غير صالح');
+            }
+            if (strlen($password) < 6) {
+                throw new Exception('كلمة المرور يجب ألا تقل عن 6 أحرف');
+            }
+
+            $emailNorm = strtolower($email);
+            $dup = $db->prepare('SELECT id FROM users WHERE LOWER(TRIM(email)) = ? LIMIT 1');
+            $dup->execute([$emailNorm]);
+            if ($dup->fetch()) {
+                throw new Exception('CONFLICT: هذا البريد الإلكتروني مسجل مسبقاً');
+            }
+
+            $hash = password_hash($password, PASSWORD_BCRYPT);
+            $phoneVal = $phone !== '' ? $phone : null;
+
+            $stmt = $db->prepare(
+                'INSERT INTO users (name, email, phone, address, location, role, password_hash) VALUES (?, ?, ?, NULL, NULL, ?, ?)'
+            );
+            $stmt->execute([$name, $emailNorm, $phoneVal, 'user', $hash]);
+            $newId = (int)$db->lastInsertId();
+
+            $sid = bin2hex(random_bytes(32));
+            $expires = date('Y-m-d H:i:s', strtotime('+30 days'));
+            $db->prepare('INSERT INTO sessions (session_id, user_id, expires_at) VALUES (?, ?, ?)')
+               ->execute([$sid, $newId, $expires]);
+
+            setcookie('app_session_id', $sid, [
+                'expires'  => strtotime($expires),
+                'path'     => '/',
+                'secure'   => true,
+                'httponly' => true,
+                'samesite' => 'None',
+            ]);
+
+            $result = [
+                'success' => true,
+                'user' => [
+                    'id'    => $newId,
+                    'name'  => $name,
+                    'email' => $emailNorm,
+                    'role'  => 'user',
+                ],
+                'sessionToken' => $sid,
+            ];
+            break;
+
         case 'auth.me':
             if (!$ctx['userId']) {
                 throw new Exception('UNAUTHORIZED');

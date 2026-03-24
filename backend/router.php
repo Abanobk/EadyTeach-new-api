@@ -185,6 +185,7 @@ require_once __DIR__ . '/accounting_procedures.php';
 require_once __DIR__ . '/permissions_procedures.php';
 require_once __DIR__ . '/notifications_procedures.php';
 require_once __DIR__ . '/users_procedures.php';
+require_once __DIR__ . '/reports_procedures.php';
 
 // ─── Helper functions ──────────────────────────────────────────
 
@@ -1175,6 +1176,28 @@ try {
         // ── Admin ──────────────────────────────────────────────
         case 'admin.getDashboardStats':
             $result = admin_getDashboardStats($input, $ctx);
+            break;
+
+        case 'reports.monthlySales':
+            $result = reports_monthlySales($input, $ctx);
+            break;
+        case 'reports.newCustomers':
+            $result = reports_newCustomers($input, $ctx);
+            break;
+        case 'reports.technicianPerformance':
+            $result = reports_technicianPerformance($input, $ctx);
+            break;
+        case 'reports.topProducts':
+            $result = reports_topProducts($input, $ctx);
+            break;
+        case 'reports.customerSummary':
+            $result = reports_customerSummary($input, $ctx);
+            break;
+        case 'reports.customerAccounts':
+            $result = reports_customerAccounts($input, $ctx);
+            break;
+        case 'reports.customerRevenue':
+            $result = reports_customerRevenue($input, $ctx);
             break;
 
         case 'admin.getAllOrders':

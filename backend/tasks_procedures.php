@@ -1534,13 +1534,20 @@ function admin_getDashboardStats($input, $ctx) {
         throw new Exception('UNAUTHORIZED');
     }
 
-    // Only allow admin/staff/supervisor accounts to access admin stats.
+    // السماح لمن لديه reports.view أو لدور مسؤول
     $roleStmt = $db->prepare("SELECT role FROM users WHERE id = ?");
     $roleStmt->execute([$userId]);
     $role = $roleStmt->fetchColumn();
     $roleLower = $role ? strtolower(trim((string)$role)) : '';
     $allowedRoles = ['admin', 'staff', 'supervisor'];
-    if (!in_array($roleLower, $allowedRoles, true)) {
+    $hasRole = in_array($roleLower, $allowedRoles, true);
+    $hasPerm = false;
+    if (!$hasRole) {
+        require_once __DIR__ . '/permissions_procedures.php';
+        $permsRes = perm_getUserPermissions(['userId' => $userId], $ctx);
+        $hasPerm = in_array('reports.view', $permsRes['permissions'] ?? [], true);
+    }
+    if (!$hasRole && !$hasPerm) {
         throw new Exception('FORBIDDEN');
     }
 

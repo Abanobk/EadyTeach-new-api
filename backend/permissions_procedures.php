@@ -70,7 +70,36 @@ function _ensurePermissionsSchema() {
                 $stmt->execute([$staffId, $key]);
             }
         }
+
+        // Give supervisor default permissions (لوحة التحكم، المهام، التقارير، إلخ)
+        $supervisorId = $db->query("SELECT id FROM roles WHERE slug = 'supervisor'")->fetchColumn();
+        if ($supervisorId) {
+            $supervisorPerms = [
+                'dashboard.view',
+                'orders.view', 'orders.edit',
+                'customers.view',
+                'tasks.view', 'tasks.create', 'tasks.edit', 'tasks.assign',
+                'quotations.view', 'quotations.create',
+                'reports.view',
+            ];
+            $stmt = $db->prepare("INSERT INTO role_permissions (role_id, permission_key) VALUES (?, ?)");
+            foreach ($supervisorPerms as $key) {
+                $stmt->execute([$supervisorId, $key]);
+            }
+        }
     }
+
+    // migration: تأكد أن المشرف لديه reports.view (للإعدادات القديمة قبل إضافة صلاحيات المشرف)
+    try {
+        $supervisorId = $db->query("SELECT id FROM roles WHERE slug = 'supervisor'")->fetchColumn();
+        if ($supervisorId) {
+            $has = $db->prepare("SELECT 1 FROM role_permissions rp JOIN roles r ON r.id = rp.role_id WHERE r.slug = 'supervisor' AND rp.permission_key = 'reports.view'");
+            $has->execute();
+            if (!$has->fetch()) {
+                $db->prepare("INSERT INTO role_permissions (role_id, permission_key) VALUES (?, 'reports.view')")->execute([$supervisorId]);
+            }
+        }
+    } catch (\Exception $e) { /* ignore */ }
 }
 
 function _getAllPermissionKeys() {

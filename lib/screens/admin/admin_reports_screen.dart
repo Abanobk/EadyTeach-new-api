@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
+import 'admin_report_detail_screen.dart';
 
 class AdminReportsScreen extends StatefulWidget {
   const AdminReportsScreen({super.key});
@@ -54,13 +55,19 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                 const SizedBox(height: 20),
                 const Text('تقارير تفصيلية', style: TextStyle(color: AppColors.text, fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
-                _reportItem(Icons.bar_chart, 'تقرير المبيعات الشهري', 'عرض إجمالي المبيعات لكل شهر', Colors.blue),
+                _reportItem(context, Icons.bar_chart, 'تقرير المبيعات الشهري', 'عرض إجمالي المبيعات لكل شهر', Colors.blue, ReportType.monthlySales),
                 const SizedBox(height: 10),
-                _reportItem(Icons.people_outline, 'تقرير العملاء الجدد', 'عدد العملاء المسجلين هذا الشهر', Colors.green),
+                _reportItem(context, Icons.people_outline, 'تقرير العملاء الجدد', 'عدد العملاء المسجلين كل شهر', Colors.green, ReportType.newCustomers),
                 const SizedBox(height: 10),
-                _reportItem(Icons.build_outlined, 'تقرير أداء الفنيين', 'عدد المهام المنجزة لكل فني', Colors.orange),
+                _reportItem(context, Icons.build_outlined, 'تقرير أداء الفنيين', 'عدد المهام المنجزة لكل فني', Colors.orange, ReportType.technicianPerformance),
                 const SizedBox(height: 10),
-                _reportItem(Icons.inventory_outlined, 'تقرير المخزون', 'المنتجات الأكثر مبيعاً', Colors.purple),
+                _reportItem(context, Icons.inventory_outlined, 'تقرير المنتجات الأكثر مبيعاً', 'المنتجات الأكثر مبيعاً', Colors.purple, ReportType.topProducts),
+                const SizedBox(height: 10),
+                _reportItem(context, Icons.people, 'تقرير إجمالي العملاء', 'قائمة العملاء مع الطلبات والمهام', Colors.teal, ReportType.customerSummary),
+                const SizedBox(height: 10),
+                _reportItem(context, Icons.account_balance_wallet_outlined, 'تقرير حسابات العملاء', 'المستحق والتم تحصيله والمتبقي', Colors.indigo, ReportType.customerAccounts),
+                const SizedBox(height: 10),
+                _reportItem(context, Icons.trending_up, 'تقرير إيرادات العملاء', 'ترتيب العملاء حسب الإنفاق', Colors.deepOrange, ReportType.customerRevenue),
               ]),
             ),
     );
@@ -80,19 +87,36 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     );
   }
 
-  Widget _reportItem(IconData icon, String title, String subtitle, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
-      child: Row(children: [
-        Container(width: 40, height: 40, decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: color, size: 20)),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 14)),
-          Text(subtitle, style: const TextStyle(color: AppColors.muted, fontSize: 12)),
-        ])),
-        const Icon(Icons.arrow_back_ios, color: AppColors.muted, size: 14),
-      ]),
+  Widget _reportItem(
+    BuildContext context,
+    IconData icon,
+    String title,
+    String subtitle,
+    Color color,
+    ReportType type,
+  ) {
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AdminReportDetailScreen(type: type, title: title),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+        child: Row(children: [
+          Container(width: 40, height: 40, decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: color, size: 20)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 14)),
+            Text(subtitle, style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+          ])),
+          const Icon(Icons.arrow_back_ios, color: AppColors.muted, size: 14),
+        ]),
+      ),
     );
   }
 }

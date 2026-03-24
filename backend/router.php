@@ -1187,14 +1187,32 @@ try {
         case 'reports.technicianPerformance':
             $result = reports_technicianPerformance($input, $ctx);
             break;
+        case 'reports.technicianList':
+            $result = reports_technicianList($input, $ctx);
+            break;
+        case 'reports.technicianPerformanceDetail':
+            $result = reports_technicianPerformanceDetail($input, $ctx);
+            break;
         case 'reports.topProducts':
             $result = reports_topProducts($input, $ctx);
+            break;
+        case 'reports.customerList':
+            $result = reports_customerList($input, $ctx);
+            break;
+        case 'reports.customerDetail':
+            $result = reports_customerDetail($input, $ctx);
             break;
         case 'reports.customerSummary':
             $result = reports_customerSummary($input, $ctx);
             break;
         case 'reports.customerAccounts':
             $result = reports_customerAccounts($input, $ctx);
+            break;
+        case 'reports.customerAccountsList':
+            $result = reports_customerAccountsList($input, $ctx);
+            break;
+        case 'reports.customerAccountStatement':
+            $result = reports_customerAccountStatement($input, $ctx);
             break;
         case 'reports.customerRevenue':
             $result = reports_customerRevenue($input, $ctx);

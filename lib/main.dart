@@ -91,6 +91,18 @@ class EasyTechApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeController.isDark ? ThemeMode.dark : ThemeMode.light,
+      builder: (context, child) {
+        // تفادي تداخل المحتوى مع أزرار التنقل (Samsung وغيره)
+        if (child == null) return const SizedBox.shrink();
+        return SafeArea(
+          top: false,
+          left: false,
+          right: false,
+          bottom: true,
+          minimum: const EdgeInsets.only(bottom: 16),
+          child: child,
+        );
+      },
       initialRoute: '/splash',
       routes: {
         '/splash': (_) => const SplashScreen(),

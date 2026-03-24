@@ -3,6 +3,16 @@
  * Tasks, TaskNotes, TechnicianLocation, Quotations, Orders procedures
  */
 
+function _ensureTaskCompletedAtColumn() {
+    global $db;
+    static $done = false;
+    if ($done) return;
+    try {
+        $db->exec('ALTER TABLE tasks ADD COLUMN completed_at DATETIME NULL DEFAULT NULL');
+    } catch (\Exception $e) { /* موجود */ }
+    $done = true;
+}
+
 /**
  * عمود آخر إشعار تأخير — يُستخدم لمنع تكرار الإشعارات في نفس الدقيقة.
  */
@@ -367,6 +377,12 @@ function tasks_update($input, $ctx) {
                     _ensureTaskOverdueNotifyColumn();
                     $db->prepare('UPDATE tasks SET overdue_last_notified_at = NULL WHERE id = ?')->execute([$id]);
                 } catch (\Exception $e) { /* ignore */ }
+                if ($st === 'completed') {
+                    try {
+                        _ensureTaskCompletedAtColumn();
+                        $db->prepare('UPDATE tasks SET completed_at = NOW() WHERE id = ? AND completed_at IS NULL')->execute([$id]);
+                    } catch (\Exception $e) { /* ignore */ }
+                }
             }
         }
     }

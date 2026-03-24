@@ -3,6 +3,9 @@ import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
 import 'admin_report_detail_screen.dart';
+import 'technician_performance_report_screen.dart';
+import 'customer_detail_report_screen.dart';
+import 'customer_accounts_report_screen.dart';
 
 class AdminReportsScreen extends StatefulWidget {
   const AdminReportsScreen({super.key});
@@ -59,13 +62,13 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                 const SizedBox(height: 10),
                 _reportItem(context, Icons.people_outline, 'تقرير العملاء الجدد', 'عدد العملاء المسجلين كل شهر', Colors.green, ReportType.newCustomers),
                 const SizedBox(height: 10),
-                _reportItem(context, Icons.build_outlined, 'تقرير أداء الفنيين', 'عدد المهام المنجزة لكل فني', Colors.orange, ReportType.technicianPerformance),
+                _reportItemTechnician(context),
                 const SizedBox(height: 10),
                 _reportItem(context, Icons.inventory_outlined, 'تقرير المنتجات الأكثر مبيعاً', 'المنتجات الأكثر مبيعاً', Colors.purple, ReportType.topProducts),
                 const SizedBox(height: 10),
-                _reportItem(context, Icons.people, 'تقرير إجمالي العملاء', 'قائمة العملاء مع الطلبات والمهام', Colors.teal, ReportType.customerSummary),
+                _reportItemCustomer(context),
                 const SizedBox(height: 10),
-                _reportItem(context, Icons.account_balance_wallet_outlined, 'تقرير حسابات العملاء', 'المستحق والتم تحصيله والمتبقي', Colors.indigo, ReportType.customerAccounts),
+                _reportItemCustomerAccounts(context),
                 const SizedBox(height: 10),
                 _reportItem(context, Icons.trending_up, 'تقرير إيرادات العملاء', 'ترتيب العملاء حسب الإنفاق', Colors.deepOrange, ReportType.customerRevenue),
               ]),
@@ -84,6 +87,82 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
           Text(title, style: const TextStyle(color: AppColors.muted, fontSize: 11)),
         ]),
       ]),
+    );
+  }
+
+  Widget _reportItemCustomerAccounts(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const CustomerAccountsReportScreen()),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+        child: Row(children: [
+          Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.indigo.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.account_balance_wallet_outlined, color: Colors.indigo, size: 20)),
+          const SizedBox(width: 12),
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('تقرير حسابات العملاء', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 14)),
+            Text('فهرس العملاء، كشف حساب كامل، من عليه بالأحمر', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+          ])),
+          const Icon(Icons.arrow_back_ios, color: AppColors.muted, size: 14),
+        ]),
+      ),
+    );
+  }
+
+  Widget _reportItemCustomer(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const CustomerDetailReportScreen(),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+        child: Row(children: [
+          Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.teal.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.people, color: Colors.teal, size: 20)),
+          const SizedBox(width: 12),
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('تقرير إجمالي العملاء', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 14)),
+            Text('اختر عميلاً واعرض الطلبات والمهام والتفاصيل', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+          ])),
+          const Icon(Icons.arrow_back_ios, color: AppColors.muted, size: 14),
+        ]),
+      ),
+    );
+  }
+
+  Widget _reportItemTechnician(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const TechnicianPerformanceReportScreen(),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+        child: Row(children: [
+          Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.build_outlined, color: Colors.orange, size: 20)),
+          const SizedBox(width: 12),
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('تقرير أداء الفنيين', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 14)),
+            Text('تحليل شامل: المهام، التأخير، وقت الإنجاز', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+          ])),
+          const Icon(Icons.arrow_back_ios, color: AppColors.muted, size: 14),
+        ]),
+      ),
     );
   }
 

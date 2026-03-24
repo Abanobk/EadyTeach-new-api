@@ -1167,6 +1167,29 @@ function quotations_requestPurchase($input, $ctx) {
             $id
         ]);
 
+    try {
+        if (!function_exists('_notifyAdminsAndSupervisors')) {
+            require_once __DIR__ . '/notifications_procedures.php';
+        }
+        $ref = $q['ref_number'] ?? ('QT-' . $id);
+        $dealerStmt = $db->prepare('SELECT name FROM users WHERE id = ?');
+        $dealerStmt->execute([$dealerId]);
+        $dealerName = trim((string)($dealerStmt->fetchColumn() ?: ''));
+        if ($dealerName === '') {
+            $dealerName = 'تاجر';
+        }
+        _notifyAdminsAndSupervisors(
+            'طلب شراء جديد من تاجر',
+            "{$dealerName} أرسل طلب شراء لعرض السعر {$ref}. المجموع: {$purchaseTotal} ج.م",
+            'quotation',
+            $id,
+            'quotation',
+            ['purchaseRequest' => 'requested', 'quotationId' => (string)$id]
+        );
+    } catch (\Throwable $e) {
+        error_log('[FCM] quotations.requestPurchase notify admins: ' . $e->getMessage());
+    }
+
     return ['success' => true, 'purchaseTotalAmount' => $purchaseTotal];
 }
 

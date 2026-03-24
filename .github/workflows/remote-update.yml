@@ -5,10 +5,12 @@ name: Remote Update
 on:
   push:
     branches: [ main ]
+  workflow_dispatch: # إعادة تشغيل يدوي من تبويب Actions → Remote Update → Run workflow
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -16,16 +18,21 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          cache: true
 
       - name: Build Web
         run: |
+          set -e
+          flutter --version
           flutter pub get
-          flutter build web --base-href "/app/"
+          # --release صريح؛ --no-wasm-dry-run يتجنب فشل/تحذيرات wasm على بعض إصدارات stable على CI
+          flutter build web --release --base-href "/app/" --no-wasm-dry-run
           [ -f build/web/index.html ] || { echo "::error::Build failed"; exit 1; }
 
       - name: Install Cloudflared
         run: |
-          curl -LsSf -o cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          set -e
+          curl -fLsS -o cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared.deb
           cloudflared --version
 
@@ -40,6 +47,7 @@ jobs:
           set -e
           DEPLOY_PATH="${WEB_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/app}"
           CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
+          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6"
 
           if [ -z "$CF_SERVICE_TOKEN_ID" ] || [ -z "$CF_SERVICE_TOKEN_SECRET" ]; then
             echo "::error::Add CF_SERVICE_TOKEN_ID and CF_SERVICE_TOKEN_SECRET in repo Secrets"
@@ -60,15 +68,29 @@ jobs:
           echo "Creating archive..."
           tar czf /tmp/deploy.tar -C build web
 
-          echo "Uploading via Cloudflare Tunnel ($CF_HOST)..."
-          scp -o StrictHostKeyChecking=no -o ConnectTimeout=90 -i ~/.ssh/id_rsa \
-            -o "ProxyCommand=cloudflared access tcp --hostname $CF_HOST" \
-            /tmp/deploy.tar root@$CF_HOST:/tmp/deploy.tar
+          PROXY="-o ProxyCommand=cloudflared access tcp --hostname $CF_HOST"
+          upload_and_extract() {
+            echo "Uploading via Cloudflare Tunnel ($CF_HOST)..."
+            scp $SSH_OPTS -i ~/.ssh/id_rsa $PROXY /tmp/deploy.tar "root@${CF_HOST}:/tmp/deploy.tar"
+            echo "Extracting on server..."
+            ssh $SSH_OPTS -i ~/.ssh/id_rsa $PROXY "root@${CF_HOST}" \
+              "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed to $DEPLOY_PATH"
+          }
 
-          echo "Extracting on server..."
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=90 -i ~/.ssh/id_rsa \
-            -o "ProxyCommand=cloudflared access tcp --hostname $CF_HOST" \
-            root@$CF_HOST "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed to $DEPLOY_PATH"
+          ok=0
+          for attempt in 1 2 3; do
+            echo "::notice::Deploy attempt $attempt/3"
+            if upload_and_extract; then
+              ok=1
+              break
+            fi
+            echo "::warning::Deploy attempt $attempt failed; retrying in 45s..."
+            sleep 45
+          done
+          if [ "$ok" != 1 ]; then
+            echo "::error::Deploy failed after 3 attempts (tunnel/SSH timeout or auth). Check Cloudflare Access token + SERVER_SSH_KEY."
+            exit 1
+          fi
 
       - name: Deploy Backend (if BACKEND_DEPLOY_PATH is set)
         env:
@@ -84,17 +106,30 @@ jobs:
           fi
           set -e
           CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
+          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6"
           export TUNNEL_SERVICE_TOKEN_ID="$CF_SERVICE_TOKEN_ID"
           export TUNNEL_SERVICE_TOKEN_SECRET="$CF_SERVICE_TOKEN_SECRET"
+          mkdir -p ~/.ssh
           echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           tar czf /tmp/backend.tar -C "$GITHUB_WORKSPACE" backend
-          scp -o StrictHostKeyChecking=no -o ConnectTimeout=90 -i ~/.ssh/id_rsa \
-            -o "ProxyCommand=cloudflared access tcp --hostname $CF_HOST" \
-            /tmp/backend.tar root@$CF_HOST:/tmp/backend.tar
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=90 -i ~/.ssh/id_rsa \
-            -o "ProxyCommand=cloudflared access tcp --hostname $CF_HOST" \
-            root@$CF_HOST "mkdir -p '$BACKEND_DEPLOY_PATH' && cd '$BACKEND_DEPLOY_PATH' && tar xzf /tmp/backend.tar --strip-components=1 && rm -f /tmp/backend.tar && echo Backend deployed"
+          PROXY="-o ProxyCommand=cloudflared access tcp --hostname $CF_HOST"
+          ok=0
+          for attempt in 1 2 3; do
+            echo "::notice::Backend deploy attempt $attempt/3"
+            if scp $SSH_OPTS -i ~/.ssh/id_rsa $PROXY /tmp/backend.tar "root@${CF_HOST}:/tmp/backend.tar" \
+              && ssh $SSH_OPTS -i ~/.ssh/id_rsa $PROXY "root@${CF_HOST}" \
+                "mkdir -p '$BACKEND_DEPLOY_PATH' && cd '$BACKEND_DEPLOY_PATH' && tar xzf /tmp/backend.tar --strip-components=1 && rm -f /tmp/backend.tar && echo Backend deployed"; then
+              ok=1
+              break
+            fi
+            echo "::warning::Backend deploy attempt $attempt failed; retrying in 45s..."
+            sleep 45
+          done
+          if [ "$ok" != 1 ]; then
+            echo "::error::Backend deploy failed after 3 attempts."
+            exit 1
+          fi
           echo "Backend (router.php etc.) deployed to $BACKEND_DEPLOY_PATH"
 
       - name: Done

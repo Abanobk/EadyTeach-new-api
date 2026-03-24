@@ -28,6 +28,28 @@ php restore_router_db_from_backup.php
 
 السكربت ينسخ `router.php` الحالي إلى `router.php.bak.TIMESTAMP` ثم ينسخ من النسخة الاحتياطية قيم `$dbHost` / `$dbName` / `$dbUser` / `$dbPass` وسطر الـ Webhook.
 
+### إرسال Push تجريبي لمستخدم واحد (بعد ما التقرير العام كان [OK])
+
+1. اعرف `USER_ID` (من الإيميل — غيّر الباسورد إن لزم):
+
+```bash
+docker exec easytech_db_v2 mariadb -uroot -p'EasyTech2026' easytech_v2 -e "SELECT id,email,role FROM users WHERE email='ضع_إيميل_حساب_الموبايل';"
+```
+
+2. أرسل اختبار:
+
+```bash
+docker exec easytech_api_v2 php /var/www/html/backend/fcm_send_test_cli.php USER_ID
+```
+
+3. لو **ما ظهرش** على الموبايل لكن السكربت قال [OK]: راجع لوج الكونتينر:
+
+```bash
+docker logs easytech_api_v2 2>&1 | tail -50
+```
+
+ابحث عن `FCM send failed` أو `skip push`.
+
 ---
 
 ## مهم: الفرق بين «ظهر في التطبيق» و«Push في الشريط»

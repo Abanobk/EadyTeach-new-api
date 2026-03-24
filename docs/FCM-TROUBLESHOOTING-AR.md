@@ -17,6 +17,17 @@ php fcm_cli_check.php
 
 **لو حابب حد يراجع معاك:** انسخ **كل مخرجات** `php fcm_cli_check.php` والصقها (من غير محتوى ملف JSON ولا كلمات مرور).
 
+### بعد `git pull` على TrueNAS: استرجاع إعدادات DB في `router.php` بدون مقارنة يدوية
+
+لو عندك نسخة احتياطية في `/root/easytech-local-backup/router.php` (زي ما اتعمل قبل الـ pull):
+
+```bash
+cd /mnt/marichia/files/easytech-new-api/backend
+php restore_router_db_from_backup.php
+```
+
+السكربت ينسخ `router.php` الحالي إلى `router.php.bak.TIMESTAMP` ثم ينسخ من النسخة الاحتياطية قيم `$dbHost` / `$dbName` / `$dbUser` / `$dbPass` وسطر الـ Webhook.
+
 ---
 
 ## مهم: الفرق بين «ظهر في التطبيق» و«Push في الشريط»

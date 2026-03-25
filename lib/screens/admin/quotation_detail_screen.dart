@@ -278,6 +278,34 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     _adminDealerPriceControllersForQuotationId = widget.quotationId;
   }
 
+  String _normalizeNumericInput(String input) {
+    // Convert Arabic-Indic digits to Latin digits and normalize decimal separators.
+    const arabicIndic = {
+      '٠': '0',
+      '١': '1',
+      '٢': '2',
+      '٣': '3',
+      '٤': '4',
+      '٥': '5',
+      '٦': '6',
+      '٧': '7',
+      '٨': '8',
+      '٩': '9',
+    };
+    var s = input.trim();
+    s = s.replaceAll('،', '.').replaceAll(',', '.');
+    s = s.split('').map((ch) => arabicIndic[ch] ?? ch).join();
+    // Keep only digits, dot, and minus.
+    s = s.replaceAll(RegExp(r'[^0-9\.\-]'), '');
+    return s;
+  }
+
+  double _parseMoney(String input) {
+    final s = _normalizeNumericInput(input);
+    if (s.isEmpty) return 0.0;
+    return double.tryParse(s) ?? 0.0;
+  }
+
   List<Map<String, dynamic>> _collectAdminPurchasePriceOverrides() {
     final purchaseItems = (_quotation?['purchaseItems'] as List? ?? []);
     if (purchaseItems.isEmpty) return const [];
@@ -290,7 +318,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       final qty = int.tryParse(raw['qty']?.toString() ?? '') ?? 1;
       final ctrl = _adminDealerPriceControllers[pid];
       if (ctrl == null) continue;
-      final price = double.tryParse(ctrl.text.trim()) ?? 0.0;
+      final price = _parseMoney(ctrl.text);
       if (price < 0) continue;
       overrides.add({
         'productId': pid,

@@ -83,9 +83,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         double.tryParse(p['discountAmount']?.toString() ?? '0') ?? 0.0;
     final discountMinStock =
         int.tryParse(p['discountMinStock']?.toString() ?? '0') ?? 0;
+    final discountWaitingMessage =
+        p['discountWaitingMessage']?.toString().trim();
 
     final rawPrice = _originalSelectedPrice;
     if (rawPrice <= 0) return 0.0;
+
+    // If backend says discount is waiting (e.g. stock = 0 / minStock not met),
+    // do not apply discount in UI.
+    if (discountWaitingMessage != null && discountWaitingMessage.isNotEmpty) {
+      return rawPrice;
+    }
 
     final stockOk = discountMinStock <= 0 || _availableStock >= discountMinStock;
     if (!stockOk) return rawPrice;
@@ -136,8 +144,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         double.tryParse(p['discountAmount']?.toString() ?? '0') ?? 0;
     final discountMinStock =
         int.tryParse(p['discountMinStock']?.toString() ?? '0') ?? 0;
+    final discountWaitingMessage =
+        p['discountWaitingMessage']?.toString().trim();
+    final bool isWaiting = discountWaitingMessage != null && discountWaitingMessage.isNotEmpty;
     final stockOk = discountMinStock <= 0 || _availableStock >= discountMinStock;
     final hasDiscount =
+        !isWaiting &&
         stockOk &&
             (discountPercent > 0 || discountAmount > 0) &&
             originalPrice > 0 &&

@@ -37,11 +37,13 @@ class UserModel {
     );
   }
 
-  bool get isAdmin => role == 'admin';
-  bool get isTechnician => role == 'technician';
-  bool get isClient => role == 'user';
+  String get _roleNorm => role.trim().toLowerCase();
 
-  bool get canAccessAdmin => role == 'admin' || role == 'staff' || role == 'supervisor';
+  bool get isAdmin => _roleNorm == 'admin';
+  bool get isTechnician => _roleNorm == 'technician';
+  bool get isClient => _roleNorm == 'user';
+
+  bool get canAccessAdmin => _roleNorm == 'admin' || _roleNorm == 'staff' || _roleNorm == 'supervisor';
 
   bool hasPermission(String key) {
     if (isAdmin) return true;

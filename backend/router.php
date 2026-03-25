@@ -158,10 +158,14 @@ if ($sessionId) {
 // ─── Parse tRPC request ────────────────────────────────────────
 // Accept both /api/trpc/procedure and /trpc/procedure (server may route either way).
 $uri = $_SERVER['REQUEST_URI'] ?? '';
-$path = parse_url($uri, PHP_URL_PATH);
+$path = parse_url($uri, PHP_URL_PATH) ?? '';
 $procedure = preg_replace('#^.*/api/trpc/(.*)$#', '$1', $path);
 if ($procedure === $path) {
     $procedure = preg_replace('#^.*/trpc/(.*)$#', '$1', $path);
+}
+// Browser GET on …/trpc.php or …/router.php: path is the script URL, not a procedure name.
+if ($procedure === $path && preg_match('#/(?:trpc|router)\.php$#i', $path)) {
+    $procedure = '';
 }
 
 $input = null;
@@ -477,6 +481,18 @@ function _ensureProductsIdAutoIncrement(PDO $db): void {
 // ─── Router ────────────────────────────────────────────────────
 try {
     $result = null;
+
+    if ($procedure === '') {
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            echo json_encode([['result' => ['data' => ['json' => [
+                'ok' => true,
+                'service' => 'easytech-api',
+                'hint' => 'Use the mobile app (POST tRPC). Optional: GET ?procedure=auth.adminLogin',
+            ]]]]]);
+            exit;
+        }
+        throw new Exception('Missing procedure');
+    }
 
     switch ($procedure) {
 

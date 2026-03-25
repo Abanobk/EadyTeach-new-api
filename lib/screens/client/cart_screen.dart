@@ -18,6 +18,7 @@ class _CartScreenState extends State<CartScreen> {
   String _paymentMethod = 'cash';
   String? _transferProofUrl;
   bool _uploadingProof = false;
+  bool _openedInstapayThisSession = false;
   bool _submitting = false;
   String? _shippingName;
   String? _shippingPhone;
@@ -392,14 +393,6 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> _openTransferProofDialog() async {
     if (!mounted) return;
-    // Open Instapay link
-    try {
-      final uri = Uri.parse(_instapayUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
-    } catch (_) {}
-
     final picker = ImagePicker();
     final result = await showDialog<String?>(
       context: context,
@@ -413,6 +406,23 @@ class _CartScreenState extends State<CartScreen> {
               children: [
                 const Text('اضغط على InstaPay للتحويل ثم ارفع صورة الإيصال هنا.', style: TextStyle(color: AppColors.muted)),
                 const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      try {
+                        final uri = Uri.parse(_instapayUrl);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          _openedInstapayThisSession = true;
+                        }
+                      } catch (_) {}
+                    },
+                    icon: const Icon(Icons.open_in_new, color: AppColors.primary),
+                    label: const Text('فتح InstaPay', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(height: 10),
                 if (_transferProofUrl != null && _transferProofUrl!.isNotEmpty)
                   Container(
                     width: 80,
@@ -449,6 +459,11 @@ class _CartScreenState extends State<CartScreen> {
                             }
                           } catch (e) {
                             setModalState(() => _uploadingProof = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('فشل رفع صورة التحويل: $e'), backgroundColor: AppColors.error),
+                              );
+                            }
                           }
                         },
                   icon: _uploadingProof

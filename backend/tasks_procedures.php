@@ -1916,6 +1916,8 @@ function admin_getAllOrders($input, $ctx) {
             o.approved_items,
             o.total,
             o.status,
+            o.payment_method,
+            o.payment_proof_url,
             o.created_at,
             u.name AS customer_name,
             u.phone AS customer_phone,
@@ -1931,6 +1933,8 @@ function admin_getAllOrders($input, $ctx) {
             'id' => (int)$r['id'],
             'items' => $r['items'] ? json_decode($r['items'], true) : [],
             'approvedItems' => $r['approved_items'] ? json_decode($r['approved_items'], true) : null,
+            'paymentMethod' => $r['payment_method'] ?? 'cash',
+            'paymentProofUrl' => $r['payment_proof_url'] ?? null,
             // UI expects totalAmount key
             'totalAmount' => (float)($r['total'] ?? 0),
             'status' => $r['status'] ?? 'pending',

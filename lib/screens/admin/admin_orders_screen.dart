@@ -107,6 +107,8 @@ class _AdminOrderCard extends StatelessWidget {
     final total =
         double.tryParse(order['totalAmount']?.toString() ?? '0') ?? 0;
     final approvedItems = (order['approvedItems'] is List) ? (order['approvedItems'] as List) : null;
+    final paymentMethod = order['paymentMethod']?.toString();
+    final paymentProofUrl = order['paymentProofUrl']?.toString();
     final date = order['createdAt'] != null
         ? DateTime.fromMillisecondsSinceEpoch(order['createdAt'])
         : null;
@@ -166,6 +168,51 @@ class _AdminOrderCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Divider(color: AppColors.border),
+                if (paymentMethod == 'transfer') ...[
+                  const Text('إثبات التحويل:', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  if (paymentProofUrl != null && paymentProofUrl.trim().isNotEmpty)
+                    GestureDetector(
+                      onTap: () async {
+                        try {
+                          // ignore: use_build_context_synchronously
+                          await showDialog(
+                            context: context,
+                            builder: (_) => Dialog(
+                              backgroundColor: AppThemeDecorations.cardColor(context),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Image.network(
+                                  ApiService.proxyImageUrl(paymentProofUrl),
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) => const Center(
+                                      child: Icon(Icons.broken_image, color: AppColors.muted, size: 40)),
+                                ),
+                              ),
+                            ),
+                          );
+                        } catch (_) {}
+                      },
+                      child: Container(
+                        width: 96,
+                        height: 96,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        clipBehavior: Clip.hardEdge,
+                        child: Image.network(
+                          ApiService.proxyImageUrl(paymentProofUrl),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Center(
+                              child: Icon(Icons.broken_image, color: AppColors.muted, size: 28)),
+                        ),
+                      ),
+                    )
+                  else
+                    const Text('لم يتم رفع إيصال بعد', style: TextStyle(color: AppColors.muted)),
+                  const SizedBox(height: 12),
+                ],
                 if (status == 'preorder') ...[
                   _AdminOrderPricingEditor(
                     orderId: order['id'],

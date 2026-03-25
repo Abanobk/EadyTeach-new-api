@@ -41,11 +41,72 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   String? _selectedCategory;
   bool _loading = true;
   String _search = '';
+  bool _didSyncConfirmedPreorders = false;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  Map<int, Map<String, dynamic>> _productsById() {
+    final map = <int, Map<String, dynamic>>{};
+    for (final p in _products) {
+      if (p is! Map) continue;
+      final id = int.tryParse(p['id']?.toString() ?? '') ??
+          int.tryParse(p['productId']?.toString() ?? '');
+      if (id == null || id <= 0) continue;
+      map[id] = Map<String, dynamic>.from(p);
+    }
+    return map;
+  }
+
+  String? _pickProductImageUrl(Map<String, dynamic>? p) {
+    if (p == null) return null;
+    final direct = (p['imageUrl'] ?? p['mainImageUrl'] ?? p['main_image_url'] ?? p['image'] ?? p['image_url'])?.toString();
+    if (direct != null && direct.trim().isNotEmpty) return direct.trim();
+    final imgs = p['images'];
+    if (imgs is List && imgs.isNotEmpty) {
+      final first = imgs.first?.toString();
+      if (first != null && first.trim().isNotEmpty) return first.trim();
+    }
+    return null;
+  }
+
+  Future<void> _syncConfirmedPreordersToCartIfNeeded() async {
+    if (_didSyncConfirmedPreorders) return;
+    _didSyncConfirmedPreorders = true;
+    try {
+      final res = await ApiService.query('orders.getPendingCartSync');
+      final data = res['data'];
+      if (data is! List || data.isEmpty) return;
+
+      final cart = context.read<CartProvider>();
+      await cart.loadCart();
+
+      final byId = _productsById();
+      for (final row in data) {
+        if (row is! Map) continue;
+        final items = row['items'];
+        if (items is! List) continue;
+        for (final it in items) {
+          if (it is! Map) continue;
+          final pid = int.tryParse(it['productId']?.toString() ?? '') ?? 0;
+          if (pid <= 0) continue;
+          final qty = int.tryParse(it['quantity']?.toString() ?? '') ?? 1;
+          final unit = double.tryParse(it['unitPrice']?.toString() ?? '') ?? 0.0;
+
+          final p = byId[pid];
+          final name = (p?['nameAr'] ?? p?['name'] ?? 'منتج').toString();
+          final image = _pickProductImageUrl(p);
+          cart.addItem(CartItem(productId: pid, name: name, image: image, price: unit, quantity: qty));
+        }
+        final orderId = row['orderId'];
+        await ApiService.mutate('orders.markCartSynced', input: {'orderId': orderId});
+      }
+    } catch (_) {
+      // ignore - sync is best-effort
+    }
   }
 
   Future<void> _loadData() async {
@@ -75,6 +136,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
         }
         _loading = false;
       });
+      // After products are loaded, sync any confirmed preorder orders into cart (with images).
+      await _syncConfirmedPreordersToCartIfNeeded();
     } catch (e) {
       setState(() => _loading = false);
     }

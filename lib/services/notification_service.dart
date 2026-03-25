@@ -447,6 +447,9 @@ class NotificationService {
         case 'quote':
           if (refId != null) nav.pushNamed('/quotation-detail', arguments: refId);
           break;
+        case 'quotationpurchase':
+          if (refId != null) nav.pushNamed('/quotation-detail', arguments: refId);
+          break;
         case 'order':
           nav.pushNamed('/admin');
           break;

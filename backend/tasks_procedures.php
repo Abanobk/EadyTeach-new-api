@@ -1186,6 +1186,31 @@ function quotations_requestPurchase($input, $ctx) {
             'quotation',
             ['purchaseRequest' => 'requested', 'quotationId' => (string)$id]
         );
+
+        // إشعار للتاجر أنه في انتظار موافقة الإدارة
+        _notifyUser(
+            $dealerId,
+            'في انتظار تأكيد الإدارة',
+            "{$dealerName} أرسل طلب شراء لعرض السعر {$ref}. سيتم إشعارك عند تأكيد الإدارة.",
+            'quotation',
+            $id,
+            'quotation',
+            ['purchaseRequest' => 'requested', 'quotationId' => (string)$id]
+        );
+
+        // إشعار للعميل بوجود طلب شراء قيد المراجعة (إذا كان Client موجوداً)
+        $clientUserId = isset($q['client_user_id']) ? (int)$q['client_user_id'] : 0;
+        if ($clientUserId > 0) {
+            _notifyUser(
+                (int)$clientUserId,
+                'طلب شراء قيد المراجعة',
+                "تم إرسال طلب شراء لعرض السعر {$ref} من تاجر. سيتم إشعارك عند تحديث الحالة.",
+                'quotation',
+                $id,
+                'quotation',
+                ['purchaseRequest' => 'requested', 'quotationId' => (string)$id]
+            );
+        }
     } catch (\Throwable $e) {
         error_log('[FCM] quotations.requestPurchase notify admins: ' . $e->getMessage());
     }
@@ -1467,15 +1492,30 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
 
     if ($dealerId > 0) {
         $ref = $q['ref_number'] ?? ('QT-' . $id);
-        $purchaseTotal = (float)($q['purchase_total_amount'] ?? 0);
+        // $purchaseTotal has been re-computed above after re-building purchaseItems.
         _notifyUser(
             $dealerId,
-            'تم قبول طلب شراء',
+            'تم تأكيد طلب الشراء',
             "تم قبول طلب الشراء لعرض السعر رقم {$ref}. المجموع: {$purchaseTotal} ج.م",
-            'quotationPurchase',
+            'quotation',
             $id,
-            'quotation'
+            'quotation',
+            ['purchaseRequest' => 'accepted', 'quotationId' => (string)$id]
         );
+
+        // إشعار للعميل عند تأكيد طلب الشراء
+        $clientUserId = isset($q['client_user_id']) ? (int)$q['client_user_id'] : 0;
+        if ($clientUserId > 0) {
+            _notifyUser(
+                (int)$clientUserId,
+                'تم تأكيد طلب الشراء',
+                "تم تأكيد طلب الشراء لعرض السعر رقم {$ref}.",
+                'quotation',
+                $id,
+                'quotation',
+                ['purchaseRequest' => 'accepted', 'quotationId' => (string)$id]
+            );
+        }
     }
 
     return ['success' => true];

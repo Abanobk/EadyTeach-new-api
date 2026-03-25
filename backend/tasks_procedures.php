@@ -2026,19 +2026,25 @@ function admin_updateOrderStatus($input, $ctx) {
         throw new Exception('FORBIDDEN');
     }
 
-    // When confirming preorder: require approved_items and reset cart_synced so owner can sync to cart.
-    if (strtolower(trim($status)) === 'confirmed') {
-        $ai = $db->prepare("SELECT approved_items FROM orders WHERE id = ?");
-        $ai->execute([$orderId]);
-        $approvedRaw = $ai->fetchColumn();
-        $approvedRaw = $approvedRaw !== false ? trim((string)$approvedRaw) : '';
+    // When confirming a *preorder* only: require approved_items and reset cart_synced for cart sync.
+    // Normal orders (pending / transfer / etc.) can be confirmed without approved_items.
+    $curStmt = $db->prepare("SELECT status, approved_items FROM orders WHERE id = ?");
+    $curStmt->execute([$orderId]);
+    $curRow = $curStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$curRow) {
+        throw new Exception('INVALID_ARGUMENT');
+    }
+    $currentStatus = strtolower(trim((string)($curRow['status'] ?? '')));
+    $newStatus = strtolower(trim($status));
+
+    if ($newStatus === 'confirmed' && $currentStatus === 'preorder') {
+        $approvedRaw = isset($curRow['approved_items']) ? trim((string)$curRow['approved_items']) : '';
         if ($approvedRaw === '') {
             throw new Exception('لا يمكن تأكيد الطلب قبل تحديد أسعار المنتجات (طلب مسبق)');
         }
         $upd = $db->prepare("UPDATE orders SET status = ?, cart_synced = 0 WHERE id = ?");
         $upd->execute([$status, $orderId]);
     } else {
-        // Update status
         $upd = $db->prepare("UPDATE orders SET status = ? WHERE id = ?");
         $upd->execute([$status, $orderId]);
     }

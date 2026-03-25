@@ -1151,7 +1151,9 @@ function quotations_requestPurchase($input, $ctx) {
                         $itemSubtotal = $qUnit * $qty;
                     }
                     $share = $quoteSubtotal > 0 ? ($itemSubtotal / $quoteSubtotal) : 0.0;
-                    $itemClientAfterDiscount = $itemSubtotal - ($quoteDiscountAmount * $share);
+                    // When waiting (e.g. stock = 0 / minStock not met), no discount should be applied
+                    // to client nor dealer for this item.
+                    $itemClientAfterDiscount = $itemSubtotal;
                     $itemInstallationShare = $quoteInstallationAmount * $share;
                     $targetDealerTotal = $itemClientAfterDiscount + $itemInstallationShare;
                     if ($targetDealerTotal < 0) $targetDealerTotal = 0.0;
@@ -1330,7 +1332,9 @@ function quotations_previewDealerPurchase($input, $ctx) {
                         $itemSubtotal = $qUnit * $qty;
                     }
                     $share = $quoteSubtotal > 0 ? ($itemSubtotal / $quoteSubtotal) : 0.0;
-                    $itemClientAfterDiscount = $itemSubtotal - ($quoteDiscountAmount * $share);
+                    // When waiting (e.g. stock = 0 / minStock not met), no discount should be applied
+                    // to client nor dealer for this item.
+                    $itemClientAfterDiscount = $itemSubtotal;
                     $itemInstallationShare = $quoteInstallationAmount * $share;
                     $targetDealerTotal = $itemClientAfterDiscount + $itemInstallationShare;
                     if ($targetDealerTotal < 0) $targetDealerTotal = 0.0;
@@ -1488,27 +1492,28 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
                         if (is_array($imgs) && count($imgs) > 0) $imageUrl = $imgs[0];
                     }
 
+                            // Compute waiting/discount rules for this product for this dealer.
+                            $rowForDiscount = [
+                                'id' => $pr['id'],
+                                'category_id' => $pr['category_id'] ?? null,
+                                'stock' => $pr['stock'] ?? 0,
+                            ];
+
+                            // IMPORTANT: calculate using the dealer as ctx.userId
+                            $dealerCtx = ['userId' => $dealerId];
+                            $userRule = _applyUserDiscount($rowForDiscount, $dealerCtx);
+                            $waitingMessage = $userRule['waitingMessage'] ?? null;
+                            $appliedPercent = (float)($userRule['percent'] ?? 0);
+                            $appliedAmount = (float)($userRule['amount'] ?? 0);
+
                             // If admin has provided explicit dealer unit price for this product, use it.
+                            // We still keep $waitingMessage (stock=0) so UI/cart treat it as waiting (no discount).
                             if (isset($overrideByProductId[$productId])) {
                                 $dealerUnitPrice = (float)($overrideByProductId[$productId]['dealerUnitPrice'] ?? 0);
                                 if ($dealerUnitPrice < 0) $dealerUnitPrice = 0.0;
-                                $waitingMessage = null;
                                 $appliedPercent = 0.0;
                                 $appliedAmount = 0.0;
                             } else {
-                                $rowForDiscount = [
-                                    'id' => $pr['id'],
-                                    'category_id' => $pr['category_id'] ?? null,
-                                    'stock' => $pr['stock'] ?? 0,
-                                ];
-
-                                // IMPORTANT: calculate using the dealer as ctx.userId
-                                $dealerCtx = ['userId' => $dealerId];
-                                $userRule = _applyUserDiscount($rowForDiscount, $dealerCtx);
-                                $waitingMessage = $userRule['waitingMessage'] ?? null;
-                                $appliedPercent = (float)($userRule['percent'] ?? 0);
-                                $appliedAmount = (float)($userRule['amount'] ?? 0);
-
                                 if ($waitingMessage == null) {
                                     $discountValue = 0.0;
                                     if ($appliedPercent > 0) {
@@ -1527,7 +1532,9 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
                                         $itemSubtotal = $qUnit * $qty;
                                     }
                                     $share = $quoteSubtotal > 0 ? ($itemSubtotal / $quoteSubtotal) : 0.0;
-                                    $itemClientAfterDiscount = $itemSubtotal - ($quoteDiscountAmount * $share);
+                                    // When waiting (e.g. stock = 0 / minStock not met), no discount should be applied
+                                    // to client nor dealer for this item.
+                                    $itemClientAfterDiscount = $itemSubtotal;
                                     $itemInstallationShare = $quoteInstallationAmount * $share;
                                     $targetDealerTotal = $itemClientAfterDiscount + $itemInstallationShare;
                                     if ($targetDealerTotal < 0) $targetDealerTotal = 0.0;

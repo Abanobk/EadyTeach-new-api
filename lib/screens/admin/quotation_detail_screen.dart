@@ -279,7 +279,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
     final cart = context.read<CartProvider>();
     await cart.loadCart();
-    cart.clear();
+    // لا نُمسح السلة الحالية؛ التاجر قد يكون عنده طلبات سابقة في السلة
+    // ونريد إضافة عناصر الطلب الجديد فوق الموجود فقط.
 
     for (final raw in purchaseItems) {
       if (raw is! Map) continue;

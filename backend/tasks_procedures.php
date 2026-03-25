@@ -1264,6 +1264,13 @@ function quotations_previewDealerPurchase($input, $ctx) {
     $purchaseItems = [];
     $purchaseTotal = 0.0;
 
+    // For "waiting" (e.g. stock/discount not ready), we must avoid fake dealer profit.
+    // We'll allocate the dealer unit price proportionally to the client revenue share:
+    // (itemSubtotal - clientDiscountShare) + itemInstallationShare.
+    $quoteSubtotal = (float)($q['subtotal'] ?? 0);
+    $quoteDiscountAmount = (float)($q['discount_amount'] ?? 0);
+    $quoteInstallationAmount = (float)($q['installation_amount'] ?? 0);
+
     $prodStmt = $db->prepare('SELECT id, category_id, stock, price, original_price, main_image_url, images FROM products WHERE id = ?');
 
     foreach ($items as $item) {
@@ -1315,6 +1322,21 @@ function quotations_previewDealerPurchase($input, $ctx) {
                     $dealerUnitPrice = $officialUnitPrice - $discountValue;
                     if ($dealerUnitPrice < 0) $dealerUnitPrice = 0.0;
                     $appliedAmount = $discountValue; // store applied money discount
+                } else {
+                    // waiting item: dealer price should match "client revenue share" (no fake profit)
+                    $itemSubtotal = (float)($item['totalPrice'] ?? 0);
+                    if ($itemSubtotal <= 0) {
+                        $qUnit = (float)($item['unitPrice'] ?? 0);
+                        $itemSubtotal = $qUnit * $qty;
+                    }
+                    $share = $quoteSubtotal > 0 ? ($itemSubtotal / $quoteSubtotal) : 0.0;
+                    $itemClientAfterDiscount = $itemSubtotal - ($quoteDiscountAmount * $share);
+                    $itemInstallationShare = $quoteInstallationAmount * $share;
+                    $targetDealerTotal = $itemClientAfterDiscount + $itemInstallationShare;
+                    if ($targetDealerTotal < 0) $targetDealerTotal = 0.0;
+                    $dealerUnitPrice = $qty > 0 ? ($targetDealerTotal / $qty) : 0.0;
+                    $appliedPercent = 0.0;
+                    $appliedAmount = 0.0;
                 }
             }
         }

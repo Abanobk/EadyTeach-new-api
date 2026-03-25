@@ -441,6 +441,39 @@ function _ensureProductPartNumberColumn(PDO $db): void {
     $done = true;
 }
 
+/**
+ * Ensures products.id is AUTO_INCREMENT. Fixes MySQL 1364 "Field 'id' doesn't have a default value"
+ * on older/migrated DBs where id lost AUTO_INCREMENT.
+ */
+function _ensureProductsIdAutoIncrement(PDO $db): void {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    try {
+        $stmt = $db->query("SHOW COLUMNS FROM products LIKE 'id'");
+        $row = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+        if (!$row) {
+            $done = true;
+            return;
+        }
+        $extra = strtolower((string) ($row['Extra'] ?? ''));
+        if (strpos($extra, 'auto_increment') !== false) {
+            $done = true;
+            return;
+        }
+        $type = trim((string) ($row['Type'] ?? 'int'));
+        if ($type === '') {
+            $type = 'int';
+        }
+        $null = (isset($row['Null']) && strtoupper((string) $row['Null']) === 'YES') ? 'NULL' : 'NOT NULL';
+        $db->exec("ALTER TABLE products MODIFY COLUMN id {$type} {$null} AUTO_INCREMENT");
+        $done = true;
+    } catch (\Exception $e) {
+        // Retry on next request if ALTER failed (permissions, lock, etc.)
+    }
+}
+
 // ─── Router ────────────────────────────────────────────────────
 try {
     $result = null;
@@ -798,6 +831,7 @@ try {
 
         case 'products.create':
             _ensureProductPartNumberColumn($db);
+            _ensureProductsIdAutoIncrement($db);
             $name     = $input['name'] ?? '';
             $nameAr   = $input['nameAr'] ?? null;
             $desc     = $input['description'] ?? null;

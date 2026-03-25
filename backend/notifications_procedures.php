@@ -451,6 +451,9 @@ function notif_saveFcmToken($input, $ctx) {
     }
 
     if (empty($token) || $userId == 0) {
+        error_log('[FCM] saveFcmToken skip: user_id=' . (int)$userId .
+            ' platform=' . (string)$platform .
+            ' tokenEmpty=' . (empty($token) ? '1' : '0'));
         return ['success' => false];
     }
 
@@ -472,6 +475,10 @@ function notif_saveFcmToken($input, $ctx) {
 
     $stmt = $db->prepare('INSERT INTO fcm_tokens (user_id, token, platform) VALUES (?, ?, ?)');
     $stmt->execute([$userId, $token, $platform]);
+
+    error_log('[FCM] saveFcmToken ok user_id=' . (int)$userId .
+        ' platform=' . (string)$platform .
+        ' tokenLen=' . strlen((string)$token));
 
     return ['success' => true];
 }

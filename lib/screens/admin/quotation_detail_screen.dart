@@ -48,6 +48,9 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   final Map<int, TextEditingController> _adminDealerPriceControllers = {};
   int? _adminDealerPriceControllersForQuotationId;
 
+  // Toggle UI for dealer price override inputs.
+  bool _showAdminDealerPriceEditor = false;
+
   final _statusLabels = {
     'draft': 'مسودة',
     'sent': 'مُرسل',
@@ -1155,87 +1158,105 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                           ],
                           // Admin/staff: accept purchase request
                           if (canAcceptPurchase && purchaseRequestStatusNorm == 'requested') ...[
-                            // Ensure controllers after quotation is loaded
-                            Builder(builder: (ctx) {
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                if (!mounted) return;
-                                _ensureAdminDealerPriceControllers();
-                              });
-                              return const SizedBox.shrink();
-                            }),
-                            Builder(builder: (ctx) {
-                              final purchaseItems = (_quotation?['purchaseItems'] as List? ?? []);
-                              if (purchaseItems.isEmpty) {
-                                return const Padding(
-                                  padding: EdgeInsets.only(bottom: 10),
-                                  child: Text(
-                                    'لا توجد تفاصيل سعر تاجر لتعديلها.',
-                                    style: TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600),
-                                  ),
-                                );
-                              }
-
-                              return Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: AppThemeDecorations.cardColor(context),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: AppColors.border),
+                            final purchaseItems = (_quotation?['purchaseItems'] as List? ?? []);
+                            if (purchaseItems.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.only(bottom: 10),
+                                child: Text(
+                                  'لا توجد تفاصيل سعر تاجر لتعديلها.',
+                                  style: TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600),
                                 ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'تعديل سعر التاجر (للمنتجات)',
-                                      style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    ...purchaseItems.map((raw) {
-                                      if (raw is! Map) return const SizedBox.shrink();
-                                      final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
-                                      if (pid <= 0) return const SizedBox.shrink();
-                                      final name = raw['productName']?.toString() ?? 'منتج';
-                                      final qty = int.tryParse(raw['qty']?.toString() ?? '') ?? 1;
-                                      final ctrl = _adminDealerPriceControllers[pid];
-                                      final officialUnitPrice = double.tryParse(raw['officialUnitPrice']?.toString() ?? '') ?? 0.0;
-                                      if (ctrl == null) return const SizedBox.shrink();
-                                      return Padding(
-                                        padding: const EdgeInsets.only(bottom: 10),
-                                        child: Row(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(name, style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 13)),
-                                                  Text('الكمية: $qty', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
-                                                  if (officialUnitPrice > 0)
-                                                    Text('السعر الأصلي: ${officialUnitPrice.toStringAsFixed(0)} ج.م', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
-                                                ],
-                                              ),
-                                            ),
-                                            const SizedBox(width: 10),
-                                            SizedBox(
-                                              width: 130,
-                                              child: TextField(
-                                                controller: ctrl,
-                                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                                textDirection: TextDirection.ltr,
-                                                decoration: const InputDecoration(
-                                                  labelText: 'سعر التاجر',
-                                                  isDense: true,
+                              )
+                            else ...[
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: () async {
+                                    if (!mounted) return;
+                                    final next = !_showAdminDealerPriceEditor;
+                                    setState(() => _showAdminDealerPriceEditor = next);
+                                    if (next) {
+                                      // Ensure controllers exist before showing inputs.
+                                      _ensureAdminDealerPriceControllers();
+                                    }
+                                  },
+                                  icon: const Icon(Icons.edit),
+                                  label: Text(_showAdminDealerPriceEditor ? 'إخفاء تعديل سعر التاجر' : 'تعديل سعر التاجر (للمنتجات)'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.black,
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              if (_showAdminDealerPriceEditor) ...[
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppThemeDecorations.cardColor(context),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: AppColors.border),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'تعديل سعر التاجر (للمنتجات)',
+                                        style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      ...purchaseItems.map((raw) {
+                                        if (raw is! Map) return const SizedBox.shrink();
+                                        final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
+                                        if (pid <= 0) return const SizedBox.shrink();
+                                        final name = raw['productName']?.toString() ?? 'منتج';
+                                        final qty = int.tryParse(raw['qty']?.toString() ?? '') ?? 1;
+                                        final ctrl = _adminDealerPriceControllers[pid];
+                                        final officialUnitPrice = double.tryParse(raw['officialUnitPrice']?.toString() ?? '') ?? 0.0;
+                                        if (ctrl == null) return const SizedBox.shrink();
+                                        return Padding(
+                                          padding: const EdgeInsets.only(bottom: 10),
+                                          child: Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(name,
+                                                        style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 13)),
+                                                    Text('الكمية: $qty', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                                                    if (officialUnitPrice > 0)
+                                                      Text(
+                                                        'السعر الأصلي: ${officialUnitPrice.toStringAsFixed(0)} ج.م',
+                                                        style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                                                      ),
+                                                  ],
                                                 ),
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ],
+                                              const SizedBox(width: 10),
+                                              SizedBox(
+                                                width: 130,
+                                                child: TextField(
+                                                  controller: ctrl,
+                                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                  textDirection: TextDirection.ltr,
+                                                  decoration: const InputDecoration(
+                                                    labelText: 'سعر التاجر',
+                                                    isDense: true,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ],
+                                  ),
                                 ),
-                              );
-                            }),
+                              ],
+                            ],
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
@@ -1245,7 +1266,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                     : const Icon(Icons.check_circle_outline),
                                 label: Text(_acceptingPurchase ? 'جاري القبول...' : 'قبول طلب الشراء'),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
+                                  backgroundColor: AppColors.primary,
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(vertical: 14),
                                 ),

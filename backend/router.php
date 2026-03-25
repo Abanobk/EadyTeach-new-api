@@ -852,6 +852,18 @@ try {
             $result = ['success' => true];
             break;
 
+        case 'products.toggleActive':
+            $id = (int) ($input['id'] ?? 0);
+            $isActive = !empty($input['isActive']);
+
+            // Ensure column exists for older deployments.
+            try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active TINYINT(1) DEFAULT 1'); } catch (\Exception $e) {}
+
+            $db->prepare('UPDATE products SET is_active = ? WHERE id = ?')
+               ->execute([$isActive ? 1 : 0, $id]);
+            $result = ['success' => true, 'isActive' => $isActive];
+            break;
+
         case 'products.delete':
             $id = (int) ($input['id'] ?? 0);
             $db->prepare('DELETE FROM products WHERE id = ?')->execute([$id]);

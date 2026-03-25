@@ -821,6 +821,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     final purchaseRequestStatus = _quotation?['purchaseRequestStatus'] ?? 'none';
     final purchaseRequestStatusNorm = purchaseRequestStatus.toString().trim().toLowerCase();
     final purchaseRequestStatusRaw = purchaseRequestStatus.toString().trim();
+    final purchaseItems = (_quotation?['purchaseItems'] as List? ?? []);
     final qSubtotal = double.tryParse(_quotation?['subtotal']?.toString() ?? '0') ?? 0.0;
     // For dealer admin pricing we must exclude "تركيبات/installation" and exclude client-wide discount effects
     // except the manual discount the dealer entered for their client (discountAmount).
@@ -1158,7 +1159,6 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                           ],
                           // Admin/staff: accept purchase request
                           if (canAcceptPurchase && purchaseRequestStatusNorm == 'requested') ...[
-                            final purchaseItems = (_quotation?['purchaseItems'] as List? ?? []);
                             if (purchaseItems.isEmpty)
                               const Padding(
                                 padding: EdgeInsets.only(bottom: 10),

@@ -59,17 +59,43 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return result;
   }
 
-  double get _currentPrice {
-    double base = double.tryParse(widget.product['price']?.toString() ?? '0') ?? 0;
+  double get _originalSelectedPrice {
+    final base = double.tryParse(widget.product['price']?.toString() ?? '0') ?? 0;
+    final original = double.tryParse(widget.product['originalPrice']?.toString() ?? '0') ?? 0;
+    final pOriginalFallback = original > 0 ? original : base;
+
     if (_selectedVariantIndex != null && _variants.isNotEmpty) {
       final vp = _variants[_selectedVariantIndex!]['price'];
-      if (vp != null) return double.tryParse(vp.toString()) ?? base;
+      return double.tryParse(vp?.toString() ?? '') ?? pOriginalFallback;
     }
     if (_selectedTypeIndex != null && _types.isNotEmpty) {
       final tp = _types[_selectedTypeIndex!]['price'];
-      if (tp != null) return double.tryParse(tp.toString()) ?? base;
+      return double.tryParse(tp?.toString() ?? '') ?? pOriginalFallback;
     }
-    return base;
+    return pOriginalFallback;
+  }
+
+  double get _currentPrice {
+    final p = widget.product;
+    final discountPercent =
+        double.tryParse(p['discountPercent']?.toString() ?? '0') ?? 0.0;
+    final discountAmount =
+        double.tryParse(p['discountAmount']?.toString() ?? '0') ?? 0.0;
+    final discountMinStock =
+        int.tryParse(p['discountMinStock']?.toString() ?? '0') ?? 0;
+
+    final rawPrice = _originalSelectedPrice;
+    if (rawPrice <= 0) return 0.0;
+
+    final stockOk = discountMinStock <= 0 || _availableStock >= discountMinStock;
+    if (!stockOk) return rawPrice;
+    if (!(discountPercent > 0 || discountAmount > 0)) return rawPrice;
+
+    final discountValue = discountPercent > 0
+        ? rawPrice * discountPercent / 100.0
+        : discountAmount;
+    final discounted = rawPrice - discountValue;
+    return discounted < 0 ? 0.0 : discounted;
   }
 
   int get _availableStock {
@@ -103,12 +129,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final images = _images;
     final variants = _variants;
     final types = _types;
-    final originalPrice = double.tryParse(p['originalPrice']?.toString() ?? '0') ?? 0;
+    final originalPrice = _originalSelectedPrice;
     final discountPercent =
         double.tryParse(p['discountPercent']?.toString() ?? '0') ?? 0;
+    final discountAmount =
+        double.tryParse(p['discountAmount']?.toString() ?? '0') ?? 0;
+    final discountMinStock =
+        int.tryParse(p['discountMinStock']?.toString() ?? '0') ?? 0;
+    final stockOk = discountMinStock <= 0 || _availableStock >= discountMinStock;
     final hasDiscount =
-        (discountPercent > 0 && !originalPrice.isNaN && originalPrice > 0) ||
-            (originalPrice > 0 && originalPrice > _currentPrice);
+        stockOk &&
+            (discountPercent > 0 || discountAmount > 0) &&
+            originalPrice > 0 &&
+            _currentPrice > 0 &&
+            _currentPrice < originalPrice;
     final bool isOutOfStock = _availableStock <= 0;
 
     return Directionality(

@@ -293,6 +293,13 @@ function _applyUserDiscount(array $row, ?array $ctx): array {
     $rule = $rules[0];
     $minStock = (int)($rule['min_stock'] ?? 0);
 
+    // Always return the underlying discount values from the rule.
+    // If stock/minStock condition isn't met, we'll set waitingMessage only.
+    $percent = (float)($rule['discount_percent'] ?? 0);
+    $amount = (float)($rule['discount_amount'] ?? 0);
+    if ($percent < 0) $percent = 0;
+    if ($amount < 0) $amount = 0;
+
     if ($stock === 0 || ($minStock > 0 && $stock < $minStock)) {
         // No discount if stock is zero or doesn't meet minStock requirement
         $msg = $stock === 0
@@ -300,19 +307,13 @@ function _applyUserDiscount(array $row, ?array $ctx): array {
             : "المخزون أقل من شرط الخصم ($minStock) – في انتظار نسبة الخصم والسعر النهائي لهذا التاجر/العميل";
 
         return [
-            'percent' => 0.0,
-            'amount' => 0.0,
+            'percent' => $percent,
+            'amount' => $amount,
             'source' => 'user',
             'minStock' => $minStock,
             'waitingMessage' => $msg,
         ];
     }
-
-    $percent = (float)($rule['discount_percent'] ?? 0);
-    $amount = (float)($rule['discount_amount'] ?? 0);
-
-    if ($percent < 0) $percent = 0;
-    if ($amount < 0) $amount = 0;
 
     return [
         'percent' => $percent,
@@ -349,8 +350,16 @@ function formatProduct(array $row, ?array $ctx = null): array {
     $discountSource = null;
     $waitingMessage = $userRule['waitingMessage'] ?? null;
 
+    $effectiveDiscountMinStock = isset($userRule['minStock']) && $userRule['minStock'] !== null
+        ? (int)$userRule['minStock']
+        : $discountMinStock;
+
     if ($waitingMessage) {
-        // Explicitly no discount, just waiting message
+        // Waiting: keep the rule values (percent/amount) for the client,
+        // but don't apply discount to the base product price.
+        $appliedPercent = (float)($userRule['percent'] ?? 0);
+        $appliedAmount = (float)($userRule['amount'] ?? 0);
+        $discountSource = ($appliedPercent > 0 || $appliedAmount > 0) ? 'user' : null;
         $finalPrice = $basePrice;
     } elseif ($discountMinStock > 0 && $stock < $discountMinStock) {
         // No discount if stock condition is not met
@@ -413,7 +422,7 @@ function formatProduct(array $row, ?array $ctx = null): array {
         'discountPercent' => $appliedPercent,
         'discountAmount'  => $appliedAmount,
         'discountSource'  => $discountSource,
-        'discountMinStock'=> $discountMinStock,
+        'discountMinStock'=> $effectiveDiscountMinStock,
         'discountWaitingMessage' => $waitingMessage,
     ];
 }

@@ -1083,6 +1083,13 @@ function quotations_requestPurchase($input, $ctx) {
     $purchaseItems = [];
     $purchaseTotal = 0.0;
 
+    // When stock/discount is "waiting" we don't want dealer price to become 0.
+    // Instead, we distribute quotation-level client revenue (after discount + installation)
+    // over items proportionally, so dealer profit becomes ~0 for these waiting items.
+    $quoteSubtotal = (float)($q['subtotal'] ?? 0);
+    $quoteDiscountAmount = (float)($q['discount_amount'] ?? 0);
+    $quoteInstallationAmount = (float)($q['installation_amount'] ?? 0);
+
     $prodStmt = $db->prepare('SELECT id, category_id, stock, price, original_price, main_image_url, images FROM products WHERE id = ?');
 
     foreach ($items as $item) {
@@ -1136,6 +1143,21 @@ function quotations_requestPurchase($input, $ctx) {
                     $dealerUnitPrice = $officialUnitPrice - $discountValue;
                     if ($dealerUnitPrice < 0) $dealerUnitPrice = 0.0;
                     $appliedAmount = $discountValue; // store applied money discount
+                } else {
+                    // Stock/discount waiting: dealer price must equal "client revenue share" (no fake profit).
+                    $itemSubtotal = (float)($item['totalPrice'] ?? 0);
+                    if ($itemSubtotal <= 0) {
+                        $qUnit = (float)($item['unitPrice'] ?? 0);
+                        $itemSubtotal = $qUnit * $qty;
+                    }
+                    $share = $quoteSubtotal > 0 ? ($itemSubtotal / $quoteSubtotal) : 0.0;
+                    $itemClientAfterDiscount = $itemSubtotal - ($quoteDiscountAmount * $share);
+                    $itemInstallationShare = $quoteInstallationAmount * $share;
+                    $targetDealerTotal = $itemClientAfterDiscount + $itemInstallationShare;
+                    if ($targetDealerTotal < 0) $targetDealerTotal = 0.0;
+                    $dealerUnitPrice = $qty > 0 ? ($targetDealerTotal / $qty) : 0.0;
+                    $appliedPercent = 0.0;
+                    $appliedAmount = 0.0;
                 }
             }
         }
@@ -1351,6 +1373,26 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
 
     $dealerId = isset($q['created_by']) ? (int)$q['created_by'] : 0;
 
+    // Optional admin overrides for dealer prices:
+    // input['purchaseItems'] = [{productId, qty, dealerUnitPrice}, ...]
+    $overrideByProductId = [];
+    $overrideItems = $input['purchaseItems'] ?? null;
+    if (is_array($overrideItems)) {
+        foreach ($overrideItems as $it) {
+            if (!is_array($it)) continue;
+            $pid = (int)($it['productId'] ?? 0);
+            if ($pid <= 0) continue;
+            $du = (float)($it['dealerUnitPrice'] ?? 0);
+            $qQty = (int)($it['qty'] ?? $it['quantity'] ?? 0);
+            $overrideByProductId[$pid] = ['dealerUnitPrice' => $du, 'qty' => $qQty];
+        }
+    }
+
+    // Used for "stock waiting" items: distribute client revenue share so dealer profit isn't fake.
+    $quoteSubtotal = (float)($q['subtotal'] ?? 0);
+    $quoteDiscountAmount = (float)($q['discount_amount'] ?? 0);
+    $quoteInstallationAmount = (float)($q['installation_amount'] ?? 0);
+
     // If purchase_items weren't stored during requestPurchase (or were empty),
     // compute them now using the dealer's discount rules so the dealer can sync cart.
     $purchaseItemsExisting = $q['purchase_items'] ?? null;
@@ -1396,7 +1438,7 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
 
         $prodStmt = $db->prepare('SELECT id, category_id, stock, price, original_price, main_image_url, images FROM products WHERE id = ?');
 
-        foreach ($items as $item) {
+                foreach ($items as $item) {
             if (!is_array($item)) continue;
 
             $productId = (int)($item['productId'] ?? 0);
@@ -1424,30 +1466,55 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
                         if (is_array($imgs) && count($imgs) > 0) $imageUrl = $imgs[0];
                     }
 
-                    $rowForDiscount = [
-                        'id' => $pr['id'],
-                        'category_id' => $pr['category_id'] ?? null,
-                        'stock' => $pr['stock'] ?? 0,
-                    ];
+                            // If admin has provided explicit dealer unit price for this product, use it.
+                            if (isset($overrideByProductId[$productId])) {
+                                $dealerUnitPrice = (float)($overrideByProductId[$productId]['dealerUnitPrice'] ?? 0);
+                                if ($dealerUnitPrice < 0) $dealerUnitPrice = 0.0;
+                                $waitingMessage = null;
+                                $appliedPercent = 0.0;
+                                $appliedAmount = 0.0;
+                            } else {
+                                $rowForDiscount = [
+                                    'id' => $pr['id'],
+                                    'category_id' => $pr['category_id'] ?? null,
+                                    'stock' => $pr['stock'] ?? 0,
+                                ];
 
-                    // IMPORTANT: calculate using the dealer as ctx.userId
-                    $dealerCtx = ['userId' => $dealerId];
-                    $userRule = _applyUserDiscount($rowForDiscount, $dealerCtx);
-                    $waitingMessage = $userRule['waitingMessage'] ?? null;
-                    $appliedPercent = (float)($userRule['percent'] ?? 0);
-                    $appliedAmount = (float)($userRule['amount'] ?? 0);
+                                // IMPORTANT: calculate using the dealer as ctx.userId
+                                $dealerCtx = ['userId' => $dealerId];
+                                $userRule = _applyUserDiscount($rowForDiscount, $dealerCtx);
+                                $waitingMessage = $userRule['waitingMessage'] ?? null;
+                                $appliedPercent = (float)($userRule['percent'] ?? 0);
+                                $appliedAmount = (float)($userRule['amount'] ?? 0);
 
-                    if ($waitingMessage == null) {
-                        $discountValue = 0.0;
-                        if ($appliedPercent > 0) {
-                            $discountValue = $officialUnitPrice * $appliedPercent / 100.0;
-                        } elseif ($appliedAmount > 0) {
-                            $discountValue = $appliedAmount;
-                        }
-                        $dealerUnitPrice = $officialUnitPrice - $discountValue;
-                        if ($dealerUnitPrice < 0) $dealerUnitPrice = 0.0;
-                        $appliedAmount = $discountValue; // store applied money discount
-                    }
+                                if ($waitingMessage == null) {
+                                    $discountValue = 0.0;
+                                    if ($appliedPercent > 0) {
+                                        $discountValue = $officialUnitPrice * $appliedPercent / 100.0;
+                                    } elseif ($appliedAmount > 0) {
+                                        $discountValue = $appliedAmount;
+                                    }
+                                    $dealerUnitPrice = $officialUnitPrice - $discountValue;
+                                    if ($dealerUnitPrice < 0) $dealerUnitPrice = 0.0;
+                                    $appliedAmount = $discountValue; // store applied money discount
+                                } else {
+                                    // Stock/discount waiting: dealer price equals client revenue share (no fake profit).
+                                    $itemSubtotal = (float)($item['totalPrice'] ?? 0);
+                                    if ($itemSubtotal <= 0) {
+                                        $qUnit = (float)($item['unitPrice'] ?? 0);
+                                        $itemSubtotal = $qUnit * $qty;
+                                    }
+                                    $share = $quoteSubtotal > 0 ? ($itemSubtotal / $quoteSubtotal) : 0.0;
+                                    $itemClientAfterDiscount = $itemSubtotal - ($quoteDiscountAmount * $share);
+                                    $itemInstallationShare = $quoteInstallationAmount * $share;
+                                    $targetDealerTotal = $itemClientAfterDiscount + $itemInstallationShare;
+                                    if ($targetDealerTotal < 0) $targetDealerTotal = 0.0;
+                                    $dealerUnitPrice = $qty > 0 ? ($targetDealerTotal / $qty) : 0.0;
+                                    $appliedPercent = 0.0;
+                                    $appliedAmount = 0.0;
+                                }
+                            }
+
                 }
             }
 

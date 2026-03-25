@@ -44,6 +44,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   bool _cartSyncedForThisQuote = false;
   bool _didAutoRecomputeRequestedPricing = false;
 
+  // Admin/supervisor: override dealer unit prices per product before accepting.
+  final Map<int, TextEditingController> _adminDealerPriceControllers = {};
+  int? _adminDealerPriceControllersForQuotationId;
+
   final _statusLabels = {
     'draft': 'مسودة',
     'sent': 'مُرسل',
@@ -215,7 +219,11 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     if (_quotation == null) return;
     setState(() => _acceptingPurchase = true);
     try {
-      await ApiService.mutate('quotations.acceptPurchaseRequest', input: {'id': widget.quotationId});
+      final overrides = _collectAdminPurchasePriceOverrides();
+      final input = overrides.isNotEmpty
+          ? {'id': widget.quotationId, 'purchaseItems': overrides}
+          : {'id': widget.quotationId};
+      await ApiService.mutate('quotations.acceptPurchaseRequest', input: input);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('✅ تم قبول طلب الشراء'), backgroundColor: AppColors.success),
@@ -231,6 +239,66 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     } finally {
       if (mounted) setState(() => _acceptingPurchase = false);
     }
+  }
+
+  void _ensureAdminDealerPriceControllers() {
+    final purchaseStatusNorm = (_quotation?['purchaseRequestStatus'] ?? 'none')
+        .toString()
+        .trim()
+        .toLowerCase();
+    if (purchaseStatusNorm != 'requested') return;
+
+    final canAcceptPurchaseNow = context.read<AuthProvider>().user?.canAccessAdmin ?? false;
+    if (!canAcceptPurchaseNow) return;
+
+    final purchaseItems = (_quotation?['purchaseItems'] as List? ?? []);
+    if (purchaseItems.isEmpty) return;
+
+    if (_adminDealerPriceControllersForQuotationId == widget.quotationId &&
+        _adminDealerPriceControllers.isNotEmpty) {
+      return;
+    }
+
+    // Reset controllers for this quotation
+    for (final c in _adminDealerPriceControllers.values) {
+      c.dispose();
+    }
+    _adminDealerPriceControllers.clear();
+
+    for (final raw in purchaseItems) {
+      if (raw is! Map) continue;
+      final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
+      if (pid <= 0) continue;
+      final dealerUnitPrice = double.tryParse(raw['dealerUnitPrice']?.toString() ?? '') ?? 0.0;
+      _adminDealerPriceControllers[pid] = TextEditingController(
+        text: dealerUnitPrice.toStringAsFixed(2),
+      );
+    }
+
+    _adminDealerPriceControllersForQuotationId = widget.quotationId;
+  }
+
+  List<Map<String, dynamic>> _collectAdminPurchasePriceOverrides() {
+    final purchaseItems = (_quotation?['purchaseItems'] as List? ?? []);
+    if (purchaseItems.isEmpty) return const [];
+
+    final overrides = <Map<String, dynamic>>[];
+    for (final raw in purchaseItems) {
+      if (raw is! Map) continue;
+      final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
+      if (pid <= 0) continue;
+      final qty = int.tryParse(raw['qty']?.toString() ?? '') ?? 1;
+      final ctrl = _adminDealerPriceControllers[pid];
+      if (ctrl == null) continue;
+      final price = double.tryParse(ctrl.text.trim()) ?? 0.0;
+      if (price < 0) continue;
+      overrides.add({
+        'productId': pid,
+        'qty': qty,
+        'dealerUnitPrice': price,
+      });
+    }
+    return overrides;
   }
 
   bool get _isDealerForCurrentQuote {
@@ -371,6 +439,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   @override
   void dispose() {
     _dealerPollTimer?.cancel();
+    for (final c in _adminDealerPriceControllers.values) {
+      c.dispose();
+    }
+    _adminDealerPriceControllers.clear();
     super.dispose();
   }
 
@@ -1055,6 +1127,87 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                           ],
                           // Admin/staff: accept purchase request
                           if (canAcceptPurchase && purchaseRequestStatusNorm == 'requested') ...[
+                            // Ensure controllers after quotation is loaded
+                            Builder(builder: (ctx) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (!mounted) return;
+                                _ensureAdminDealerPriceControllers();
+                              });
+                              return const SizedBox.shrink();
+                            }),
+                            Builder(builder: (ctx) {
+                              final purchaseItems = (_quotation?['purchaseItems'] as List? ?? []);
+                              if (purchaseItems.isEmpty) {
+                                return const Padding(
+                                  padding: EdgeInsets.only(bottom: 10),
+                                  child: Text(
+                                    'لا توجد تفاصيل سعر تاجر لتعديلها.',
+                                    style: TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600),
+                                  ),
+                                );
+                              }
+
+                              return Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppThemeDecorations.cardColor(context),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppColors.border),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'تعديل سعر التاجر (للمنتجات)',
+                                      style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    ...purchaseItems.map((raw) {
+                                      if (raw is! Map) return const SizedBox.shrink();
+                                      final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
+                                      if (pid <= 0) return const SizedBox.shrink();
+                                      final name = raw['productName']?.toString() ?? 'منتج';
+                                      final qty = int.tryParse(raw['qty']?.toString() ?? '') ?? 1;
+                                      final ctrl = _adminDealerPriceControllers[pid];
+                                      final officialUnitPrice = double.tryParse(raw['officialUnitPrice']?.toString() ?? '') ?? 0.0;
+                                      if (ctrl == null) return const SizedBox.shrink();
+                                      return Padding(
+                                        padding: const EdgeInsets.only(bottom: 10),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(name, style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 13)),
+                                                  Text('الكمية: $qty', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                                                  if (officialUnitPrice > 0)
+                                                    Text('السعر الأصلي: ${officialUnitPrice.toStringAsFixed(0)} ج.م', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            SizedBox(
+                                              width: 130,
+                                              child: TextField(
+                                                controller: ctrl,
+                                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                textDirection: TextDirection.ltr,
+                                                decoration: const InputDecoration(
+                                                  labelText: 'سعر التاجر',
+                                                  isDense: true,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ],
+                                ),
+                              );
+                            }),
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(

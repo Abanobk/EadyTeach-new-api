@@ -1092,6 +1092,14 @@ try {
             $result = orders_getMyOrders($ctx);
             break;
 
+        case 'orders.getPendingCartSync':
+            $result = orders_getPendingCartSync($input ?? [], $ctx);
+            break;
+
+        case 'orders.markCartSynced':
+            $result = orders_markCartSynced($input, $ctx);
+            break;
+
         // ── Meta / Messenger ──────────────────────────────────────
         case 'meta.listConversations':
             $result = meta_listConversations($input, $ctx);
@@ -1303,6 +1311,10 @@ try {
 
         case 'admin.updateOrderStatus':
             $result = admin_updateOrderStatus($input, $ctx);
+            break;
+
+        case 'admin.updateOrderPricing':
+            $result = admin_updateOrderPricing($input, $ctx);
             break;
 
         // ── Notifications ────────────────────────────────────────

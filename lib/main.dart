@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'services/api_service.dart';
+import 'providers/cart_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'controllers/theme_controller.dart';
@@ -166,6 +168,30 @@ class _SplashScreenState extends State<SplashScreen> {
       if (auth.isLoggedIn) {
         await NotificationService().getAndSaveFcmToken().timeout(const Duration(seconds: 10));
         unawaited(NotificationService().updateBadgeFromServer());
+        // Sync confirmed preorder orders into cart (server-side approved prices)
+        try {
+          final pending = await ApiService.query('orders.getPendingCartSync');
+          final data = pending['data'];
+          if (data is List) {
+            final cart = context.read<CartProvider>();
+            await cart.loadCart();
+            for (final row in data) {
+              if (row is! Map) continue;
+              final items = row['items'];
+              if (items is! List) continue;
+              for (final it in items) {
+                if (it is! Map) continue;
+                final pid = int.tryParse(it['productId']?.toString() ?? '') ?? 0;
+                if (pid <= 0) continue;
+                final qty = int.tryParse(it['quantity']?.toString() ?? '') ?? 1;
+                final unit = double.tryParse(it['unitPrice']?.toString() ?? '') ?? 0.0;
+                cart.addItem(CartItem(productId: pid, name: 'منتج', price: unit, quantity: qty));
+              }
+              final orderId = row['orderId'];
+              await ApiService.mutate('orders.markCartSynced', input: {'orderId': orderId});
+            }
+          }
+        } catch (_) {}
         if (mounted) Navigator.pushReplacementNamed(context, '/role-select');
       } else {
         if (mounted) Navigator.pushReplacementNamed(context, '/login');

@@ -106,9 +106,11 @@ class _AdminOrderCard extends StatelessWidget {
     final status = order['status'] as String? ?? 'pending';
     final total =
         double.tryParse(order['totalAmount']?.toString() ?? '0') ?? 0;
+    final approvedItems = (order['approvedItems'] is List) ? (order['approvedItems'] as List) : null;
     final date = order['createdAt'] != null
         ? DateTime.fromMillisecondsSinceEpoch(order['createdAt'])
         : null;
+    final items = (order['items'] is List) ? (order['items'] as List) : const [];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -164,6 +166,15 @@ class _AdminOrderCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Divider(color: AppColors.border),
+                if (status == 'preorder') ...[
+                  _AdminOrderPricingEditor(
+                    orderId: order['id'],
+                    items: items,
+                    approvedItems: approvedItems,
+                    onSaved: () => onUpdateStatus(order['id'], status), // just refresh via parent flow
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 // Customer details
                 if (order['customerPhone'] != null)
                   _DetailRow(
@@ -206,6 +217,210 @@ class _AdminOrderCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AdminOrderPricingEditor extends StatefulWidget {
+  final dynamic orderId;
+  final List items;
+  final List? approvedItems;
+  final VoidCallback onSaved;
+
+  const _AdminOrderPricingEditor({
+    required this.orderId,
+    required this.items,
+    required this.approvedItems,
+    required this.onSaved,
+  });
+
+  @override
+  State<_AdminOrderPricingEditor> createState() => _AdminOrderPricingEditorState();
+}
+
+class _AdminOrderPricingEditorState extends State<_AdminOrderPricingEditor> {
+  final Map<int, TextEditingController> _controllers = {};
+  bool _open = false;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
+    _controllers.clear();
+    super.dispose();
+  }
+
+  void _ensureControllers() {
+    if (_controllers.isNotEmpty) return;
+    final approvedByPid = <int, double>{};
+    final a = widget.approvedItems;
+    if (a != null) {
+      for (final raw in a) {
+        if (raw is! Map) continue;
+        final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
+        if (pid <= 0) continue;
+        final unit = double.tryParse(raw['unitPrice']?.toString() ?? '') ?? 0.0;
+        approvedByPid[pid] = unit;
+      }
+    }
+    for (final raw in widget.items) {
+      if (raw is! Map) continue;
+      final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
+      if (pid <= 0) continue;
+      final unit = approvedByPid[pid] ??
+          (double.tryParse(raw['unitPrice']?.toString() ?? '') ?? 0.0);
+      _controllers[pid] = TextEditingController(text: unit.toStringAsFixed(2));
+    }
+  }
+
+  String _normalizeNumeric(String s) {
+    const arabicIndic = {
+      '٠': '0',
+      '١': '1',
+      '٢': '2',
+      '٣': '3',
+      '٤': '4',
+      '٥': '5',
+      '٦': '6',
+      '٧': '7',
+      '٨': '8',
+      '٩': '9',
+    };
+    var x = s.trim().replaceAll('،', '.').replaceAll(',', '.');
+    x = x.split('').map((ch) => arabicIndic[ch] ?? ch).join();
+    x = x.replaceAll(RegExp(r'[^0-9\.\-]'), '');
+    return x;
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      _ensureControllers();
+      final payload = <Map<String, dynamic>>[];
+      for (final raw in widget.items) {
+        if (raw is! Map) continue;
+        final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
+        if (pid <= 0) continue;
+        final qty = int.tryParse(raw['quantity']?.toString() ?? raw['qty']?.toString() ?? '') ?? 1;
+        final ctrl = _controllers[pid];
+        if (ctrl == null) continue;
+        final unit = double.tryParse(_normalizeNumeric(ctrl.text)) ?? 0.0;
+        payload.add({'productId': pid, 'quantity': qty, 'unitPrice': unit});
+      }
+
+      await ApiService.mutate('admin.updateOrderPricing', input: {
+        'orderId': widget.orderId,
+        'items': payload,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم حفظ أسعار الطلب المسبق'), backgroundColor: AppColors.success),
+        );
+      }
+      widget.onSaved();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في حفظ الأسعار: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              setState(() {
+                _open = !_open;
+              });
+              if (_open) _ensureControllers();
+            },
+            icon: const Icon(Icons.edit),
+            label: Text(_open ? 'إخفاء تعديل الأسعار' : 'تعديل أسعار الطلب المسبق'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+        if (_open) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppThemeDecorations.cardColor(context),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              children: [
+                ...widget.items.map((raw) {
+                  if (raw is! Map) return const SizedBox.shrink();
+                  final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
+                  if (pid <= 0) return const SizedBox.shrink();
+                  final name = raw['name']?.toString() ?? raw['productName']?.toString() ?? 'منتج';
+                  final qty = int.tryParse(raw['quantity']?.toString() ?? raw['qty']?.toString() ?? '') ?? 1;
+                  final ctrl = _controllers[pid];
+                  if (ctrl == null) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(name, style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 13)),
+                              Text('الكمية: $qty', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          width: 130,
+                          child: TextField(
+                            controller: ctrl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            textDirection: TextDirection.ltr,
+                            decoration: const InputDecoration(
+                              labelText: 'سعر الوحدة',
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _saving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(_saving ? 'جاري الحفظ...' : 'حفظ الأسعار'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ]
+      ],
     );
   }
 }

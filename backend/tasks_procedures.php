@@ -1784,7 +1784,9 @@ function _ensureOrdersTable() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NULL,
         items LONGTEXT,
+        approved_items LONGTEXT NULL,
         total DECIMAL(12,2) DEFAULT 0,
+        cart_synced TINYINT(1) DEFAULT 0,
         status VARCHAR(50) DEFAULT "pending",
         payment_method VARCHAR(30) DEFAULT "cash",
         payment_proof_url TEXT NULL,
@@ -1793,6 +1795,10 @@ function _ensureOrdersTable() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_user (user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+
+    // Ensure new columns exist for older deployments.
+    try { $db->exec('ALTER TABLE orders ADD COLUMN IF NOT EXISTS approved_items LONGTEXT NULL'); } catch (\Exception $e) {}
+    try { $db->exec('ALTER TABLE orders ADD COLUMN IF NOT EXISTS cart_synced TINYINT(1) DEFAULT 0'); } catch (\Exception $e) {}
 }
 
 function orders_create($input, $ctx) {
@@ -1812,7 +1818,8 @@ function orders_create($input, $ctx) {
     try { $db->exec('ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method VARCHAR(30) DEFAULT "cash"'); } catch (\Exception $e) {}
     try { $db->exec('ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_proof_url TEXT NULL'); } catch (\Exception $e) {}
 
-    $stmt = $db->prepare('INSERT INTO orders (user_id, items, total, status, payment_method, payment_proof_url, shipping_address, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt = $db->prepare('INSERT INTO orders (user_id, items, approved_items, total, cart_synced, status, payment_method, payment_proof_url, shipping_address, notes)
+                          VALUES (?, ?, NULL, ?, 0, ?, ?, ?, ?, ?)');
     $stmt->execute([$userId, $items, $total, $status, $paymentMethod, $paymentProofUrl, $address, $notes]);
     $orderId = (int)$db->lastInsertId();
 
@@ -1821,6 +1828,46 @@ function orders_create($input, $ctx) {
     } catch (\Exception $e) { /* ignore */ }
 
     return ['id' => $orderId];
+}
+
+/**
+ * Orders pending cart sync:
+ * - For owner (client/dealer) only
+ * - Returns confirmed orders that have approved_items and cart_synced = 0
+ */
+function orders_getPendingCartSync($input, $ctx) {
+    global $db;
+    _ensureOrdersTable();
+    $userId = (int)($ctx['userId'] ?? 0);
+    if ($userId <= 0) throw new Exception('UNAUTHORIZED');
+
+    $stmt = $db->prepare("SELECT id, approved_items FROM orders
+                          WHERE user_id = ? AND status = 'confirmed' AND cart_synced = 0
+                            AND approved_items IS NOT NULL AND TRIM(approved_items) <> ''
+                          ORDER BY created_at ASC");
+    $stmt->execute([$userId]);
+    $rows = $stmt->fetchAll();
+    $result = [];
+    foreach ($rows as $r) {
+        $items = [];
+        try { $items = $r['approved_items'] ? json_decode($r['approved_items'], true) : []; } catch (\Exception $e) { $items = []; }
+        if (!is_array($items)) $items = [];
+        $result[] = ['orderId' => (int)$r['id'], 'items' => $items];
+    }
+    return $result;
+}
+
+function orders_markCartSynced($input, $ctx) {
+    global $db;
+    _ensureOrdersTable();
+    $userId = (int)($ctx['userId'] ?? 0);
+    if ($userId <= 0) throw new Exception('UNAUTHORIZED');
+    $orderId = (int)($input['orderId'] ?? 0);
+    if ($orderId <= 0) throw new Exception('INVALID_ARGUMENT');
+
+    $upd = $db->prepare("UPDATE orders SET cart_synced = 1 WHERE id = ? AND user_id = ?");
+    $upd->execute([$orderId, $userId]);
+    return ['success' => true];
 }
 
 function orders_getMyOrders($ctx) {
@@ -1866,6 +1913,7 @@ function admin_getAllOrders($input, $ctx) {
         SELECT
             o.id,
             o.items,
+            o.approved_items,
             o.total,
             o.status,
             o.created_at,
@@ -1882,6 +1930,7 @@ function admin_getAllOrders($input, $ctx) {
         $result[] = [
             'id' => (int)$r['id'],
             'items' => $r['items'] ? json_decode($r['items'], true) : [],
+            'approvedItems' => $r['approved_items'] ? json_decode($r['approved_items'], true) : null,
             // UI expects totalAmount key
             'totalAmount' => (float)($r['total'] ?? 0),
             'status' => $r['status'] ?? 'pending',
@@ -1893,6 +1942,65 @@ function admin_getAllOrders($input, $ctx) {
     }
 
     return $result;
+}
+
+/**
+ * Admin can override unit prices for preorder orders.
+ * input: { orderId, items: [{productId, quantity, unitPrice}] }
+ */
+function admin_updateOrderPricing($input, $ctx) {
+    global $db;
+    _ensureOrdersTable();
+
+    $adminId = (int)($ctx['userId'] ?? 0);
+    if ($adminId <= 0) throw new Exception('UNAUTHORIZED');
+
+    $roleStmt = $db->prepare("SELECT role FROM users WHERE id = ?");
+    $roleStmt->execute([$adminId]);
+    $role = $roleStmt->fetchColumn();
+    $roleLower = $role ? strtolower(trim((string)$role)) : '';
+    if (!in_array($roleLower, ['admin', 'staff', 'supervisor'], true)) {
+        throw new Exception('FORBIDDEN');
+    }
+
+    $orderId = (int)($input['orderId'] ?? 0);
+    if ($orderId <= 0) throw new Exception('INVALID_ARGUMENT');
+    $newItems = $input['items'] ?? null;
+    if (!is_array($newItems) || count($newItems) === 0) throw new Exception('INVALID_ARGUMENT');
+
+    // Load order to validate status
+    $stmt = $db->prepare("SELECT status FROM orders WHERE id = ?");
+    $stmt->execute([$orderId]);
+    $status = $stmt->fetchColumn();
+    $statusNorm = $status ? strtolower(trim((string)$status)) : '';
+    if ($statusNorm !== 'preorder') {
+        throw new Exception('لا يمكن تعديل السعر إلا في حالة طلب مسبق');
+    }
+
+    $approvedItems = [];
+    $total = 0.0;
+    foreach ($newItems as $it) {
+        if (!is_array($it)) continue;
+        $pid = (int)($it['productId'] ?? 0);
+        if ($pid <= 0) continue;
+        $qty = (int)($it['quantity'] ?? $it['qty'] ?? 1);
+        if ($qty <= 0) $qty = 1;
+        $unit = (float)($it['unitPrice'] ?? $it['price'] ?? 0);
+        if ($unit < 0) $unit = 0.0;
+        $lineTotal = $unit * $qty;
+        $total += $lineTotal;
+        $approvedItems[] = [
+            'productId' => $pid,
+            'quantity' => $qty,
+            'unitPrice' => $unit,
+        ];
+    }
+    if (!$approvedItems) throw new Exception('INVALID_ARGUMENT');
+
+    $upd = $db->prepare("UPDATE orders SET approved_items = ?, total = ? WHERE id = ?");
+    $upd->execute([json_encode($approvedItems, JSON_UNESCAPED_UNICODE), $total, $orderId]);
+
+    return ['success' => true, 'totalAmount' => $total];
 }
 
 function admin_updateOrderStatus($input, $ctx) {
@@ -1914,9 +2022,22 @@ function admin_updateOrderStatus($input, $ctx) {
         throw new Exception('FORBIDDEN');
     }
 
-    // Update status
-    $upd = $db->prepare("UPDATE orders SET status = ? WHERE id = ?");
-    $upd->execute([$status, $orderId]);
+    // When confirming preorder: require approved_items and reset cart_synced so owner can sync to cart.
+    if (strtolower(trim($status)) === 'confirmed') {
+        $ai = $db->prepare("SELECT approved_items FROM orders WHERE id = ?");
+        $ai->execute([$orderId]);
+        $approvedRaw = $ai->fetchColumn();
+        $approvedRaw = $approvedRaw !== false ? trim((string)$approvedRaw) : '';
+        if ($approvedRaw === '') {
+            throw new Exception('لا يمكن تأكيد الطلب قبل تحديد أسعار المنتجات (طلب مسبق)');
+        }
+        $upd = $db->prepare("UPDATE orders SET status = ?, cart_synced = 0 WHERE id = ?");
+        $upd->execute([$status, $orderId]);
+    } else {
+        // Update status
+        $upd = $db->prepare("UPDATE orders SET status = ? WHERE id = ?");
+        $upd->execute([$status, $orderId]);
+    }
 
     // Notify order owner (if available)
     try {

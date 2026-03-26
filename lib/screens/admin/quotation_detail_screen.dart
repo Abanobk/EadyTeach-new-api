@@ -519,6 +519,49 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return s;
   }
 
+  /// سعر شراء التاجر للبند: من JSON العرض أولاً، ثم نفس الترتيب في preview / purchase_items (لا نستخدم productId فقط — قد يتكرر المنتج).
+  double? _dealerPurchaseUnitForLine(
+    int index,
+    Map<String, dynamic> item,
+    List<dynamic> quoteItems,
+    List<dynamic>? previewPurchaseItems,
+    List<dynamic>? storedPurchaseItems,
+    Map<int, Map<String, dynamic>> purchaseByProductId,
+  ) {
+    final fromItem = item['dealerUnitPrice'];
+    if (fromItem != null && fromItem.toString().trim().isNotEmpty) {
+      final v = double.tryParse(fromItem.toString());
+      if (v != null && v >= 0) return v;
+    }
+    if (previewPurchaseItems != null && index < previewPurchaseItems.length) {
+      final row = previewPurchaseItems[index];
+      if (row is Map) {
+        final v = double.tryParse(row['dealerUnitPrice']?.toString() ?? '');
+        if (v != null && v >= 0) return v;
+      }
+    }
+    if (storedPurchaseItems != null && index < storedPurchaseItems.length) {
+      final row = storedPurchaseItems[index];
+      if (row is Map) {
+        final v = double.tryParse(row['dealerUnitPrice']?.toString() ?? '');
+        if (v != null && v >= 0) return v;
+      }
+    }
+    final pid = int.tryParse(item['productId']?.toString() ?? '');
+    if (pid != null) {
+      final n = quoteItems.where((e) {
+        if (e is! Map) return false;
+        return int.tryParse(e['productId']?.toString() ?? '') == pid;
+      }).length;
+      if (n == 1) {
+        final row = purchaseByProductId[pid];
+        final v = double.tryParse(row?['dealerUnitPrice']?.toString() ?? '');
+        if (v != null && v >= 0) return v;
+      }
+    }
+    return null;
+  }
+
   Map<String, double> _dealerPricingSnapshot() {
     final qSubtotal = double.tryParse(_quotation?['subtotal']?.toString() ?? '0') ?? 0.0;
     final qDiscountAmount = double.tryParse(_quotation?['discountAmount']?.toString() ?? '0') ?? 0.0;
@@ -531,13 +574,45 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     final qOriginalTotal = qSubtotal;
     final qFinalTotal = (qSubtotal - qDiscountAmount).clamp(0.0, double.infinity);
 
+    final quoteItems = (_quotation?['items'] as List?) ?? [];
+    final previewPi = _dealerPurchasePreview?['purchaseItems'] as List?;
+    final storedPi = _quotation?['purchaseItems'] as List?;
+    final purchaseRaw = (storedPi ?? []);
+    final purchaseByProductId = <int, Map<String, dynamic>>{};
+    for (final raw in purchaseRaw) {
+      if (raw is! Map) continue;
+      final pid = int.tryParse(raw['productId']?.toString() ?? '');
+      if (pid != null) purchaseByProductId[pid] = Map<String, dynamic>.from(raw);
+    }
+
     double qDealerTotal = 0.0;
     if (purchaseRequestStatusNorm == 'accepted') {
       final dealerTotalRaw = _quotation?['purchaseTotalAmount'];
       qDealerTotal = (dealerTotalRaw == null) ? 0.0 : (double.tryParse(dealerTotalRaw.toString()) ?? 0.0);
     } else {
-      final previewTotalRaw = _dealerPurchasePreview?['purchaseTotalAmount'];
-      qDealerTotal = (previewTotalRaw == null) ? 0.0 : (double.tryParse(previewTotalRaw.toString()) ?? 0.0);
+      double sumLines = 0.0;
+      var allLinesResolved = quoteItems.isNotEmpty;
+      for (var i = 0; i < quoteItems.length; i++) {
+        final raw = quoteItems[i];
+        if (raw is! Map) {
+          allLinesResolved = false;
+          continue;
+        }
+        final item = Map<String, dynamic>.from(raw);
+        final qty = int.tryParse(item['qty']?.toString() ?? item['quantity']?.toString() ?? '1') ?? 1;
+        final du = _dealerPurchaseUnitForLine(i, item, quoteItems, previewPi, storedPi, purchaseByProductId);
+        if (du == null) {
+          allLinesResolved = false;
+          break;
+        }
+        sumLines += du * qty;
+      }
+      if (allLinesResolved) {
+        qDealerTotal = sumLines;
+      } else {
+        final previewTotalRaw = _dealerPurchasePreview?['purchaseTotalAmount'];
+        qDealerTotal = (previewTotalRaw == null) ? 0.0 : (double.tryParse(previewTotalRaw.toString()) ?? 0.0);
+      }
     }
     final qProfit = (qFinalTotal + qInstallationAmount) - qDealerTotal;
     return {
@@ -764,17 +839,16 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     final arabicFont = await PdfGoogleFonts.cairoRegular();
     final arabicBold = await PdfGoogleFonts.cairoBold();
     final totals = _dealerPricingSnapshot();
-    final profitPercent = totals['dealerTotal']! > 0
-        ? ((totals['profit']! / totals['dealerTotal']!) * 100.0)
-        : 0.0;
+    final revenueForMargin = totals['soldTotal']! + totals['installation']!;
+    final profitPercent = revenueForMargin > 0 ? ((totals['profit']! / revenueForMargin) * 100.0) : 0.0;
     final items = (q['items'] as List? ?? []);
     final purchaseItems = (q['purchaseItems'] as List? ?? []);
+    final previewPi = _dealerPurchasePreview?['purchaseItems'] as List?;
     final purchaseByProductId = <int, Map<String, dynamic>>{};
     for (final raw in purchaseItems) {
       if (raw is! Map) continue;
       final pid = int.tryParse(raw['productId']?.toString() ?? '');
-      if (pid == null) continue;
-      purchaseByProductId[pid] = Map<String, dynamic>.from(raw);
+      if (pid != null) purchaseByProductId[pid] = Map<String, dynamic>.from(raw);
     }
 
     final pdf = pw.Document();
@@ -843,11 +917,18 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           ),
           ...List.generate(items.length, (i) {
             final item = items[i] as Map;
-            final pid = int.tryParse(item['productId']?.toString() ?? '');
+            final itemMap = Map<String, dynamic>.from(item);
             final qty = int.tryParse(item['qty']?.toString() ?? item['quantity']?.toString() ?? '1') ?? 1;
             final soldUnit = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0.0;
-            final purchaseRow = pid == null ? null : purchaseByProductId[pid];
-            final dealerUnit = double.tryParse(purchaseRow?['dealerUnitPrice']?.toString() ?? '') ?? 0.0;
+            final dealerUnit = _dealerPurchaseUnitForLine(
+                  i,
+                  itemMap,
+                  items,
+                  previewPi,
+                  purchaseItems,
+                  purchaseByProductId,
+                ) ??
+                0.0;
             final lineProfit = (soldUnit - dealerUnit) * qty;
             return pw.Container(
               padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
@@ -912,6 +993,9 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     if (_quotation == null) return;
     setState(() => _generatingPdf = true);
     try {
+      if (_isDealerForCurrentQuote && !_dealerPreviewLoadedForCurrentQuotation) {
+        await _loadDealerPurchasePreview();
+      }
       final bytes = await _buildDealerPricingPdfBytes();
       final refNumber = (_quotation!['refNumber'] as String? ?? 'quote').replaceAll(RegExp(r'[^\w\-]'), '_');
       if (kIsWeb) {

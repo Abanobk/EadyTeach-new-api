@@ -1196,7 +1196,15 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                   }
                                   final productIdForRow =
                                       int.tryParse(item['productId']?.toString() ?? '') ?? 0;
-                                  final purchaseRow = (productIdForRow > 0) ? purchaseByProductId[productIdForRow] : null;
+                                  Map<String, dynamic>? purchaseRow;
+                                  if (productIdForRow > 0 && purchaseByProductId.containsKey(productIdForRow)) {
+                                    purchaseRow = purchaseByProductId[productIdForRow];
+                                  } else if (idx >= 0 && idx < purchaseItems.length) {
+                                    final raw = purchaseItems[idx];
+                                    if (raw is Map) {
+                                      purchaseRow = Map<String, dynamic>.from(raw);
+                                    }
+                                  }
                                   return Column(
                                     children: [
                                       Padding(
@@ -1223,11 +1231,11 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                                         if (isDealer && purchaseRow != null)
                                                           Builder(
                                                             builder: (_) {
-                                                              final officialUnit = double.tryParse(purchaseRow['officialUnitPrice']?.toString() ?? '') ?? 0.0;
-                                                              final dealerUnit = double.tryParse(purchaseRow['dealerUnitPrice']?.toString() ?? '') ?? 0.0;
+                                                              final officialUnit = double.tryParse(purchaseRow!['officialUnitPrice']?.toString() ?? '') ?? 0.0;
+                                                              final dealerUnit = double.tryParse(purchaseRow!['dealerUnitPrice']?.toString() ?? '') ?? 0.0;
                                                               final profitPerUnit = unitPrice - dealerUnit;
                                                               final profitTotal = profitPerUnit * qty;
-                                                              final waitingMsg = purchaseRow['discountWaitingMessage']?.toString() ?? '';
+                                                              final waitingMsg = purchaseRow!['discountWaitingMessage']?.toString() ?? '';
 
                                                               return Column(
                                                                 crossAxisAlignment: CrossAxisAlignment.start,

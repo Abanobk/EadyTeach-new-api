@@ -519,6 +519,22 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return s;
   }
 
+  /// اسم الموزع في PDF: من الـ API، أو من المستخدم الحالي إن كان هو منشئ العرض.
+  String _resolvedDealerNameForPdf(Map<String, dynamic> q) {
+    final dn = q['dealerName']?.toString().trim();
+    if (dn != null && dn.isNotEmpty) return dn;
+    try {
+      final auth = context.read<AuthProvider>();
+      final cb = int.tryParse(q['createdBy']?.toString() ?? '');
+      final u = auth.user;
+      if (cb != null && u != null && u.id == cb) {
+        final n = u.name.trim();
+        if (n.isNotEmpty) return n;
+      }
+    } catch (_) {}
+    return '-';
+  }
+
   /// سعر شراء التاجر للبند: من JSON العرض أولاً، ثم نفس الترتيب في preview / purchase_items (لا نستخدم productId فقط — قد يتكرر المنتج).
   double? _dealerPurchaseUnitForLine(
     int index,
@@ -560,6 +576,34 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       }
     }
     return null;
+  }
+
+  /// هل يمكن حساب إجمالي سعر شراء التاجر من البنود دون الاعتماد على preview فقط؟
+  bool _allQuotationLinesHaveDealerPrice() {
+    if (_quotation == null) return false;
+    final st = (_quotation!['purchaseRequestStatus'] ?? 'none').toString().trim().toLowerCase();
+    if (st == 'accepted') return true;
+
+    final quoteItems = (_quotation!['items'] as List?) ?? [];
+    if (quoteItems.isEmpty) return false;
+    final previewPi = _dealerPurchasePreview?['purchaseItems'] as List?;
+    final storedPi = _quotation!['purchaseItems'] as List?;
+    final purchaseRaw = storedPi ?? [];
+    final purchaseByProductId = <int, Map<String, dynamic>>{};
+    for (final raw in purchaseRaw) {
+      if (raw is! Map) continue;
+      final pid = int.tryParse(raw['productId']?.toString() ?? '');
+      if (pid != null) purchaseByProductId[pid] = Map<String, dynamic>.from(raw);
+    }
+    for (var i = 0; i < quoteItems.length; i++) {
+      final raw = quoteItems[i];
+      if (raw is! Map) return false;
+      final item = Map<String, dynamic>.from(raw);
+      if (_dealerPurchaseUnitForLine(i, item, quoteItems, previewPi, storedPi, purchaseByProductId) == null) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Map<String, double> _dealerPricingSnapshot() {
@@ -875,7 +919,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           pw.SizedBox(height: 10),
           pw.Divider(thickness: 1.2, color: PdfColors.blue700),
           pw.SizedBox(height: 8),
-          pw.Text('الموزع المعتمد: ${q['dealerName'] ?? '-'}', style: const pw.TextStyle(fontSize: 11)),
+          pw.Text('الموزع المعتمد: ${_resolvedDealerNameForPdf(q)}', style: const pw.TextStyle(fontSize: 11)),
           pw.Text('العميل: ${q['clientName'] ?? '-'}', style: const pw.TextStyle(fontSize: 11)),
           pw.Text('التاريخ: ${_formatDate(q['createdAt'])}', style: const pw.TextStyle(fontSize: 11)),
           pw.SizedBox(height: 14),
@@ -1158,25 +1202,19 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     // For dealer admin pricing we must exclude "تركيبات/installation" and exclude client-wide discount effects
     // except the manual discount the dealer entered for their client (discountAmount).
     final qDiscountAmount = double.tryParse(_quotation?['discountAmount']?.toString() ?? '0') ?? 0.0;
-    final qInstallationAmount = double.tryParse(_quotation?['installationAmount']?.toString() ?? '0') ?? 0.0;
     final qOriginalTotal = qSubtotal; // official product-only total (no installation)
     final qFinalTotal = (qSubtotal - qDiscountAmount).clamp(0.0, double.infinity); // after dealer's discount to client (no installation)
-    // Dealer total:
-    // - when accepted -> use stored purchase_total_amount
-    // - otherwise -> use preview calculation so it shows before admin approval too.
-    double qDealerTotal = 0.0;
-    if (purchaseRequestStatusNorm == 'accepted') {
-      final dealerTotalRaw = _quotation?['purchaseTotalAmount'];
-      qDealerTotal = (dealerTotalRaw == null) ? 0.0 : (double.tryParse(dealerTotalRaw.toString()) ?? 0.0);
-    } else {
-      final previewTotalRaw = _dealerPurchasePreview?['purchaseTotalAmount'];
-      qDealerTotal = (previewTotalRaw == null) ? 0.0 : (double.tryParse(previewTotalRaw.toString()) ?? 0.0);
-    }
-    // Profit = (client-facing total without product cost from admin) + installation revenue.
-    // Installation is extra revenue for dealer because it is not included in dealer purchase price.
-    final qProfit = (qFinalTotal + qInstallationAmount) - qDealerTotal;
-    final isDealerPriceLoading = purchaseRequestStatusNorm != 'accepted' && _loadingDealerPreview && !_dealerPreviewLoadedForCurrentQuotation;
+    // نفس منطق PDF: مجموع سعر شراء التاجر من البنود (dealerUnitPrice + محاذاة بالفهرس)، وليس purchaseTotalAmount من المعاينة فقط.
+    final dealerSnap = _quotation != null ? _dealerPricingSnapshot() : null;
+    final qDealerTotal = dealerSnap?['dealerTotal'] ?? 0.0;
+    final qProfit = dealerSnap?['profit'] ?? 0.0;
+    final linesHaveDealerPrice = _allQuotationLinesHaveDealerPrice();
+    final isDealerPriceLoading = purchaseRequestStatusNorm != 'accepted' &&
+        !linesHaveDealerPrice &&
+        _loadingDealerPreview &&
+        !_dealerPreviewLoadedForCurrentQuotation;
     final hasDealerPreviewError = purchaseRequestStatusNorm != 'accepted' &&
+        !linesHaveDealerPrice &&
         (_dealerPurchasePreviewError != null && _dealerPurchasePreviewError!.toString().trim().isNotEmpty);
     final dealerPriceValue = isDealerPriceLoading
         ? 'جاري الحساب...'
@@ -1295,23 +1333,27 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                   final unitPrice = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
                                   final qty = item['qty'] as int? ?? 1;
                                   final total = double.tryParse(item['totalPrice']?.toString() ?? '0') ?? (unitPrice * qty);
-                                  final purchaseItems = (_quotation?['purchaseItems'] as List? ?? []);
+                                  final purchaseItemsList = (_quotation?['purchaseItems'] as List? ?? []);
                                   final purchaseByProductId = <int, Map<String, dynamic>>{};
-                                  for (final raw in purchaseItems) {
+                                  for (final raw in purchaseItemsList) {
                                     if (raw is! Map) continue;
                                     final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
                                     if (pid > 0) purchaseByProductId[pid] = Map<String, dynamic>.from(raw);
                                   }
-                                  final productIdForRow =
-                                      int.tryParse(item['productId']?.toString() ?? '') ?? 0;
-                                  Map<String, dynamic>? purchaseRow;
-                                  if (productIdForRow > 0 && purchaseByProductId.containsKey(productIdForRow)) {
-                                    purchaseRow = purchaseByProductId[productIdForRow];
-                                  } else if (idx >= 0 && idx < purchaseItems.length) {
-                                    final raw = purchaseItems[idx];
-                                    if (raw is Map) {
-                                      purchaseRow = Map<String, dynamic>.from(raw);
-                                    }
+                                  final quoteItemsList = (_quotation!['items'] as List? ?? []);
+                                  final itemMap = Map<String, dynamic>.from(item);
+                                  final previewPiRows = _dealerPurchasePreview?['purchaseItems'] as List?;
+                                  final dealerUnitResolved = _dealerPurchaseUnitForLine(
+                                    idx,
+                                    itemMap,
+                                    quoteItemsList,
+                                    previewPiRows,
+                                    purchaseItemsList,
+                                    purchaseByProductId,
+                                  );
+                                  String? waitingMsg;
+                                  if (previewPiRows != null && idx < previewPiRows.length && previewPiRows[idx] is Map) {
+                                    waitingMsg = (previewPiRows[idx] as Map)['discountWaitingMessage']?.toString();
                                   }
                                   return Column(
                                     children: [
@@ -1336,20 +1378,21 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                                         if (item['selectedVariant'] != null)
                                                           Text('نوع: ${item['selectedVariant']}', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
                                                         Text('${unitPrice.toStringAsFixed(0)} ج.م / قطعة', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
-                                                        if (isDealer && purchaseRow != null)
+                                                        if (isDealer && dealerUnitResolved != null)
                                                           Builder(
                                                             builder: (_) {
-                                                              final officialUnit = double.tryParse(purchaseRow!['officialUnitPrice']?.toString() ?? '') ?? 0.0;
-                                                              final dealerUnit = double.tryParse(purchaseRow!['dealerUnitPrice']?.toString() ?? '') ?? 0.0;
+                                                              final officialUnit = double.tryParse(itemMap['officialUnitPrice']?.toString() ?? '') ??
+                                                                  unitPrice;
+                                                              final dealerUnit = dealerUnitResolved;
                                                               final profitPerUnit = unitPrice - dealerUnit;
                                                               final profitTotal = profitPerUnit * qty;
-                                                              final waitingMsg = purchaseRow!['discountWaitingMessage']?.toString() ?? '';
+                                                              final wm = waitingMsg?.trim() ?? '';
 
                                                               return Column(
                                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                                 children: [
-                                                                  if (waitingMsg.isNotEmpty)
-                                                                    Text(waitingMsg, style: const TextStyle(color: AppColors.error, fontSize: 10)),
+                                                                  if (wm.isNotEmpty)
+                                                                    Text(wm, style: const TextStyle(color: AppColors.error, fontSize: 10)),
                                                                   Text(
                                                                     'سعر شراء التاجر: ${dealerUnit.toStringAsFixed(0)} ج.م (السعر الرسمي ${officialUnit.toStringAsFixed(0)})',
                                                                     style: TextStyle(

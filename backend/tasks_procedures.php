@@ -1776,6 +1776,53 @@ function quotations_delete($input, $ctx) {
     return ['success' => true];
 }
 
+function _quotationDealerDisplayName($db, $r) {
+    if (!$db || !is_array($r)) {
+        return null;
+    }
+    $tryName = function ($userId) use ($db) {
+        if ($userId <= 0) {
+            return null;
+        }
+        try {
+            $ds = $db->prepare('SELECT name, role FROM users WHERE id = ?');
+            $ds->execute([$userId]);
+            $row = $ds->fetch(PDO::FETCH_ASSOC);
+            if (!$row) {
+                return null;
+            }
+            $name = trim((string)($row['name'] ?? ''));
+            if ($name === '') {
+                return null;
+            }
+            return ['name' => $name, 'role' => strtolower(trim((string)($row['role'] ?? '')))];
+        } catch (\Exception $e) {
+            return null;
+        }
+    };
+
+    if (!empty($r['dealer_user_id'])) {
+        $got = $tryName((int)$r['dealer_user_id']);
+        if ($got !== null) {
+            return $got['name'];
+        }
+    }
+
+    // عروض أنشأها التاجر بدون تعبئة dealer_user_id (لم يُختر موزع من القائمة)
+    if (empty($r['dealer_user_id']) && !empty($r['created_by'])) {
+        $got = $tryName((int)$r['created_by']);
+        if ($got !== null) {
+            $role = $got['role'];
+            // لا نعرض اسم المسؤول كـ "موزع" عند إنشاء العرض من لوحة الإدارة
+            if (!in_array($role, ['admin', 'supervisor'], true)) {
+                return $got['name'];
+            }
+        }
+    }
+
+    return null;
+}
+
 function _formatQuotation($r) {
     global $db;
     $items = $r['items'] ? json_decode($r['items'], true) : [];
@@ -1787,19 +1834,7 @@ function _formatQuotation($r) {
     }
     unset($item);
 
-    $dealerName = null;
-    if (!empty($r['dealer_user_id']) && isset($db)) {
-        try {
-            $ds = $db->prepare('SELECT name FROM users WHERE id = ?');
-            $ds->execute([(int)$r['dealer_user_id']]);
-            $dealerName = $ds->fetchColumn();
-            if ($dealerName === false) {
-                $dealerName = null;
-            }
-        } catch (\Exception $e) {
-            $dealerName = null;
-        }
-    }
+    $dealerName = _quotationDealerDisplayName($db, $r);
 
     return [
         'id' => (int)$r['id'],

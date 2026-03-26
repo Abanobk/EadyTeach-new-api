@@ -130,7 +130,8 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
           final off = double.tryParse(m['officialUnitPrice']?.toString() ?? '') ??
               (( _cartItems[i]['officialUnitPrice'] ?? _cartItems[i]['unitPrice']) as num).toDouble();
           _cartItems[i]['officialUnitPrice'] = off;
-          _cartItems[i]['unitPrice'] = up;
+          // خصم الموديول خاص بسعر شراء التاجر من الإدارة، وليس سعر بيع العميل.
+          _cartItems[i]['dealerUnitPrice'] = up;
           _cartItems[i]['dealerDiscountPercent'] = m['dealerDiscountPercent'];
           _cartItems[i]['dealerDiscountWaiting'] = m['dealerDiscountWaiting'];
         }
@@ -505,8 +506,37 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
     setState(() => _cartItems.removeAt(index));
   }
 
+  double _clientUnitPrice(Map<String, dynamic> item) =>
+      (item['unitPrice'] as num?)?.toDouble() ?? 0.0;
+
+  double _officialUnitPrice(Map<String, dynamic> item) =>
+      (item['officialUnitPrice'] as num?)?.toDouble() ?? _clientUnitPrice(item);
+
+  double _dealerPurchaseUnitPrice(Map<String, dynamic> item) =>
+      (item['dealerUnitPrice'] as num?)?.toDouble() ?? _officialUnitPrice(item);
+
+  double _itemManualDiscountPercent(Map<String, dynamic> item) =>
+      (item['manualDiscountPercent'] as num?)?.toDouble() ?? 0.0;
+
+  double _itemManualDiscountAmount(Map<String, dynamic> item) =>
+      (item['manualDiscountAmount'] as num?)?.toDouble() ?? 0.0;
+
+  bool _hasManualDiscount(Map<String, dynamic> item) =>
+      _itemManualDiscountPercent(item) > 0 || _itemManualDiscountAmount(item) > 0;
+
+  double _effectiveUnitPrice(Map<String, dynamic> item) {
+    final clientBase = _clientUnitPrice(item);
+    if (!_hasManualDiscount(item)) return clientBase;
+    final base = clientBase;
+    final pct = _itemManualDiscountPercent(item);
+    final amt = _itemManualDiscountAmount(item);
+    final discountValue = pct > 0 ? (base * pct / 100.0) : amt;
+    final out = base - discountValue;
+    return out < 0 ? 0 : out;
+  }
+
   double get _subtotal => _cartItems.fold(0.0, (sum, item) {
-        final up = (item['unitPrice'] as num?)?.toDouble() ?? 0.0;
+        final up = _effectiveUnitPrice(item);
         final q = (item['qty'] as int?) ?? 1;
         return sum + up * q;
       });
@@ -589,8 +619,11 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
             'description': descParts.isEmpty ? null : descParts.join(' | '),
             'imageUrl': item['productImage'],
             'quantity': item['qty'] as int,
-            'unitPrice': (item['unitPrice'] as num).toDouble(),
+            'unitPrice': _effectiveUnitPrice(item),
             if (item['officialUnitPrice'] != null) 'officialUnitPrice': (item['officialUnitPrice'] as num).toDouble(),
+            if (item['dealerUnitPrice'] != null) 'dealerUnitPrice': (item['dealerUnitPrice'] as num).toDouble(),
+            if (_itemManualDiscountPercent(item) > 0) 'manualDiscountPercent': _itemManualDiscountPercent(item),
+            if (_itemManualDiscountAmount(item) > 0) 'manualDiscountAmount': _itemManualDiscountAmount(item),
             if (cfg is Map) 'configuration': Map<String, dynamic>.from(cfg as Map),
             'sortOrder': idx,
           };
@@ -630,6 +663,101 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
         );
       }
     }
+  }
+
+  Future<void> _showItemDiscountDialog(int index) async {
+    final item = _cartItems[index];
+    final pctCtrl = TextEditingController(
+      text: _itemManualDiscountPercent(item) > 0
+          ? _itemManualDiscountPercent(item).toStringAsFixed(2)
+          : '',
+    );
+    final amtCtrl = TextEditingController(
+      text: _itemManualDiscountAmount(item) > 0
+          ? _itemManualDiscountAmount(item).toStringAsFixed(2)
+          : '',
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('خصم يدوي للبند'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item['productName']?.toString() ?? '',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'السعر الرسمي: ${_officialUnitPrice(item).toStringAsFixed(2)} ج.م',
+              style: const TextStyle(color: AppColors.muted, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: pctCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'خصم نسبة % (اختياري)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: amtCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'خصم مبلغ ثابت ج.م (اختياري)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'لو كتبت النسبة والمبلغ معاً، سيتم تطبيق النسبة فقط.',
+              style: TextStyle(color: AppColors.muted, fontSize: 11),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _cartItems[index].remove('manualDiscountPercent');
+                _cartItems[index].remove('manualDiscountAmount');
+              });
+              Navigator.pop(ctx);
+            },
+            child: const Text('مسح الخصم'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final pct = double.tryParse(pctCtrl.text.replaceAll(',', '.')) ?? 0;
+              final amt = double.tryParse(amtCtrl.text.replaceAll(',', '.')) ?? 0;
+              setState(() {
+                if (pct > 0) {
+                  _cartItems[index]['manualDiscountPercent'] = pct;
+                  _cartItems[index]['manualDiscountAmount'] = 0.0;
+                } else if (amt > 0) {
+                  _cartItems[index]['manualDiscountPercent'] = 0.0;
+                  _cartItems[index]['manualDiscountAmount'] = amt;
+                } else {
+                  _cartItems[index].remove('manualDiscountPercent');
+                  _cartItems[index].remove('manualDiscountAmount');
+                }
+              });
+              Navigator.pop(ctx);
+            },
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -755,6 +883,9 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                           itemBuilder: (context, i) {
                             final p = _filteredProducts[i];
                             final cartLines = _cartItems.where((c) => c['productId'] == p['id']).length;
+                            final cartQty = _cartItems
+                                .where((c) => c['productId'] == p['id'])
+                                .fold<int>(0, (sum, c) => sum + ((c['qty'] as int?) ?? 1));
                             final price = double.tryParse((p['originalPrice'] ?? p['price'])?.toString() ?? '0') ?? 0;
                             // variants = ألوان, types = أنواع
                             final variantsList = (p['variants'] as List?) ?? [];
@@ -829,7 +960,9 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                                             border: Border.all(color: AppColors.primary.withOpacity(0.4)),
                                           ),
                                           child: Text(
-                                            cartLines == 1 ? '1 في السلة' : '$cartLines أسطر في السلة',
+                                            cartQty <= 1
+                                                ? '1 قطعة في السلة'
+                                                : '$cartQty قطعة في السلة',
                                             style: const TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
                                           ),
                                         )
@@ -931,9 +1064,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                               if (v == null) {
                                 _selectedDealerName = null;
                                 for (final item in _cartItems) {
-                                  if (item['officialUnitPrice'] != null) {
-                                    item['unitPrice'] = (item['officialUnitPrice'] as num).toDouble();
-                                  }
+                                  item.remove('dealerUnitPrice');
                                   item.remove('dealerDiscountPercent');
                                   item.remove('dealerDiscountWaiting');
                                 }
@@ -983,19 +1114,33 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                                   (item['dealerDiscountPercent'] as num) > 0 &&
                                   item['officialUnitPrice'] != null)
                                 Text(
-                                  'بعد خصم التاجر: ${(item['unitPrice'] as num).toStringAsFixed(2)} ج.م (قبل الخصم ${(item['officialUnitPrice'] as num).toStringAsFixed(2)})',
+                                  'سعر شراء التاجر: ${_dealerPurchaseUnitPrice(item).toStringAsFixed(2)} ج.م (السعر الرسمي ${(item['officialUnitPrice'] as num).toStringAsFixed(2)})',
                                   style: const TextStyle(color: AppColors.success, fontSize: 10),
+                                ),
+                              if (_hasManualDiscount(item))
+                                Text(
+                                  _itemManualDiscountPercent(item) > 0
+                                      ? 'خصم يدوي للعميل ${_itemManualDiscountPercent(item).toStringAsFixed(2)}%'
+                                      : 'خصم يدوي للعميل ${_itemManualDiscountAmount(item).toStringAsFixed(2)} ج.م',
+                                  style: const TextStyle(color: AppColors.error, fontSize: 10, fontWeight: FontWeight.w600),
                                 ),
                               if (item['dealerDiscountWaiting'] != null && item['dealerDiscountWaiting'].toString().isNotEmpty)
                                 Text(item['dealerDiscountWaiting'].toString(), style: const TextStyle(color: AppColors.error, fontSize: 10)),
                               Text(
-                                  '${(item['unitPrice'] as num).toStringAsFixed(0)} × ${item['qty']} = ${((item['unitPrice'] as num).toDouble() * (item['qty'] as int)).toStringAsFixed(0)} ج.م',
+                                  '${_effectiveUnitPrice(item).toStringAsFixed(0)} × ${item['qty']} = ${(_effectiveUnitPrice(item) * (item['qty'] as int)).toStringAsFixed(0)} ج.م',
                                   style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
                             ],
                           ),
                         ),
                         Row(
                           children: [
+                            IconButton(
+                              icon: const Icon(Icons.local_offer_outlined, color: AppColors.primary, size: 20),
+                              onPressed: () => _showItemDiscountDialog(i),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                            const SizedBox(width: 6),
                             IconButton(
                               icon: const Icon(Icons.remove_circle_outline, color: AppColors.error, size: 20),
                               onPressed: () {

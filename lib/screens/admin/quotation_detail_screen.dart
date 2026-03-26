@@ -518,6 +518,37 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return s;
   }
 
+  Map<String, double> _dealerPricingSnapshot() {
+    final qSubtotal = double.tryParse(_quotation?['subtotal']?.toString() ?? '0') ?? 0.0;
+    final qDiscountAmount = double.tryParse(_quotation?['discountAmount']?.toString() ?? '0') ?? 0.0;
+    final qInstallationAmount = double.tryParse(_quotation?['installationAmount']?.toString() ?? '0') ?? 0.0;
+    final purchaseRequestStatusNorm = (_quotation?['purchaseRequestStatus'] ?? 'none')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    final qOriginalTotal = qSubtotal;
+    final qFinalTotal = (qSubtotal - qDiscountAmount).clamp(0.0, double.infinity);
+
+    double qDealerTotal = 0.0;
+    if (purchaseRequestStatusNorm == 'accepted') {
+      final dealerTotalRaw = _quotation?['purchaseTotalAmount'];
+      qDealerTotal = (dealerTotalRaw == null) ? 0.0 : (double.tryParse(dealerTotalRaw.toString()) ?? 0.0);
+    } else {
+      final previewTotalRaw = _dealerPurchasePreview?['purchaseTotalAmount'];
+      qDealerTotal = (previewTotalRaw == null) ? 0.0 : (double.tryParse(previewTotalRaw.toString()) ?? 0.0);
+    }
+    final qProfit = (qFinalTotal + qInstallationAmount) - qDealerTotal;
+    return {
+      'officialTotal': qOriginalTotal,
+      'clientDiscount': qDiscountAmount,
+      'soldTotal': qFinalTotal,
+      'installation': qInstallationAmount,
+      'dealerTotal': qDealerTotal,
+      'profit': qProfit,
+    };
+  }
+
   Future<pw.ImageProvider?> _fetchPdfImage(String? rawUrl) async {
     if (rawUrl == null || rawUrl.isEmpty) return null;
     try {
@@ -720,6 +751,177 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('خطأ: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _generatingPdf = false);
+    }
+  }
+
+  Future<Uint8List> _buildDealerPricingPdfBytes() async {
+    final q = _quotation!;
+    final arabicFont = await PdfGoogleFonts.cairoRegular();
+    final arabicBold = await PdfGoogleFonts.cairoBold();
+    final totals = _dealerPricingSnapshot();
+    final profitPercent = totals['dealerTotal']! > 0
+        ? ((totals['profit']! / totals['dealerTotal']!) * 100.0)
+        : 0.0;
+    final items = (q['items'] as List? ?? []);
+    final purchaseItems = (q['purchaseItems'] as List? ?? []);
+    final purchaseByProductId = <int, Map<String, dynamic>>{};
+    for (final raw in purchaseItems) {
+      if (raw is! Map) continue;
+      final pid = int.tryParse(raw['productId']?.toString() ?? '');
+      if (pid == null) continue;
+      purchaseByProductId[pid] = Map<String, dynamic>.from(raw);
+    }
+
+    final pdf = pw.Document();
+    pdf.addPage(
+      pw.MultiPage(
+        textDirection: pw.TextDirection.rtl,
+        theme: pw.ThemeData.withFont(base: arabicFont, bold: arabicBold),
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(36),
+        build: (ctx) => [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('Easy Tech', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text('تقرير أسعار التاجر', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(q['refNumber']?.toString() ?? '', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
+                ],
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 10),
+          pw.Divider(thickness: 1.2, color: PdfColors.blue700),
+          pw.SizedBox(height: 8),
+          pw.Text('الموزع المعتمد: ${q['dealerName'] ?? '-'}', style: const pw.TextStyle(fontSize: 11)),
+          pw.Text('العميل: ${q['clientName'] ?? '-'}', style: const pw.TextStyle(fontSize: 11)),
+          pw.Text('التاريخ: ${_formatDate(q['createdAt'])}', style: const pw.TextStyle(fontSize: 11)),
+          pw.SizedBox(height: 14),
+          pw.Container(
+            padding: const pw.EdgeInsets.all(10),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey400),
+              borderRadius: pw.BorderRadius.circular(6),
+            ),
+            child: pw.Column(
+              children: [
+                _pdfMoneyRow('إجمالي السعر الرسمي', totals['officialTotal']!),
+                _pdfMoneyRow('خصم التاجر للعميل', -totals['clientDiscount']!),
+                _pdfMoneyRow('إجمالي البيع للعميل (بعد الخصم)', totals['soldTotal']!),
+                _pdfMoneyRow('سعر شراء التاجر', totals['dealerTotal']!),
+                _pdfMoneyRow('التركيبات', totals['installation']!),
+                pw.Divider(),
+                _pdfMoneyRow('مكسب التاجر', totals['profit']!, emphasize: true),
+                _pdfMoneyRow('نسبة المكسب', profitPercent, emphasize: true, asPercent: true),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 14),
+          pw.Text('تفاصيل البنود', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          pw.Container(
+            color: PdfColors.blue800,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            child: pw.Row(
+              children: [
+                _pdfHeaderCell('#', 1),
+                _pdfHeaderCell('المنتج', 4),
+                _pdfHeaderCell('الكمية', 1),
+                _pdfHeaderCell('سعر شراء التاجر', 2),
+                _pdfHeaderCell('سعر بيع العميل', 2),
+                _pdfHeaderCell('مكسب البند', 2),
+              ],
+            ),
+          ),
+          ...List.generate(items.length, (i) {
+            final item = items[i] as Map;
+            final pid = int.tryParse(item['productId']?.toString() ?? '');
+            final qty = int.tryParse(item['qty']?.toString() ?? item['quantity']?.toString() ?? '1') ?? 1;
+            final soldUnit = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0.0;
+            final purchaseRow = pid == null ? null : purchaseByProductId[pid];
+            final dealerUnit = double.tryParse(purchaseRow?['dealerUnitPrice']?.toString() ?? '') ?? 0.0;
+            final lineProfit = (soldUnit - dealerUnit) * qty;
+            return pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300, width: 0.5),
+                color: i.isEven ? PdfColors.white : PdfColors.grey50,
+              ),
+              child: pw.Row(
+                children: [
+                  _pdfCell('${i + 1}', 1),
+                  _pdfCell(item['productName']?.toString() ?? '-', 4),
+                  _pdfCell('$qty', 1),
+                  _pdfCell('${dealerUnit.toStringAsFixed(0)} ج.م', 2),
+                  _pdfCell('${soldUnit.toStringAsFixed(0)} ج.م', 2),
+                  _pdfCell('${lineProfit.toStringAsFixed(0)} ج.م', 2),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+    return pdf.save();
+  }
+
+  pw.Widget _pdfHeaderCell(String text, int flex) => pw.Expanded(
+        flex: flex,
+        child: pw.Text(
+          text,
+          style: pw.TextStyle(color: PdfColors.white, fontSize: 9, fontWeight: pw.FontWeight.bold),
+          textAlign: pw.TextAlign.center,
+        ),
+      );
+
+  pw.Widget _pdfCell(String text, int flex) => pw.Expanded(
+        flex: flex,
+        child: pw.Text(
+          text,
+          style: const pw.TextStyle(fontSize: 9),
+          textAlign: pw.TextAlign.center,
+        ),
+      );
+
+  pw.Widget _pdfMoneyRow(String label, double amount, {bool emphasize = false, bool asPercent = false}) {
+    final color = emphasize ? PdfColors.blue800 : PdfColors.black;
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 4),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(label, style: pw.TextStyle(fontSize: 11, color: color, fontWeight: emphasize ? pw.FontWeight.bold : pw.FontWeight.normal)),
+          pw.Text(
+            asPercent ? '${amount.toStringAsFixed(1)}%' : '${amount.toStringAsFixed(0)} ج.م',
+            style: pw.TextStyle(fontSize: 11, color: color, fontWeight: emphasize ? pw.FontWeight.bold : pw.FontWeight.normal),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _shareDealerPricingPdf() async {
+    if (_quotation == null) return;
+    setState(() => _generatingPdf = true);
+    try {
+      final bytes = await _buildDealerPricingPdfBytes();
+      final refNumber = (_quotation!['refNumber'] as String? ?? 'quote').replaceAll(RegExp(r'[^\w\-]'), '_');
+      if (kIsWeb) {
+        await pdf_saver.savePdfBytes(bytes, '${refNumber}_dealer_pricing.pdf');
+      } else {
+        await Printing.sharePdf(bytes: bytes, filename: '${refNumber}_dealer_pricing.pdf');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في إنشاء PDF التاجر: $e'), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -1139,6 +1341,24 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                               ),
                             ),
                           ),
+                          if (_quotation!['dealerName'] != null && _quotation!['dealerName'].toString().isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: (_generatingPdf || _downloadingPdf) ? null : _shareDealerPricingPdf,
+                                icon: _generatingPdf
+                                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                    : const Icon(Icons.request_quote, color: Colors.white),
+                                label: const Text('مشاركة PDF أسعار التاجر ومكسبه'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0F766E),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 10),
                           // Dealer: request purchase to admin
                           if (isDealer) ...[

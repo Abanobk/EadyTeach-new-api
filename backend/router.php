@@ -259,9 +259,12 @@ function _applyUserDiscount(array $row, ?array $ctx): array {
         $stmt = $db->prepare("SELECT * FROM discount_rules
                               WHERE target_type = 'dealer' AND target_id = ? AND is_active = 1
                                 AND scope_type = 'product_type' AND product_id = ?
-                                AND LOWER(TRIM(variant_name)) = LOWER(TRIM(?))
+                                AND (
+                                  LOWER(TRIM(variant_name)) = LOWER(TRIM(?))
+                                  OR LOWER(TRIM(variant_name)) LIKE CONCAT('%', LOWER(TRIM(?)), '%')
+                                )
                               ORDER BY id DESC");
-        $stmt->execute([$userId, $productId, $variantName]);
+        $stmt->execute([$userId, $productId, $variantName, $variantName]);
         $rules = $stmt->fetchAll();
     }
 
@@ -288,9 +291,12 @@ function _applyUserDiscount(array $row, ?array $ctx): array {
             $stmt = $db->prepare("SELECT * FROM discount_rules
                                   WHERE target_type = 'client' AND target_id = ? AND is_active = 1
                                     AND scope_type = 'product_type' AND product_id = ?
-                                    AND LOWER(TRIM(variant_name)) = LOWER(TRIM(?))
+                                    AND (
+                                      LOWER(TRIM(variant_name)) = LOWER(TRIM(?))
+                                      OR LOWER(TRIM(variant_name)) LIKE CONCAT('%', LOWER(TRIM(?)), '%')
+                                    )
                                   ORDER BY id DESC");
-            $stmt->execute([$userId, $productId, $variantName]);
+            $stmt->execute([$userId, $productId, $variantName, $variantName]);
             $rules = $stmt->fetchAll();
         }
     }

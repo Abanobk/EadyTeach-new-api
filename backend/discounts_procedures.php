@@ -207,9 +207,12 @@ function discounts_fetchDealerRuleForProduct(PDO $db, int $dealerId, int $produc
         $stmt = $db->prepare("SELECT * FROM discount_rules
                               WHERE target_type = 'dealer' AND target_id = ? AND is_active = 1
                                 AND scope_type = 'product_type' AND product_id = ?
-                                AND LOWER(TRIM(variant_name)) = LOWER(TRIM(?))
+                                AND (
+                                  LOWER(TRIM(variant_name)) = LOWER(TRIM(?))
+                                  OR LOWER(TRIM(variant_name)) LIKE CONCAT('%', LOWER(TRIM(?)), '%')
+                                )
                               ORDER BY id DESC LIMIT 1");
-        $stmt->execute([$dealerId, $productId, $variantName]);
+        $stmt->execute([$dealerId, $productId, $variantName, $variantName]);
         $r = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($r) {
             return $r;

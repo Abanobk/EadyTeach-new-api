@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
@@ -20,6 +21,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   int? _selectedVariantIndex;
   int? _selectedTypeIndex;
 
+  int? _dealerId;
+  bool _loadingTypePrices = false;
+  final Map<String, double> _dealerTypeUnitPrice = {};
+  final Map<String, String?> _dealerTypeWaiting = {};
+
   late final TextEditingController _curtainLengthCmCtrl;
   late final TextEditingController _curtainNotesCtrl;
   String _curtainDirection = 'center'; // left | center | right
@@ -39,6 +45,83 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     _curtainLengthCmCtrl.dispose();
     _curtainNotesCtrl.dispose();
     super.dispose();
+  }
+
+  String _normalizeTypeName(String raw) =>
+      raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+  Future<void> _refreshDealerTypePrices(int dealerId) async {
+    if (_isCurtainTrack) return;
+    final types = _types;
+    if (types.isEmpty) return;
+
+    final rawPid = widget.product['id'] ?? widget.product['productId'];
+    final productId =
+        rawPid is int ? rawPid : int.tryParse(rawPid?.toString() ?? '');
+    if (productId == null || productId <= 0) return;
+
+    setState(() => _loadingTypePrices = true);
+    try {
+      final items = <Map<String, dynamic>>[];
+      for (final t in types) {
+        final name = _normalizeTypeName((t['name']?.toString() ?? '').trim());
+        final base = double.tryParse(t['price']?.toString() ?? '0') ?? 0.0;
+        if (name.isEmpty || base <= 0) continue;
+        items.add({
+          'productId': productId,
+          'unitPrice': base,
+          'variantName': name,
+        });
+      }
+
+      if (items.isEmpty) {
+        setState(() => _loadingTypePrices = false);
+        return;
+      }
+
+      final res = await ApiService.mutate(
+        'discounts.previewQuotationItems',
+        input: {
+          'dealerUserId': dealerId,
+          'items': items,
+        },
+      );
+
+      final data = res['data'];
+      final out = data is Map<String, dynamic> ? data['items'] as List? : null;
+      if (out == null || out.isEmpty) {
+        if (!mounted) return;
+        setState(() => _loadingTypePrices = false);
+        return;
+      }
+
+      final nextPrices = <String, double>{};
+      final nextWaiting = <String, String?>{};
+      final limit = items.length < out.length ? items.length : out.length;
+      for (var i = 0; i < limit; i++) {
+        final sentName = items[i]['variantName']?.toString() ?? '';
+        if (sentName.isEmpty) continue;
+        final row = out[i];
+        if (row is! Map) continue;
+        final finalUnit = double.tryParse(row['unitPrice']?.toString() ?? '') ?? (items[i]['unitPrice'] as double);
+        nextPrices[sentName] = finalUnit;
+        nextWaiting[sentName] = row['dealerDiscountWaiting']?.toString();
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _dealerTypeUnitPrice
+          ..clear()
+          ..addAll(nextPrices);
+        _dealerTypeWaiting
+          ..clear()
+          ..addAll(nextWaiting);
+        _loadingTypePrices = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingTypePrices = false);
+    }
   }
 
   bool get _isCurtainTrack =>
@@ -199,6 +282,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   double get _currentPrice {
+    if (!_isCurtainTrack &&
+        _selectedTypeIndex != null &&
+        _selectedVariantIndex == null &&
+        _dealerId != null &&
+        _dealerTypeUnitPrice.isNotEmpty) {
+      final rawTypeName = _types[_selectedTypeIndex!]['name']?.toString() ?? '';
+      final typeName = rawTypeName.trim().replaceAll(RegExp(r'\s+'), ' ');
+      final dealerPrice = _dealerTypeUnitPrice[typeName];
+      if (dealerPrice != null) return dealerPrice;
+    }
+
     final p = widget.product;
     final discountPercent =
         double.tryParse(p['discountPercent']?.toString() ?? '0') ?? 0.0;
@@ -261,6 +355,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final variants = _variants;
     final types = _types;
     final originalPrice = _originalSelectedPrice;
+
+    final auth = context.watch<AuthProvider>();
+    final dealerId = auth.user?.id;
+    if (!_loadingTypePrices &&
+        dealerId != null &&
+        dealerId != _dealerId &&
+        types.isNotEmpty) {
+      _dealerId = dealerId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _refreshDealerTypePrices(dealerId);
+      });
+    }
+
+    if (!_loadingTypePrices &&
+        dealerId != null &&
+        dealerId == _dealerId &&
+        types.isNotEmpty &&
+        _dealerTypeUnitPrice.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _refreshDealerTypePrices(dealerId);
+      });
+    }
     final discountPercent =
         double.tryParse(p['discountPercent']?.toString() ?? '0') ?? 0;
     final discountAmount =
@@ -270,14 +388,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final discountWaitingMessage =
         p['discountWaitingMessage']?.toString().trim();
     final bool isWaiting = discountWaitingMessage != null && discountWaitingMessage.isNotEmpty;
-    final stockOk = discountMinStock <= 0 || _availableStock >= discountMinStock;
     final hasDiscount =
         !isWaiting &&
-        stockOk &&
-            (discountPercent > 0 || discountAmount > 0) &&
-            originalPrice > 0 &&
-            _currentPrice > 0 &&
-            _currentPrice < originalPrice;
+        originalPrice > 0 &&
+        _currentPrice > 0 &&
+        _currentPrice < originalPrice;
     final bool isOutOfStock = _availableStock <= 0;
 
     return Directionality(
@@ -335,9 +450,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
-                                    discountPercent > 0
-                                        ? 'خصم ${discountPercent.toStringAsFixed(0)}%'
-                                        : 'خصم ${(((originalPrice - _currentPrice) / originalPrice) * 100).toStringAsFixed(0)}%',
+                                    'خصم ${originalPrice > 0 ? (((originalPrice - _currentPrice) / originalPrice) * 100).toStringAsFixed(0) : '0'}%',
                                     style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 12,
@@ -635,7 +748,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   if (t['price'] != null) ...[
                                     const SizedBox(height: 2),
                                     Text(
-                                      '${double.tryParse(t['price'].toString())?.toStringAsFixed(0)} ج.م',
+                                      (() {
+                                        final base =
+                                            double.tryParse(t['price'].toString()) ?? 0.0;
+                                        final rawTypeName =
+                                            t['name']?.toString() ?? '';
+                                        final typeName =
+                                            _normalizeTypeName(rawTypeName);
+                                        final dealerPrice =
+                                            _dealerTypeUnitPrice[typeName];
+                                        final show = dealerPrice != null
+                                            ? dealerPrice
+                                            : base;
+                                        return '${show.toStringAsFixed(0)} ج.م';
+                                      })(),
                                       style: TextStyle(
                                         color: isSelected ? Colors.black87 : AppColors.primary,
                                         fontSize: 11,

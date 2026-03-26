@@ -1135,13 +1135,19 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                                 Text('نوع: ${item['selectedVariant']}', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
                               if (item['configurationSummary'] != null && item['configurationSummary'].toString().isNotEmpty)
                                 Text(item['configurationSummary'].toString(), style: const TextStyle(color: AppColors.text, fontSize: 11)),
-                              if (item['dealerDiscountPercent'] != null &&
-                                  (item['dealerDiscountPercent'] as num) > 0 &&
-                                  item['officialUnitPrice'] != null)
-                                Text(
-                                  'سعر شراء التاجر: ${_dealerPurchaseUnitPrice(item).toStringAsFixed(2)} ج.م (السعر الرسمي ${(item['officialUnitPrice'] as num).toStringAsFixed(2)})',
-                                  style: const TextStyle(color: AppColors.success, fontSize: 10),
-                                ),
+                              final officialForDealerUi = item['officialUnitPrice'];
+                              final dealerUnitForUi = item['dealerUnitPrice'];
+                              if (officialForDealerUi != null &&
+                                  dealerUnitForUi != null) {
+                                final offVal = (officialForDealerUi as num).toDouble();
+                                final dealerVal = (dealerUnitForUi as num).toDouble();
+                                final showDealerPricing = offVal > 0 && dealerVal > 0 && dealerVal < offVal;
+                                if (showDealerPricing)
+                                  Text(
+                                    'سعر شراء التاجر: ${_dealerPurchaseUnitPrice(item).toStringAsFixed(2)} ج.م (السعر الرسمي ${offVal.toStringAsFixed(2)})',
+                                    style: const TextStyle(color: AppColors.success, fontSize: 10),
+                                  );
+                              }
                               if (_hasManualDiscount(item))
                                 Text(
                                   _itemManualDiscountPercent(item) > 0

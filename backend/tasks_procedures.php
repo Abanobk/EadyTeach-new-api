@@ -1046,7 +1046,51 @@ function quotations_create($input, $ctx) {
 
     $stmt = $db->prepare('INSERT INTO quotations (ref_number, created_by, client_user_id, dealer_user_id, client_name, client_email, client_phone, items, subtotal, installation_percent, installation_amount, discount_percent, discount_amount, total_amount, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     $stmt->execute([$refNumber, $createdBy, $clientUserId, $dealerUserId > 0 ? $dealerUserId : null, $clientName, $clientEmail, $clientPhone, json_encode($items, JSON_UNESCAPED_UNICODE), $subtotal, $installPct, $installAmt, $discountPct, $discountAmt, $totalAmt, $notes]);
-    return ['id' => (int)$db->lastInsertId()];
+    $newId = (int)$db->lastInsertId();
+
+    // إشعار لجميع الإدارة عند إنشاء عرض سعر من لوحة الإدارة (وليس من حساب تاجر فقط)
+    try {
+        if (!function_exists('_notifyAdminsAndSupervisors')) {
+            require_once __DIR__ . '/notifications_procedures.php';
+        }
+        $creatorId = isset($ctx['userId']) ? (int)$ctx['userId'] : 0;
+        if ($creatorId > 0) {
+            $roleStmt = $db->prepare('SELECT TRIM(LOWER(role)) FROM users WHERE id = ?');
+            $roleStmt->execute([$creatorId]);
+            $creatorRole = strtolower(trim((string)($roleStmt->fetchColumn() ?: '')));
+            if (in_array($creatorRole, ['admin', 'supervisor', 'staff'], true)) {
+                $clientLabel = trim((string)($clientName ?? ''));
+                if ($clientLabel === '') {
+                    $clientLabel = trim((string)($clientEmail ?? ''));
+                }
+                if ($clientLabel === '') {
+                    $clientLabel = 'عميل';
+                }
+                $dealerSuffix = '';
+                if ($dealerUserId > 0) {
+                    $ds = $db->prepare('SELECT name FROM users WHERE id = ?');
+                    $ds->execute([$dealerUserId]);
+                    $dn = trim((string)($ds->fetchColumn() ?: ''));
+                    if ($dn !== '') {
+                        $dealerSuffix = " — الموزع: {$dn}";
+                    }
+                }
+                $totalStr = number_format((float)$totalAmt, 2, '.', '');
+                _notifyAdminsAndSupervisors(
+                    'عرض سعر جديد',
+                    "تم إنشاء عرض السعر {$refNumber} للعميل: {$clientLabel}{$dealerSuffix}. الإجمالي: {$totalStr} ج.م",
+                    'quotation',
+                    $newId,
+                    'quotation',
+                    ['quotationId' => (string)$newId, 'action' => 'created']
+                );
+            }
+        }
+    } catch (\Throwable $e) {
+        error_log('[FCM] quotations.create notify admins: ' . $e->getMessage());
+    }
+
+    return ['id' => $newId];
 }
 
 function quotations_getById($input, $ctx) {

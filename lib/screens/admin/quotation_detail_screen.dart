@@ -1220,25 +1220,41 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                                         if (item['selectedVariant'] != null)
                                                           Text('نوع: ${item['selectedVariant']}', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
                                                         Text('${unitPrice.toStringAsFixed(0)} ج.م / قطعة', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
-                                                        if (isDealer && purchaseRow != null) ...[
-                                                          final officialUnit = double.tryParse(purchaseRow['officialUnitPrice']?.toString() ?? '') ?? 0.0;
-                                                          final dealerUnit = double.tryParse(purchaseRow['dealerUnitPrice']?.toString() ?? '') ?? 0.0;
-                                                          final profitPerUnit = unitPrice - dealerUnit;
-                                                          final profitTotal = profitPerUnit * qty;
-                                                          final waitingMsg = purchaseRow['discountWaitingMessage']?.toString() ?? '';
+                                                        if (isDealer && purchaseRow != null)
+                                                          Builder(
+                                                            builder: (_) {
+                                                              final officialUnit = double.tryParse(purchaseRow['officialUnitPrice']?.toString() ?? '') ?? 0.0;
+                                                              final dealerUnit = double.tryParse(purchaseRow['dealerUnitPrice']?.toString() ?? '') ?? 0.0;
+                                                              final profitPerUnit = unitPrice - dealerUnit;
+                                                              final profitTotal = profitPerUnit * qty;
+                                                              final waitingMsg = purchaseRow['discountWaitingMessage']?.toString() ?? '';
 
-                                                          if (waitingMsg.isNotEmpty)
-                                                            Text(waitingMsg, style: const TextStyle(color: AppColors.error, fontSize: 10)),
-
-                                                          if (officialUnit > 0 && dealerUnit > 0)
-                                                            Text('سعر شراء التاجر: ${dealerUnit.toStringAsFixed(0)} ج.م', style: TextStyle(color: dealerUnit < unitPrice ? AppColors.success : AppColors.muted, fontSize: 10)),
-
-                                                          if (dealerUnit > 0)
-                                                            Text(
-                                                              'مكسب البند: ${profitTotal.toStringAsFixed(0)} ج.م',
-                                                              style: TextStyle(color: profitPerUnit >= 0 ? AppColors.success : AppColors.error, fontSize: 10, fontWeight: FontWeight.w600),
-                                                            ),
-                                                        ],
+                                                              return Column(
+                                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                                children: [
+                                                                  if (waitingMsg.isNotEmpty)
+                                                                    Text(waitingMsg, style: const TextStyle(color: AppColors.error, fontSize: 10)),
+                                                                  if (officialUnit > 0 && dealerUnit > 0)
+                                                                    Text(
+                                                                      'سعر شراء التاجر: ${dealerUnit.toStringAsFixed(0)} ج.م',
+                                                                      style: TextStyle(
+                                                                        color: dealerUnit < unitPrice ? AppColors.success : AppColors.muted,
+                                                                        fontSize: 10,
+                                                                      ),
+                                                                    ),
+                                                                  if (dealerUnit > 0)
+                                                                    Text(
+                                                                      'مكسب البند: ${profitTotal.toStringAsFixed(0)} ج.م',
+                                                                      style: TextStyle(
+                                                                        color: profitPerUnit >= 0 ? AppColors.success : AppColors.error,
+                                                                        fontSize: 10,
+                                                                        fontWeight: FontWeight.w600,
+                                                                      ),
+                                                                    ),
+                                                                ],
+                                                              );
+                                                            },
+                                                          ),
                                                       ],
                                                     ),
                                                   ),

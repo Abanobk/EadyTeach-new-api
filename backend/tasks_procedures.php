@@ -1064,6 +1064,88 @@ function quotations_getByIdForClient($input, $ctx) {
     return quotations_getById($input, $ctx);
 }
 
+function quotations_update($input, $ctx) {
+    global $db;
+    _ensureQuotationsTable();
+
+    $userId = isset($ctx['userId']) ? (int)$ctx['userId'] : 0;
+    if ($userId <= 0) throw new Exception('UNAUTHORIZED');
+
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) throw new Exception('Invalid quotation id');
+
+    $qStmt = $db->prepare('SELECT * FROM quotations WHERE id = ?');
+    $qStmt->execute([$id]);
+    $q = $qStmt->fetch();
+    if (!$q) throw new Exception('Quotation not found');
+
+    // Only allow owner (created_by) or admin/supervisor/staff to edit.
+    $createdBy = isset($q['created_by']) ? (int)$q['created_by'] : 0;
+    $roleStmt = $db->prepare('SELECT role FROM users WHERE id = ?');
+    $roleStmt->execute([$userId]);
+    $role = strtolower(trim((string)($roleStmt->fetchColumn() ?: '')));
+    $isAdmin = in_array($role, ['admin', 'supervisor', 'staff'], true);
+    if (!$isAdmin && $createdBy !== $userId) throw new Exception('FORBIDDEN');
+
+    // Block editing when purchase flow started/accepted.
+    $purchaseStatus = strtolower(trim((string)($q['purchase_request_status'] ?? 'none')));
+    if ($purchaseStatus === 'requested' || $purchaseStatus === 'accepted') {
+        throw new Exception('لا يمكن تعديل عرض السعر بعد بدء/اعتماد طلب الشراء');
+    }
+
+    $items = $input['items'] ?? null;
+    if (!is_array($items) || count($items) === 0) {
+        throw new Exception('items is required');
+    }
+
+    $notes = $input['notes'] ?? null;
+    $installPct = (float)($input['installationPercent'] ?? 0);
+    $discountPct = (float)($input['discountPercent'] ?? 0);
+    $discountAmtInput = (float)($input['discountAmount'] ?? 0);
+
+    // Recompute subtotal/total from items
+    $subtotal = 0.0;
+    foreach ($items as &$item) {
+        if (!is_array($item)) continue;
+        $qty = (int)($item['quantity'] ?? $item['qty'] ?? 1);
+        if ($qty <= 0) $qty = 1;
+        $unitPrice = (float)($item['unitPrice'] ?? 0);
+        $item['qty'] = $qty;
+        $item['totalPrice'] = $unitPrice * $qty;
+        $subtotal += $item['totalPrice'];
+    }
+    unset($item);
+
+    $installAmt = $installPct > 0 ? $subtotal * $installPct / 100.0 : 0.0;
+    $discountAmt = $discountPct > 0 ? $subtotal * $discountPct / 100.0 : $discountAmtInput;
+    $totalAmt = $subtotal + $installAmt - $discountAmt;
+    if ($totalAmt < 0) $totalAmt = 0.0;
+
+    $db->prepare('UPDATE quotations
+        SET items = ?,
+            subtotal = ?,
+            installation_percent = ?,
+            installation_amount = ?,
+            discount_percent = ?,
+            discount_amount = ?,
+            total_amount = ?,
+            notes = ?
+        WHERE id = ?')
+      ->execute([
+        json_encode($items, JSON_UNESCAPED_UNICODE),
+        $subtotal,
+        $installPct,
+        $installAmt,
+        $discountPct,
+        $discountAmt,
+        $totalAmt,
+        $notes,
+        $id
+      ]);
+
+    return ['success' => true];
+}
+
 function quotations_myQuotations($ctx) {
     global $db;
     _ensureQuotationsTable();

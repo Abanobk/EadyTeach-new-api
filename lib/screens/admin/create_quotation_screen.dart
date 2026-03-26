@@ -8,12 +8,14 @@ class CreateQuotationScreen extends StatefulWidget {
   final int? preselectedClientUserId;
   final String? preselectedClientName;
   final bool forceExternalClient;
+  final int? quotationIdToEdit;
 
   const CreateQuotationScreen({
     super.key,
     this.preselectedClientUserId,
     this.preselectedClientName,
     this.forceExternalClient = false,
+    this.quotationIdToEdit,
   });
 
   @override
@@ -77,6 +79,97 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
     _loadCategories();
     if (!widget.forceExternalClient) _loadClients();
     _loadDealers();
+
+    if (widget.quotationIdToEdit != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await _loadQuotationForEdit(widget.quotationIdToEdit!);
+      });
+    }
+  }
+
+  Future<void> _loadQuotationForEdit(int id) async {
+    setState(() => _submitting = true);
+    try {
+      final res = await ApiService.query('quotations.getById', input: {'id': id});
+      final q = res['data'];
+      if (!mounted || q is! Map) return;
+
+      final purchaseStatus = (q['purchaseRequestStatus'] ?? 'none').toString().trim().toLowerCase();
+      if (purchaseStatus == 'requested' || purchaseStatus == 'accepted') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('لا يمكن تعديل عرض السعر بعد بدء/اعتماد طلب الشراء'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
+
+      final items = (q['items'] as List? ?? []);
+      setState(() {
+        _step = 2; // Jump to client info + cart summary
+
+        _selectedDealerId = int.tryParse(q['dealerUserId']?.toString() ?? '');
+        _selectedDealerName = q['dealerName']?.toString();
+
+        _clientType = 'external';
+        _selectedClientId = null;
+        _selectedClientName = null;
+        _clientNameCtrl.text = (q['clientName'] ?? '').toString();
+        _clientEmailCtrl.text = (q['clientEmail'] ?? '').toString();
+        _clientPhoneCtrl.text = (q['clientPhone'] ?? '').toString();
+        _notesCtrl.text = (q['notes'] ?? '').toString();
+
+        _addInstallation = (double.tryParse(q['installationPercent']?.toString() ?? '0') ?? 0) > 0;
+        _installationPercent = double.tryParse(q['installationPercent']?.toString() ?? '0') ?? 0.0;
+
+        _addDiscount = (double.tryParse(q['discountAmount']?.toString() ?? '0') ?? 0) > 0;
+        _discountPercent = double.tryParse(q['discountPercent']?.toString() ?? '0') ?? 0.0;
+        _discountFixed = double.tryParse(q['discountAmount']?.toString() ?? '0') ?? 0.0;
+        _discountIsPercent = _discountPercent > 0;
+        _discountFixedCtrl.text = _discountFixed.toStringAsFixed(0);
+
+        _cartItems.clear();
+        for (final raw in items) {
+          if (raw is! Map) continue;
+          final m = Map<String, dynamic>.from(raw);
+          final pid = int.tryParse(m['productId']?.toString() ?? '') ?? 0;
+          if (pid <= 0) continue;
+          _cartItems.add({
+            'productId': pid,
+            'productName': m['productName'] ?? '',
+            'productDescription': m['description'] ?? '',
+            'productImage': m['imageUrl'],
+            'selectedColor': m['selectedColor'],
+            'selectedVariant': m['selectedVariant'] ?? m['variantName'] ?? m['variant'],
+            if (m['configuration'] != null) 'configuration': m['configuration'],
+            if (m['configurationSummary'] != null) 'configurationSummary': m['configurationSummary'],
+            'unitPrice': (double.tryParse(m['unitPrice']?.toString() ?? '') ?? 0.0),
+            if (m['officialUnitPrice'] != null)
+              'officialUnitPrice': (double.tryParse(m['officialUnitPrice'].toString()) ?? (double.tryParse(m['unitPrice']?.toString() ?? '') ?? 0.0)),
+            if (m['dealerUnitPrice'] != null) 'dealerUnitPrice': double.tryParse(m['dealerUnitPrice'].toString()) ?? 0.0,
+            if (m['manualDiscountPercent'] != null) 'manualDiscountPercent': double.tryParse(m['manualDiscountPercent'].toString()) ?? 0.0,
+            if (m['manualDiscountAmount'] != null) 'manualDiscountAmount': double.tryParse(m['manualDiscountAmount'].toString()) ?? 0.0,
+            'qty': int.tryParse(m['qty']?.toString() ?? m['quantity']?.toString() ?? '1') ?? 1,
+          });
+        }
+      });
+
+      if (_selectedDealerId != null) {
+        await _applyDealerPricesToCart();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   Future<void> _loadDealers() async {
@@ -672,11 +765,19 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
         input['clientPhone'] = _clientPhoneCtrl.text.trim().isEmpty ? null : _clientPhoneCtrl.text.trim();
       }
 
-      await ApiService.mutate('quotations.create', input: input);
+      if (widget.quotationIdToEdit != null) {
+        input['id'] = widget.quotationIdToEdit;
+        await ApiService.mutate('quotations.update', input: input);
+      } else {
+        await ApiService.mutate('quotations.create', input: input);
+      }
       if (mounted) {
         setState(() => _submitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ تم إنشاء عرض السعر بنجاح'), backgroundColor: AppColors.success),
+          SnackBar(
+            content: Text(widget.quotationIdToEdit != null ? '✅ تم تعديل عرض السعر بنجاح' : '✅ تم إنشاء عرض السعر بنجاح'),
+            backgroundColor: AppColors.success,
+          ),
         );
         Navigator.pop(context, true);
       }
@@ -794,7 +895,9 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
           Scaffold(
             backgroundColor: AppThemeDecorations.pageBackground(context),
             appBar: AppBar(
-              title: Text(_step == 1 ? 'اختيار المنتجات' : 'بيانات العميل'),
+              title: Text(widget.quotationIdToEdit != null
+                  ? (_step == 1 ? 'تعديل عرض السعر — اختيار المنتجات' : 'تعديل عرض السعر — بيانات العميل')
+                  : (_step == 1 ? 'اختيار المنتجات' : 'بيانات العميل')),
               backgroundColor: AppThemeDecorations.cardColor(context),
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back_ios, color: AppColors.text),

@@ -1204,6 +1204,9 @@ try {
         case 'quotations.getById':
             $result = quotations_getById($input, $ctx);
             break;
+        case 'quotations.update':
+            $result = quotations_update($input, $ctx);
+            break;
 
         case 'quotations.getByIdForClient':
             $result = quotations_getByIdForClient($input, $ctx);

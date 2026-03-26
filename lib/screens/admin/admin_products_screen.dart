@@ -458,6 +458,162 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                 },
                               ),
                             IconButton(
+                              tooltip: 'تعديل النوع',
+                              icon: const Icon(Icons.edit_outlined, color: AppColors.muted, size: 18),
+                              onPressed: () async {
+                                final nameController = TextEditingController(text: t['name']?.toString() ?? '');
+                                final priceController = TextEditingController(text: t['price']?.toString() ?? '');
+                                final stockController = TextEditingController(text: t['stock']?.toString() ?? '');
+                                final partController = TextEditingController(text: t['partNumber']?.toString() ?? '');
+                                final imageController = TextEditingController(text: t['imageUrl']?.toString() ?? '');
+
+                                final ok = await showDialog<bool>(
+                                  context: ctx,
+                                  builder: (dCtx) => Directionality(
+                                    textDirection: TextDirection.rtl,
+                                    child: AlertDialog(
+                                      backgroundColor: AppThemeDecorations.cardColor(context),
+                                      title: const Text('تعديل النوع', style: TextStyle(color: AppColors.text)),
+                                      content: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text('اسم النوع', style: TextStyle(color: AppColors.text, fontSize: 13)),
+                                          const SizedBox(height: 6),
+                                          TextField(
+                                            controller: nameController,
+                                            style: const TextStyle(color: AppColors.text),
+                                            decoration: _inputDecoration(hint: 'مثال: ir zigbee'),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          const Text('السعر لهذا النوع (اختياري)', style: TextStyle(color: AppColors.text, fontSize: 13)),
+                                          const SizedBox(height: 6),
+                                          TextField(
+                                            controller: priceController,
+                                            keyboardType: TextInputType.number,
+                                            style: const TextStyle(color: AppColors.text),
+                                            decoration: _inputDecoration(hint: 'اتركه فارغًا لاستخدام السعر الأساسي'),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          const Text('المخزون لهذا النوع (اختياري)', style: TextStyle(color: AppColors.text, fontSize: 13)),
+                                          const SizedBox(height: 6),
+                                          TextField(
+                                            controller: stockController,
+                                            keyboardType: TextInputType.number,
+                                            style: const TextStyle(color: AppColors.text),
+                                            decoration: _inputDecoration(hint: 'اتركه فارغًا لاستخدام مخزون المنتج الأساسي'),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          const Text('رقم البارت (اختياري)', style: TextStyle(color: AppColors.text, fontSize: 13)),
+                                          const SizedBox(height: 6),
+                                          TextField(
+                                            controller: partController,
+                                            style: const TextStyle(color: AppColors.text),
+                                            decoration: _inputDecoration(hint: 'Part Number'),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          const Text('صورة للنوع (اختياري)', style: TextStyle(color: AppColors.text, fontSize: 13)),
+                                          const SizedBox(height: 6),
+                                          ElevatedButton.icon(
+                                            onPressed: uploadingTypeImage
+                                                ? null
+                                                : () async {
+                                                    final picker = ImagePicker();
+                                                    final picked = await picker.pickImage(
+                                                      source: ImageSource.gallery,
+                                                      imageQuality: 80,
+                                                    );
+                                                    if (picked == null) return;
+                                                    setModalState(() => uploadingTypeImage = true);
+                                                    try {
+                                                      final bytes = await picked.readAsBytes();
+                                                      final url = await ApiService.uploadFile(
+                                                        picked.path,
+                                                        bytes: bytes,
+                                                        filename: picked.name,
+                                                      );
+                                                      setModalState(() => uploadingTypeImage = false);
+                                                      imageController.text = url;
+                                                    } catch (e) {
+                                                      setModalState(() => uploadingTypeImage = false);
+                                                      if (context.mounted) {
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          SnackBar(
+                                                            content: Text('فشل رفع صورة النوع: $e'),
+                                                            backgroundColor: AppColors.error,
+                                                          ),
+                                                        );
+                                                      }
+                                                    }
+                                                  },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: AppThemeDecorations.pageBackground(context),
+                                              foregroundColor: AppColors.text,
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                            ),
+                                            icon: uploadingTypeImage
+                                                ? const SizedBox(
+                                                    width: 16,
+                                                    height: 16,
+                                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                                  )
+                                                : const Icon(Icons.photo_library_outlined, size: 18),
+                                            label: Text(
+                                              uploadingTypeImage ? 'جاري الرفع...' : 'اختيار/تغيير صورة',
+                                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                            ),
+                                          ),
+                                          if (imageController.text.isNotEmpty) ...[
+                                            const SizedBox(height: 6),
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.circular(8),
+                                              child: Image.network(
+                                                ApiService.proxyImageUrl(imageController.text),
+                                                width: 120,
+                                                height: 80,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: AppColors.muted),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('إلغاء')),
+                                        TextButton(onPressed: () => Navigator.pop(dCtx, true), child: const Text('حفظ')),
+                                      ],
+                                    ),
+                                  ),
+                                );
+
+                                if (ok == true && nameController.text.trim().isNotEmpty) {
+                                  setModalState(() {
+                                    types[idx]['name'] = nameController.text.trim();
+                                    if (priceController.text.trim().isEmpty) {
+                                      types[idx].remove('price');
+                                    } else {
+                                      types[idx]['price'] = priceController.text.trim();
+                                    }
+                                    if (stockController.text.trim().isEmpty) {
+                                      types[idx].remove('stock');
+                                    } else {
+                                      types[idx]['stock'] = stockController.text.trim();
+                                    }
+                                    if (partController.text.trim().isEmpty) {
+                                      types[idx].remove('partNumber');
+                                    } else {
+                                      types[idx]['partNumber'] = partController.text.trim();
+                                    }
+                                    if (imageController.text.trim().isEmpty) {
+                                      types[idx].remove('imageUrl');
+                                    } else {
+                                      types[idx]['imageUrl'] = imageController.text.trim();
+                                    }
+                                  });
+                                }
+                              },
+                            ),
+                            IconButton(
                               icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 18),
                               onPressed: () {
                                 setModalState(() {

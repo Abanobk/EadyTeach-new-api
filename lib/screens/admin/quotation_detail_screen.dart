@@ -13,6 +13,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
+import 'create_quotation_screen.dart';
 import '../../utils/pdf_saver_stub.dart'
     if (dart.library.html) '../../utils/pdf_saver_web.dart' as pdf_saver;
 
@@ -1393,6 +1394,34 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                               ),
                             ),
                           ),
+                          if (!isDealer && purchaseRequestStatusNorm != 'requested' && purchaseRequestStatusNorm != 'accepted') ...[
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final ok = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => CreateQuotationScreen(
+                                        quotationIdToEdit: widget.quotationId,
+                                      ),
+                                    ),
+                                  );
+                                  if (ok == true) {
+                                    await _loadQuotation();
+                                  }
+                                },
+                                icon: const Icon(Icons.edit_note, color: Colors.white),
+                                label: const Text('تعديل عرض السعر'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1D4ED8),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                              ),
+                            ),
+                          ],
                           if (isDealer ||
                               ((_quotation?['purchaseItems'] as List?)
                                       ?.isNotEmpty ??

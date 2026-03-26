@@ -105,6 +105,18 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
     return true;
   }
 
+  /// Normalize type name for matching price rules (product_type) and discount rules.
+  /// Some names may contain invisible chars / extra spaces that look identical in UI.
+  String _normalizeTypeNameForMatch(String raw) {
+    final s = raw
+        .toString()
+        // Remove zero-width characters commonly found in copy/pasted text.
+        .replaceAll(RegExp(r'[\u200B-\u200D\uFEFF]'), '')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ');
+    return s.toLowerCase();
+  }
+
   Future<void> _applyDealerPricesToCart() async {
     if (_selectedDealerId == null || _cartItems.isEmpty) return;
     setState(() => _previewingDealer = true);
@@ -117,7 +129,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                   'unitPrice': ((e['officialUnitPrice'] ?? e['unitPrice']) as num).toDouble(),
                   if (e['selectedVariant'] != null &&
                       e['selectedVariant'].toString().trim().isNotEmpty)
-                    'variantName': e['selectedVariant'].toString().trim(),
+                    'variantName': _normalizeTypeNameForMatch(e['selectedVariant'].toString()),
                 })
             .toList(),
       });
@@ -462,10 +474,20 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
     if (variant != null) {
       // types لها حقل name
       final types = (product['types'] as List?) ?? [];
-      final variantData = types.firstWhere(
-        (v) => v['name'] == variant,
-        orElse: () => null,
-      );
+      final normVariant = _normalizeTypeNameForMatch(variant);
+      dynamic variantData;
+      for (final v in types) {
+        final rawName = v['name'];
+        if (rawName == null) continue;
+        final normName = _normalizeTypeNameForMatch(rawName.toString());
+        // Exact match first; fallback to "contains" to be robust against formatting differences.
+        final isMatch =
+            normName == normVariant || normName.contains(normVariant) || normVariant.contains(normName);
+        if (isMatch) {
+          variantData = v;
+          break;
+        }
+      }
       if (variantData != null && variantData['price'] != null) {
         final vp = double.tryParse(variantData['price'].toString()) ?? 0;
         if (vp > 0) unitPrice = vp;

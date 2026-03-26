@@ -246,7 +246,7 @@ function discounts_fetchDealerRuleForProduct(PDO $db, int $dealerId, int $produc
  * تطبيق قاعدة الخصم على سعر وحدة (نفس منطق formatProduct للمستخدم).
  * @return array{finalUnitPrice: float, discountPercent: float, discountValuePerUnit: float, waitingMessage: ?string}
  */
-function discounts_applyDealerRuleToUnitPrice(float $officialUnit, array $rule, int $stock): array {
+function discounts_applyDealerRuleToUnitPrice(float $officialUnit, array $rule, int $stock, bool $allowDiscountWhenStockZero): array {
     $minStock = (int)($rule['min_stock'] ?? 0);
     $percent = (float)($rule['discount_percent'] ?? 0);
     $amount = (float)($rule['discount_amount'] ?? 0);
@@ -257,7 +257,10 @@ function discounts_applyDealerRuleToUnitPrice(float $officialUnit, array $rule, 
         $amount = 0;
     }
 
-    if ($stock === 0 || ($minStock > 0 && $stock < $minStock)) {
+    $stockZeroWait = ($stock === 0 && !$allowDiscountWhenStockZero);
+    $minStockWait = ($minStock > 0 && $stock > 0 && $stock < $minStock);
+
+    if ($stockZeroWait || $minStockWait) {
         $msg = $stock === 0
             ? 'كمية الصفر — خصم التاجر معلق حتى توفر المخزون'
             : "المخزون أقل من شرط الخصم ($minStock)";
@@ -333,7 +336,8 @@ function discounts_previewQuotationItems($input, $ctx) {
             continue;
         }
 
-        $pStmt = $db->prepare('SELECT id, category_id, stock FROM products WHERE id = ?');
+        try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS allow_discount_when_stock_zero TINYINT DEFAULT 0'); } catch (Exception $e) {}
+        $pStmt = $db->prepare('SELECT id, category_id, stock, allow_discount_when_stock_zero FROM products WHERE id = ?');
         $pStmt->execute([$pid]);
         $prow = $pStmt->fetch(PDO::FETCH_ASSOC);
         if (!$prow) {
@@ -350,6 +354,7 @@ function discounts_previewQuotationItems($input, $ctx) {
 
         $catId = isset($prow['category_id']) ? (int)$prow['category_id'] : null;
         $stock = (int)($prow['stock'] ?? 0);
+        $allowZero = (int)($prow['allow_discount_when_stock_zero'] ?? 0) === 1;
         $rule = discounts_fetchDealerRuleForProduct($db, $dealerId, $pid, $catId, $variantName);
         if (!$rule) {
             $out[] = [
@@ -363,7 +368,7 @@ function discounts_previewQuotationItems($input, $ctx) {
             continue;
         }
 
-        $applied = discounts_applyDealerRuleToUnitPrice($official, $rule, $stock);
+        $applied = discounts_applyDealerRuleToUnitPrice($official, $rule, $stock, $allowZero);
         $out[] = [
             'productId' => $pid,
             'officialUnitPrice' => $official,

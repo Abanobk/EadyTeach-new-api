@@ -1002,16 +1002,18 @@ function quotations_create($input, $ctx) {
         $pid = (int)($item['productId'] ?? 0);
 
         if ($dealerUserId > 0 && $pid > 0) {
-            $pStmt = $db->prepare('SELECT id, category_id, stock FROM products WHERE id = ?');
+            try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS allow_discount_when_stock_zero TINYINT DEFAULT 0'); } catch (\Exception $e) {}
+            $pStmt = $db->prepare('SELECT id, category_id, stock, allow_discount_when_stock_zero FROM products WHERE id = ?');
             $pStmt->execute([$pid]);
             $prow = $pStmt->fetch(PDO::FETCH_ASSOC);
             if ($prow) {
                 $catId = isset($prow['category_id']) ? (int)$prow['category_id'] : null;
                 $stock = (int)($prow['stock'] ?? 0);
+                $allowZero = (int)($prow['allow_discount_when_stock_zero'] ?? 0) === 1;
                 $rule = discounts_fetchDealerRuleForProduct($db, $dealerUserId, $pid, $catId);
                 if ($rule) {
                     $item['officialUnitPrice'] = $unitPrice;
-                    $applied = discounts_applyDealerRuleToUnitPrice($unitPrice, $rule, $stock);
+                    $applied = discounts_applyDealerRuleToUnitPrice($unitPrice, $rule, $stock, $allowZero);
                     $unitPrice = $applied['finalUnitPrice'];
                     $item['unitPrice'] = $unitPrice;
                     $item['dealerDiscountPercent'] = $applied['discountPercent'];

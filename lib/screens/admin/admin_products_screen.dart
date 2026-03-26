@@ -173,6 +173,8 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     final discountMinStockCtrl = TextEditingController(
       text: (product?['discountMinStock'] ?? '').toString(),
     );
+    bool allowDiscountWhenStockZero =
+        (product?['allowDiscountWhenStockZero'] ?? false) == true;
     final descCtrl = TextEditingController(text: product?['description'] ?? '');
     final curtainMinCtrl = TextEditingController(
       text: '${product?['curtainLengthMinCm'] ?? 50}',
@@ -347,6 +349,24 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   keyboardType: TextInputType.number,
                   style: const TextStyle(color: AppColors.text),
                   decoration: _inputDecoration(hint: 'مثال: 1 (اتركها فارغة لإلغاء الشرط)'),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Switch(
+                      value: allowDiscountWhenStockZero,
+                      activeColor: AppColors.primary,
+                      onChanged: (v) =>
+                          setModalState(() => allowDiscountWhenStockZero = v),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'تجاهل شرط المخزون عند الصفر لتفعيل خصم المنتج',
+                        style: TextStyle(color: AppColors.muted, fontSize: 12),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 const Text('الأنواع (مثلاً: متر، قطعة...)', style: TextStyle(color: AppColors.text, fontSize: 13)),
@@ -928,6 +948,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         if (minStockForDiscount != null && minStockForDiscount > 0) {
                           body['discountMinStock'] = minStockForDiscount;
                         }
+                        body['allowDiscountWhenStockZero'] = allowDiscountWhenStockZero;
                         body['curtainLengthMinCm'] =
                             int.tryParse(curtainMinCtrl.text.trim()) ?? 50;
                         body['curtainLengthMaxCm'] =

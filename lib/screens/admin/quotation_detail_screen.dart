@@ -623,7 +623,6 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                           descriptionText,
                           style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
                           maxLines: 3,
-                          overflow: pw.TextOverflow.ellipsis,
                         ),
                       if (item['officialUnitPrice'] != null &&
                           item['dealerDiscountPercent'] != null &&

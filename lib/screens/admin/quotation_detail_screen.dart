@@ -1187,6 +1187,16 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                   final unitPrice = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
                                   final qty = item['qty'] as int? ?? 1;
                                   final total = double.tryParse(item['totalPrice']?.toString() ?? '0') ?? (unitPrice * qty);
+                                  final purchaseItems = (_quotation?['purchaseItems'] as List? ?? []);
+                                  final purchaseByProductId = <int, Map<String, dynamic>>{};
+                                  for (final raw in purchaseItems) {
+                                    if (raw is! Map) continue;
+                                    final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
+                                    if (pid > 0) purchaseByProductId[pid] = Map<String, dynamic>.from(raw);
+                                  }
+                                  final productIdForRow =
+                                      int.tryParse(item['productId']?.toString() ?? '') ?? 0;
+                                  final purchaseRow = (productIdForRow > 0) ? purchaseByProductId[productIdForRow] : null;
                                   return Column(
                                     children: [
                                       Padding(
@@ -1210,6 +1220,25 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                                         if (item['selectedVariant'] != null)
                                                           Text('نوع: ${item['selectedVariant']}', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
                                                         Text('${unitPrice.toStringAsFixed(0)} ج.م / قطعة', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+                                                        if (isDealer && purchaseRow != null) ...[
+                                                          final officialUnit = double.tryParse(purchaseRow['officialUnitPrice']?.toString() ?? '') ?? 0.0;
+                                                          final dealerUnit = double.tryParse(purchaseRow['dealerUnitPrice']?.toString() ?? '') ?? 0.0;
+                                                          final profitPerUnit = unitPrice - dealerUnit;
+                                                          final profitTotal = profitPerUnit * qty;
+                                                          final waitingMsg = purchaseRow['discountWaitingMessage']?.toString() ?? '';
+
+                                                          if (waitingMsg.isNotEmpty)
+                                                            Text(waitingMsg, style: const TextStyle(color: AppColors.error, fontSize: 10)),
+
+                                                          if (officialUnit > 0 && dealerUnit > 0)
+                                                            Text('سعر شراء التاجر: ${dealerUnit.toStringAsFixed(0)} ج.م', style: TextStyle(color: dealerUnit < unitPrice ? AppColors.success : AppColors.muted, fontSize: 10)),
+
+                                                          if (dealerUnit > 0)
+                                                            Text(
+                                                              'مكسب البند: ${profitTotal.toStringAsFixed(0)} ج.م',
+                                                              style: TextStyle(color: profitPerUnit >= 0 ? AppColors.success : AppColors.error, fontSize: 10, fontWeight: FontWeight.w600),
+                                                            ),
+                                                        ],
                                                       ],
                                                     ),
                                                   ),
@@ -1341,7 +1370,11 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                               ),
                             ),
                           ),
-                          if (_quotation!['dealerName'] != null && _quotation!['dealerName'].toString().isNotEmpty) ...[
+                          if (_isDealerForCurrentQuote ||
+                              ((_quotation?['purchaseItems'] as List?)
+                                      ?.isNotEmpty ??
+                                  false))
+                            ...[
                             const SizedBox(height: 10),
                             SizedBox(
                               width: double.infinity,

@@ -509,6 +509,15 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return false;
   }
 
+  /// أحرف مثل ← → قد لا تُرسم في خط Cairo داخل الـPDF فتظهر مربعات.
+  static String _pdfSafeText(String? raw) {
+    if (raw == null) return '';
+    var s = raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+    s = s.replaceAll('\u2190', ' - ').replaceAll('\u2192', ' - ');
+    s = s.replaceAll(RegExp(r'[\u200B-\u200D\uFEFF]'), '');
+    return s;
+  }
+
   Future<pw.ImageProvider?> _fetchPdfImage(String? rawUrl) async {
     if (rawUrl == null || rawUrl.isEmpty) return null;
     try {
@@ -566,7 +575,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
               if (q['clientPhone'] != null) pw.Text('الهاتف: ${q['clientPhone']}', style: const pw.TextStyle(fontSize: 11)),
               if (q['clientEmail'] != null) pw.Text('البريد: ${q['clientEmail']}', style: const pw.TextStyle(fontSize: 11)),
               if (q['dealerName'] != null && q['dealerName'].toString().isNotEmpty)
-                pw.Text('التاجر (خصم الموديول): ${q['dealerName']}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue700)),
+                pw.Text('الموزع المعتمد: ${q['dealerName']}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue700)),
             ]),
             pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
               pw.Text('التاريخ: ${_formatDate(q['createdAt'])}', style: const pw.TextStyle(fontSize: 11)),
@@ -592,7 +601,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             final up = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
             final qty = int.tryParse(item['qty']?.toString() ?? item['quantity']?.toString() ?? '1') ?? 1;
             final tp = double.tryParse(item['totalPrice']?.toString() ?? '0') ?? (up * qty);
-            final descriptionText = item['description']?.toString().trim().replaceAll(RegExp(r'\s+'), ' ') ?? '';
+            final descriptionText = _pdfSafeText(item['description']?.toString());
             final hasImage = itemImages.containsKey(i);
             return pw.Container(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -623,18 +632,6 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                           descriptionText,
                           style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
                           maxLines: 3,
-                        ),
-                      if (item['officialUnitPrice'] != null &&
-                          item['dealerDiscountPercent'] != null &&
-                          (double.tryParse(item['dealerDiscountPercent'].toString()) ?? 0) > 0)
-                        pw.Text(
-                          'سعر القائمة ${(double.tryParse(item['officialUnitPrice'].toString()) ?? 0).toStringAsFixed(0)} ← بعد خصم التاجر ${(double.tryParse(item['unitPrice'].toString()) ?? 0).toStringAsFixed(0)} ج.م',
-                          style: const pw.TextStyle(fontSize: 7, color: PdfColors.blue700),
-                        ),
-                      if (item['dealerDiscountWaiting'] != null && item['dealerDiscountWaiting'].toString().isNotEmpty)
-                        pw.Text(
-                          item['dealerDiscountWaiting'].toString(),
-                          style: const pw.TextStyle(fontSize: 7, color: PdfColors.orange),
                         ),
                     ],
                   ),

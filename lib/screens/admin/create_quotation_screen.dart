@@ -308,7 +308,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                     break;
                   }
                 }
-                return 'طول فعلي ${c.toStringAsFixed(0)} سم ← $comm م تجاري | $dirAr | $wAr | $mAr';
+                return 'طول فعلي ${c.toStringAsFixed(0)} سم - $comm م تجاري | $dirAr | $wAr | $mAr';
               }
 
               return SingleChildScrollView(

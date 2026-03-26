@@ -137,7 +137,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       }
     }
     if (cm != null && comm != null) {
-      return 'طول فعلي ${cm.toStringAsFixed(0)} سم ← $comm م تجاري | $dirAr | $wheelAr | $motorAr';
+      return 'طول فعلي ${cm.toStringAsFixed(0)} سم - $comm م تجاري | $dirAr | $wheelAr | $motorAr';
     }
     return 'مسار ستائر (أكمل الطول)';
   }

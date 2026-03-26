@@ -592,6 +592,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             final up = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
             final qty = int.tryParse(item['qty']?.toString() ?? item['quantity']?.toString() ?? '1') ?? 1;
             final tp = double.tryParse(item['totalPrice']?.toString() ?? '0') ?? (up * qty);
+            final descriptionText = item['description']?.toString().trim().replaceAll(RegExp(r'\s+'), ' ') ?? '';
             final hasImage = itemImages.containsKey(i);
             return pw.Container(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -617,10 +618,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
                       pw.Text(item['productName'] ?? '', style: const pw.TextStyle(fontSize: 10)),
-                      if (item['description'] != null && item['description'].toString().trim().isNotEmpty)
+                      if (descriptionText.isNotEmpty)
                         pw.Text(
-                          item['description'].toString(),
+                          descriptionText,
                           style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
+                          maxLines: 3,
+                          overflow: pw.TextOverflow.ellipsis,
                         ),
                       if (item['officialUnitPrice'] != null &&
                           item['dealerDiscountPercent'] != null &&

@@ -247,15 +247,32 @@ function _applyUserDiscount(array $row, ?array $ctx): array {
     $productId = (int)($row['id'] ?? 0);
     $categoryId = isset($row['category_id']) ? (int)$row['category_id'] : null;
     $stock = (int)($row['stock'] ?? 0);
+    $variantName = trim((string)($row['variant_name'] ?? $row['variantName'] ?? ''));
+    if ($variantName !== '') {
+        $variantName = preg_replace('/\s+/u', ' ', $variantName);
+    }
 
-    // Try as dealer first, then as client
+    // Try as dealer first, then as client.
+    // Priority inside each target type: product_type -> product -> category.
     $rules = [];
-    $stmt = $db->prepare("SELECT * FROM discount_rules
-                          WHERE target_type = 'dealer' AND target_id = ? AND is_active = 1
-                            AND scope_type = 'product' AND product_id = ?
-                          ORDER BY id DESC");
-    $stmt->execute([$userId, $productId]);
-    $rules = $stmt->fetchAll();
+    if ($variantName !== '') {
+        $stmt = $db->prepare("SELECT * FROM discount_rules
+                              WHERE target_type = 'dealer' AND target_id = ? AND is_active = 1
+                                AND scope_type = 'product_type' AND product_id = ?
+                                AND LOWER(TRIM(variant_name)) = LOWER(TRIM(?))
+                              ORDER BY id DESC");
+        $stmt->execute([$userId, $productId, $variantName]);
+        $rules = $stmt->fetchAll();
+    }
+
+    if (!$rules) {
+        $stmt = $db->prepare("SELECT * FROM discount_rules
+                              WHERE target_type = 'dealer' AND target_id = ? AND is_active = 1
+                                AND scope_type = 'product' AND product_id = ?
+                              ORDER BY id DESC");
+        $stmt->execute([$userId, $productId]);
+        $rules = $stmt->fetchAll();
+    }
 
     if (!$rules && $categoryId) {
         $stmt = $db->prepare("SELECT * FROM discount_rules
@@ -264,6 +281,18 @@ function _applyUserDiscount(array $row, ?array $ctx): array {
                               ORDER BY id DESC");
         $stmt->execute([$userId, $categoryId]);
         $rules = $stmt->fetchAll();
+    }
+
+    if (!$rules) {
+        if ($variantName !== '') {
+            $stmt = $db->prepare("SELECT * FROM discount_rules
+                                  WHERE target_type = 'client' AND target_id = ? AND is_active = 1
+                                    AND scope_type = 'product_type' AND product_id = ?
+                                    AND LOWER(TRIM(variant_name)) = LOWER(TRIM(?))
+                                  ORDER BY id DESC");
+            $stmt->execute([$userId, $productId, $variantName]);
+            $rules = $stmt->fetchAll();
+        }
     }
 
     if (!$rules) {

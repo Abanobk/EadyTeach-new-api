@@ -134,6 +134,7 @@ function discounts_saveRule($input, $ctx) {
     $categoryId = !empty($input['categoryId']) ? (int)$input['categoryId'] : null;
     $productId = !empty($input['productId']) ? (int)$input['productId'] : null;
     $variantName = trim((string)($input['variantName'] ?? ''));
+    $variantName = preg_replace('/\s+/u', ' ', $variantName);
     if ($variantName === '') $variantName = null;
     $discountPercent = (float)($input['discountPercent'] ?? 0);
     $discountAmount = (float)($input['discountAmount'] ?? 0);
@@ -201,10 +202,12 @@ function discounts_deleteRule($input, $ctx) {
  */
 function discounts_fetchDealerRuleForProduct(PDO $db, int $dealerId, int $productId, ?int $categoryId, ?string $variantName = null): ?array {
     $variantName = trim((string)($variantName ?? ''));
+    $variantName = preg_replace('/\s+/u', ' ', $variantName);
     if ($variantName !== '') {
         $stmt = $db->prepare("SELECT * FROM discount_rules
                               WHERE target_type = 'dealer' AND target_id = ? AND is_active = 1
-                                AND scope_type = 'product_type' AND product_id = ? AND variant_name = ?
+                                AND scope_type = 'product_type' AND product_id = ?
+                                AND LOWER(TRIM(variant_name)) = LOWER(TRIM(?))
                               ORDER BY id DESC LIMIT 1");
         $stmt->execute([$dealerId, $productId, $variantName]);
         $r = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -302,6 +305,7 @@ function discounts_previewQuotationItems($input, $ctx) {
         $pid = (int)($ln['productId'] ?? 0);
         $official = (float)($ln['unitPrice'] ?? 0);
         $variantName = trim((string)($ln['variantName'] ?? ''));
+        $variantName = preg_replace('/\s+/u', ' ', $variantName);
         if ($pid <= 0) {
             $out[] = [
                 'productId' => $pid,

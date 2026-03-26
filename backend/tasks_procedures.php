@@ -1121,6 +1121,12 @@ function quotations_update($input, $ctx) {
     $totalAmt = $subtotal + $installAmt - $discountAmt;
     if ($totalAmt < 0) $totalAmt = 0.0;
 
+    $dealerUserId = !empty($q['dealer_user_id']) ? (int)$q['dealer_user_id'] : null;
+    if (array_key_exists('dealerUserId', $input)) {
+        $du = (int)($input['dealerUserId'] ?? 0);
+        $dealerUserId = $du > 0 ? $du : null;
+    }
+
     $db->prepare('UPDATE quotations
         SET items = ?,
             subtotal = ?,
@@ -1129,7 +1135,8 @@ function quotations_update($input, $ctx) {
             discount_percent = ?,
             discount_amount = ?,
             total_amount = ?,
-            notes = ?
+            notes = ?,
+            dealer_user_id = ?
         WHERE id = ?')
       ->execute([
         json_encode($items, JSON_UNESCAPED_UNICODE),
@@ -1140,6 +1147,7 @@ function quotations_update($input, $ctx) {
         $discountAmt,
         $totalAmt,
         $notes,
+        $dealerUserId,
         $id
       ]);
 
@@ -1813,8 +1821,8 @@ function _quotationDealerDisplayName($db, $r) {
         $got = $tryName((int)$r['created_by']);
         if ($got !== null) {
             $role = $got['role'];
-            // لا نعرض اسم المسؤول كـ "موزع" عند إنشاء العرض من لوحة الإدارة
-            if (!in_array($role, ['admin', 'supervisor'], true)) {
+            // لا نعرض اسم المسؤول/الموظف كـ "موزع" عند إنشاء العرض من لوحة الإدارة
+            if (!in_array($role, ['admin', 'supervisor', 'staff'], true)) {
                 return $got['name'];
             }
         }

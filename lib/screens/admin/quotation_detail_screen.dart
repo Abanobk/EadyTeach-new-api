@@ -519,15 +519,17 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return s;
   }
 
-  /// اسم الموزع في PDF: من الـ API، أو من المستخدم الحالي إن كان هو منشئ العرض.
+  /// اسم الموزع: من السيرفر (`dealer_user_id` → `dealerName`). لا نستبدله باسم المستخدم الحالي لو كان مسؤولاً (يُظهر الموزع المختار عند إنشاء العرض وليس اسم المسجل).
   String _resolvedDealerNameForPdf(Map<String, dynamic> q) {
     final dn = q['dealerName']?.toString().trim();
     if (dn != null && dn.isNotEmpty) return dn;
     try {
       final auth = context.read<AuthProvider>();
-      final cb = int.tryParse(q['createdBy']?.toString() ?? '');
       final u = auth.user;
-      if (cb != null && u != null && u.id == cb) {
+      if (u == null) return '-';
+      if (u.canAccessAdmin) return '-';
+      final cb = int.tryParse(q['createdBy']?.toString() ?? '');
+      if (cb != null && u.id == cb) {
         final n = u.name.trim();
         if (n.isNotEmpty) return n;
       }
@@ -895,6 +897,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       if (pid != null) purchaseByProductId[pid] = Map<String, dynamic>.from(raw);
     }
 
+    final Map<int, pw.ImageProvider> itemImages = {};
+    for (var ii = 0; ii < items.length; ii++) {
+      final row = items[ii] as Map;
+      final imgUrl = row['imageUrl'] as String? ?? row['productImage'] as String?;
+      final img = await _fetchPdfImage(imgUrl);
+      if (img != null) itemImages[ii] = img;
+    }
+
     final pdf = pw.Document();
     pdf.addPage(
       pw.MultiPage(
@@ -951,7 +961,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             child: pw.Row(
               children: [
                 _pdfHeaderCell('#', 1),
-                _pdfHeaderCell('المنتج', 4),
+                _pdfHeaderCell('صورة', 2),
+                _pdfHeaderCell('المنتج', 2),
                 _pdfHeaderCell('الكمية', 1),
                 _pdfHeaderCell('سعر شراء التاجر', 2),
                 _pdfHeaderCell('سعر بيع العميل', 2),
@@ -983,7 +994,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
               child: pw.Row(
                 children: [
                   _pdfCell('${i + 1}', 1),
-                  _pdfCell(item['productName']?.toString() ?? '-', 4),
+                  _pdfCellImage(itemImages[i], 2),
+                  _pdfCell(item['productName']?.toString() ?? '-', 2),
                   _pdfCell('$qty', 1),
                   _pdfCell('${dealerUnit.toStringAsFixed(0)} ج.م', 2),
                   _pdfCell('${soldUnit.toStringAsFixed(0)} ج.م', 2),
@@ -1013,6 +1025,19 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           text,
           style: const pw.TextStyle(fontSize: 9),
           textAlign: pw.TextAlign.center,
+        ),
+      );
+
+  pw.Widget _pdfCellImage(pw.ImageProvider? img, int flex) => pw.Expanded(
+        flex: flex,
+        child: pw.Center(
+          child: img != null
+              ? pw.ClipRRect(
+                  horizontalRadius: 4,
+                  verticalRadius: 4,
+                  child: pw.Image(img, width: 40, height: 40, fit: pw.BoxFit.cover),
+                )
+              : pw.Text('—', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
         ),
       );
 

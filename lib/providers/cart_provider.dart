@@ -9,6 +9,8 @@ class CartItem {
   final double? originalPrice;
   final String? image;
   final String? variant;
+  /// بيانات إضافية (مثلاً مسار ستائر: طول سم، اتجاه، موتور…)
+  final Map<String, dynamic>? configuration;
   int quantity;
 
   CartItem({
@@ -18,6 +20,7 @@ class CartItem {
     this.originalPrice,
     this.image,
     this.variant,
+    this.configuration,
     this.quantity = 1,
   });
 
@@ -28,6 +31,7 @@ class CartItem {
         'originalPrice': originalPrice,
         'image': image,
         'variant': variant,
+        if (configuration != null) 'configuration': configuration,
         'quantity': quantity,
       };
 
@@ -38,6 +42,7 @@ class CartItem {
         originalPrice: json['originalPrice'] != null ? (json['originalPrice'] as num).toDouble() : null,
         image: json['image'],
         variant: json['variant'],
+        configuration: json['configuration'] is Map ? Map<String, dynamic>.from(json['configuration'] as Map) : null,
         quantity: json['quantity'] ?? 1,
       );
 }
@@ -64,8 +69,30 @@ class CartProvider extends ChangeNotifier {
     await prefs.setString('cart', jsonEncode(_items.map((e) => e.toJson()).toList()));
   }
 
+  bool _sameConfiguration(Map<String, dynamic>? a, Map<String, dynamic>? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    if (a.length != b.length) return false;
+    for (final k in a.keys) {
+      if (a[k]?.toString() != b[k]?.toString()) return false;
+    }
+    return true;
+  }
+
   void addItem(CartItem item) {
-    final idx = _items.indexWhere((e) => e.productId == item.productId);
+    // منتجات بتكوين مخصص (ستائر بالمتر) لا تُدمج تلقائياً مع نفس الـ productId
+    if (item.configuration != null && item.configuration!.isNotEmpty) {
+      _items.add(item);
+      _saveCart();
+      notifyListeners();
+      return;
+    }
+    final idx = _items.indexWhere(
+      (e) =>
+          e.productId == item.productId &&
+          (e.variant ?? '') == (item.variant ?? '') &&
+          _sameConfiguration(e.configuration, item.configuration),
+    );
     if (idx >= 0) {
       _items[idx].quantity += item.quantity;
     } else {

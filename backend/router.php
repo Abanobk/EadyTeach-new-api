@@ -428,7 +428,43 @@ function formatProduct(array $row, ?array $ctx = null): array {
         'discountSource'  => $discountSource,
         'discountMinStock'=> $effectiveDiscountMinStock,
         'discountWaitingMessage' => $waitingMessage,
+        'pricingMode' => $row['pricing_mode'] ?? null,
+        'curtainLengthMinCm' => isset($row['curtain_length_min_cm']) ? (int) $row['curtain_length_min_cm'] : null,
+        'curtainLengthMaxCm' => isset($row['curtain_length_max_cm']) ? (int) $row['curtain_length_max_cm'] : null,
+        'curtainWaveSurcharge' => isset($row['curtain_wave_surcharge']) ? (float) $row['curtain_wave_surcharge'] : null,
+        'curtainMotors' => (function () use ($row) {
+            $raw = $row['curtain_motors_json'] ?? null;
+            if (empty($raw)) {
+                return [];
+            }
+            $dec = json_decode((string) $raw, true);
+
+            return is_array($dec) ? $dec : [];
+        })(),
     ];
+}
+
+/** أعمدة تسعير مسار الستائر (طول فعلي سم vs متر تجاري) — تُضاف تلقائياً على النشرات القديمة. */
+function _ensureProductCurtainColumns(PDO $db): void {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $stmts = [
+        'ALTER TABLE products ADD COLUMN pricing_mode VARCHAR(32) NULL DEFAULT NULL',
+        'ALTER TABLE products ADD COLUMN curtain_length_min_cm INT DEFAULT 50',
+        'ALTER TABLE products ADD COLUMN curtain_length_max_cm INT DEFAULT 1200',
+        'ALTER TABLE products ADD COLUMN curtain_wave_surcharge DECIMAL(12,2) DEFAULT 100.00',
+        'ALTER TABLE products ADD COLUMN curtain_motors_json LONGTEXT NULL',
+    ];
+    foreach ($stmts as $sql) {
+        try {
+            $db->exec($sql);
+        } catch (\Exception $e) {
+            // column exists
+        }
+    }
+    $done = true;
 }
 
 /** يضيف عمود part_number لجدول المنتجات مرة واحدة (للبارت نامبر على مستوى المنتج). */
@@ -786,6 +822,7 @@ try {
         // ── Products ───────────────────────────────────────────
         case 'products.list':
             _ensureProductPartNumberColumn($db);
+            _ensureProductCurtainColumns($db);
             $catSel = _hasCategoryDiscountColumns()
                 ? ', c.discount_percent AS cat_discount_percent, c.discount_amount AS cat_discount_amount'
                 : '';
@@ -816,6 +853,7 @@ try {
 
         case 'products.listAdmin':
             _ensureProductPartNumberColumn($db);
+            _ensureProductCurtainColumns($db);
             $catSel = _hasCategoryDiscountColumns()
                 ? ', c.discount_percent AS cat_discount_percent, c.discount_amount AS cat_discount_amount'
                 : '';
@@ -847,6 +885,7 @@ try {
 
         case 'products.create':
             _ensureProductPartNumberColumn($db);
+            _ensureProductCurtainColumns($db);
             _ensureProductsIdAutoIncrement($db);
             $name     = $input['name'] ?? '';
             $nameAr   = $input['nameAr'] ?? null;
@@ -873,13 +912,24 @@ try {
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(12,2) DEFAULT 0'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_min_stock INT DEFAULT 0'); } catch (Exception $e) {}
 
-            $stmt = $db->prepare('INSERT INTO products (name, name_ar, description, description_ar, price, original_price, stock, is_featured, category_id, main_image_url, images, variants, types, sku, serial_number, part_number, discount_percent, discount_amount, discount_min_stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial, $partNumber, $discountPercent, $discountAmount, $discountMinStock]);
+            $pricingModeRaw = isset($input['pricingMode']) ? trim((string) $input['pricingMode']) : '';
+            $pricingMode = $pricingModeRaw !== '' ? $pricingModeRaw : null;
+            $curtainMinCm = isset($input['curtainLengthMinCm']) ? (int) $input['curtainLengthMinCm'] : 50;
+            $curtainMaxCm = isset($input['curtainLengthMaxCm']) ? (int) $input['curtainLengthMaxCm'] : 1200;
+            $curtainWave = isset($input['curtainWaveSurcharge']) ? (float) $input['curtainWaveSurcharge'] : 100.0;
+            $curtainMotorsJson = null;
+            if (!empty($input['curtainMotors']) && is_array($input['curtainMotors'])) {
+                $curtainMotorsJson = json_encode($input['curtainMotors'], JSON_UNESCAPED_UNICODE);
+            }
+
+            $stmt = $db->prepare('INSERT INTO products (name, name_ar, description, description_ar, price, original_price, stock, is_featured, category_id, main_image_url, images, variants, types, sku, serial_number, part_number, discount_percent, discount_amount, discount_min_stock, pricing_mode, curtain_length_min_cm, curtain_length_max_cm, curtain_wave_surcharge, curtain_motors_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial, $partNumber, $discountPercent, $discountAmount, $discountMinStock, $pricingMode, $curtainMinCm, $curtainMaxCm, $curtainWave, $curtainMotorsJson]);
             $result = ['id' => (int) $db->lastInsertId()];
             break;
 
         case 'products.update':
             _ensureProductPartNumberColumn($db);
+            _ensureProductCurtainColumns($db);
             $id       = (int) ($input['id'] ?? 0);
             $name     = $input['name'] ?? '';
             $nameAr   = $input['nameAr'] ?? null;
@@ -906,8 +956,18 @@ try {
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(12,2) DEFAULT 0'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_min_stock INT DEFAULT 0'); } catch (Exception $e) {}
 
-            $stmt = $db->prepare('UPDATE products SET name = ?, name_ar = ?, description = ?, description_ar = ?, price = ?, original_price = ?, stock = ?, is_featured = ?, category_id = ?, main_image_url = ?, images = ?, variants = ?, types = ?, sku = ?, serial_number = ?, part_number = ?, discount_percent = ?, discount_amount = ?, discount_min_stock = ? WHERE id = ?');
-            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial, $partNumber, $discountPercent, $discountAmount, $discountMinStock, $id]);
+            $pricingModeRaw = isset($input['pricingMode']) ? trim((string) $input['pricingMode']) : '';
+            $pricingMode = $pricingModeRaw !== '' ? $pricingModeRaw : null;
+            $curtainMinCm = isset($input['curtainLengthMinCm']) ? (int) $input['curtainLengthMinCm'] : 50;
+            $curtainMaxCm = isset($input['curtainLengthMaxCm']) ? (int) $input['curtainLengthMaxCm'] : 1200;
+            $curtainWave = isset($input['curtainWaveSurcharge']) ? (float) $input['curtainWaveSurcharge'] : 100.0;
+            $curtainMotorsJson = null;
+            if (!empty($input['curtainMotors']) && is_array($input['curtainMotors'])) {
+                $curtainMotorsJson = json_encode($input['curtainMotors'], JSON_UNESCAPED_UNICODE);
+            }
+
+            $stmt = $db->prepare('UPDATE products SET name = ?, name_ar = ?, description = ?, description_ar = ?, price = ?, original_price = ?, stock = ?, is_featured = ?, category_id = ?, main_image_url = ?, images = ?, variants = ?, types = ?, sku = ?, serial_number = ?, part_number = ?, discount_percent = ?, discount_amount = ?, discount_min_stock = ?, pricing_mode = ?, curtain_length_min_cm = ?, curtain_length_max_cm = ?, curtain_wave_surcharge = ?, curtain_motors_json = ? WHERE id = ?');
+            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial, $partNumber, $discountPercent, $discountAmount, $discountMinStock, $pricingMode, $curtainMinCm, $curtainMaxCm, $curtainWave, $curtainMotorsJson, $id]);
             $result = ['success' => true];
             break;
 

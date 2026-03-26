@@ -152,6 +152,16 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
       text: (product?['discountMinStock'] ?? '').toString(),
     );
     final descCtrl = TextEditingController(text: product?['description'] ?? '');
+    final curtainMinCtrl = TextEditingController(
+      text: '${product?['curtainLengthMinCm'] ?? 50}',
+    );
+    final curtainMaxCtrl = TextEditingController(
+      text: '${product?['curtainLengthMaxCm'] ?? 1200}',
+    );
+    final curtainWaveCtrl = TextEditingController(
+      text: '${product?['curtainWaveSurcharge'] ?? 100}',
+    );
+    bool curtainTrackMode = product?['pricingMode']?.toString() == 'curtain_per_meter';
     String? mainImageUrl = product?['mainImageUrl'] as String?;
     List<String> extraImages = [];
     if (product != null && product['images'] is List) {
@@ -216,8 +226,58 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   controller: priceCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   style: const TextStyle(color: AppColors.text),
-                  decoration: _inputDecoration(hint: '0.00'),
+                  decoration: _inputDecoration(
+                    hint: curtainTrackMode ? 'سعر المتر التجاري (ج.م)' : '0.00',
+                  ),
                 ),
+                const SizedBox(height: 10),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'مسار ستائر — تسعير بالمتر التجاري',
+                    style: TextStyle(color: AppColors.text, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    curtainTrackMode
+                        ? 'نفس منطق المسح: الطول بالسم → تقريب لأشهر نصف متر للتسعير'
+                        : 'منتج عادي بالسعر الثابت',
+                    style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                  ),
+                  value: curtainTrackMode,
+                  activeThumbColor: AppColors.primary,
+                  onChanged: (v) => setModalState(() => curtainTrackMode = v),
+                ),
+                if (curtainTrackMode) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: curtainMinCtrl,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: AppColors.text),
+                          decoration: _inputDecoration(hint: 'حد أدنى سم'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: curtainMaxCtrl,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: AppColors.text),
+                          decoration: _inputDecoration(hint: 'حد أقصى سم'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: curtainWaveCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: const TextStyle(color: AppColors.text),
+                    decoration: _inputDecoration(hint: 'زيادة Wave (ج.م)'),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 const Text('المخزون', style: TextStyle(color: AppColors.muted, fontSize: 13)),
                 const SizedBox(height: 6),
@@ -846,6 +906,15 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                         if (minStockForDiscount != null && minStockForDiscount > 0) {
                           body['discountMinStock'] = minStockForDiscount;
                         }
+                        body['curtainLengthMinCm'] =
+                            int.tryParse(curtainMinCtrl.text.trim()) ?? 50;
+                        body['curtainLengthMaxCm'] =
+                            int.tryParse(curtainMaxCtrl.text.trim()) ?? 1200;
+                        body['curtainWaveSurcharge'] = double.tryParse(
+                                curtainWaveCtrl.text.trim().replaceAll(',', '.')) ??
+                            100;
+                        body['pricingMode'] =
+                            curtainTrackMode ? 'curtain_per_meter' : '';
                         if (isEdit) {
                           body['id'] = product!['id'];
                           await ApiService.mutate('products.update', input: body);

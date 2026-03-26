@@ -4,6 +4,7 @@ import '../../providers/cart_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
+import '../../utils/curtain_pricing.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -18,6 +19,128 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   int _selectedImageIndex = 0;
   int? _selectedVariantIndex;
   int? _selectedTypeIndex;
+
+  late final TextEditingController _curtainLengthCmCtrl;
+  late final TextEditingController _curtainNotesCtrl;
+  String _curtainDirection = 'center'; // left | center | right
+  bool _curtainWheelWave = false;
+  String _curtainMotorId = 'none';
+
+  @override
+  void initState() {
+    super.initState();
+    _curtainLengthCmCtrl = TextEditingController();
+    _curtainNotesCtrl = TextEditingController();
+    _curtainLengthCmCtrl.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _curtainLengthCmCtrl.dispose();
+    _curtainNotesCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _isCurtainTrack =>
+      (widget.product['pricingMode']?.toString() == 'curtain_per_meter');
+
+  double get _curtainMinCm =>
+      (widget.product['curtainLengthMinCm'] as num?)?.toDouble() ?? 50;
+  double get _curtainMaxCm =>
+      (widget.product['curtainLengthMaxCm'] as num?)?.toDouble() ?? 1200;
+  double get _curtainWaveFee =>
+      (widget.product['curtainWaveSurcharge'] as num?)?.toDouble() ?? 100;
+
+  List<Map<String, dynamic>> _curtainMotorsList() {
+    final raw = widget.product['curtainMotors'];
+    if (raw is List && raw.isNotEmpty) {
+      return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    return [
+      {'id': 'none', 'labelAr': 'بدون موتور', 'price': 0},
+      {'id': 'dt82', 'labelAr': 'Dooya DT82', 'price': 0},
+      {'id': 'wistar', 'labelAr': 'Wistar', 'price': 0},
+      {'id': 'aqara', 'labelAr': 'Aqara', 'price': 0},
+      {'id': 'somfy', 'labelAr': 'Somfy', 'price': 0},
+      {'id': 'lm', 'labelAr': 'LM', 'price': 0},
+    ];
+  }
+
+  double? _parsedCurtainLengthCm() {
+    final v = double.tryParse(
+        _curtainLengthCmCtrl.text.replaceAll('،', '.').replaceAll(',', '.'));
+    if (v == null || v <= 0) return null;
+    return v;
+  }
+
+  bool get _curtainLengthOk {
+    final cm = _parsedCurtainLengthCm();
+    if (cm == null) return false;
+    return cm >= _curtainMinCm && cm <= _curtainMaxCm;
+  }
+
+  double _curtainMotorExtra() {
+    for (final m in _curtainMotorsList()) {
+      if (m['id']?.toString() == _curtainMotorId) {
+        final p = m['price'];
+        if (p is num) return p.toDouble();
+        return double.tryParse(p?.toString() ?? '0') ?? 0;
+      }
+    }
+    return 0;
+  }
+
+  /// سعر خط واحد (مسار واحد) بعد اختيار الطول والخيارات.
+  double _curtainLineUnitTotal() {
+    if (!_isCurtainTrack) return _currentPrice;
+    final cm = _parsedCurtainLengthCm();
+    if (cm == null || !_curtainLengthOk) return 0;
+    final commercialM = curtainCommercialMetersFromCm(cm);
+    double total = commercialM * _currentPrice;
+    if (_curtainWheelWave) total += _curtainWaveFee;
+    total += _curtainMotorExtra();
+    return total;
+  }
+
+  Map<String, dynamic>? _curtainConfiguration() {
+    if (!_isCurtainTrack) return null;
+    final cm = _parsedCurtainLengthCm();
+    if (cm == null || !_curtainLengthOk) return null;
+    final commercialM = curtainCommercialMetersFromCm(cm);
+    return {
+      'pricingMode': 'curtain_per_meter',
+      'curtainLengthCm': cm,
+      'curtainCommercialM': commercialM,
+      'direction': _curtainDirection,
+      'wheel': _curtainWheelWave ? 'wave' : 'normal',
+      'motorId': _curtainMotorId,
+      if (_curtainNotesCtrl.text.trim().isNotEmpty)
+        'notes': _curtainNotesCtrl.text.trim(),
+    };
+  }
+
+  String _curtainVariantSummary() {
+    if (!_isCurtainTrack) return '';
+    final cm = _parsedCurtainLengthCm();
+    final comm = cm != null && _curtainLengthOk
+        ? curtainCommercialMetersFromCm(cm)
+        : null;
+    final dirAr = _curtainDirection == 'left'
+        ? 'يسار'
+        : (_curtainDirection == 'right' ? 'يمين' : 'منتصف');
+    final wheelAr = _curtainWheelWave ? 'Wave' : 'Normal';
+    String motorAr = _curtainMotorId;
+    for (final m in _curtainMotorsList()) {
+      if (m['id']?.toString() == _curtainMotorId) {
+        motorAr = m['labelAr']?.toString() ?? _curtainMotorId;
+        break;
+      }
+    }
+    if (cm != null && comm != null) {
+      return 'طول فعلي ${cm.toStringAsFixed(0)} سم ← $comm م تجاري | $dirAr | $wheelAr | $motorAr';
+    }
+    return 'مسار ستائر (أكمل الطول)';
+  }
 
   List<Map<String, dynamic>> get _variants {
     final v = widget.product['variants'];
@@ -276,12 +399,28 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     // ─── السعر ───
                     Row(
                       children: [
-                        Text(
-                          '${_currentPrice.toStringAsFixed(2)} ج.م',
-                          style: const TextStyle(color: AppColors.primary, fontSize: 26, fontWeight: FontWeight.w900),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _isCurtainTrack
+                                    ? '${_currentPrice.toStringAsFixed(2)} ج.م / متر تجاري'
+                                    : '${_currentPrice.toStringAsFixed(2)} ج.م',
+                                style: const TextStyle(
+                                    color: AppColors.primary, fontSize: 26, fontWeight: FontWeight.w900),
+                              ),
+                              if (_isCurtainTrack) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  'السعر النهائي = (أمتار تجارية × السعر أعلاه) + إضافات',
+                                  style: TextStyle(color: AppColors.muted.withOpacity(0.9), fontSize: 12),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
-                        if (hasDiscount) ...[
-                          const SizedBox(width: 10),
+                        if (hasDiscount && !_isCurtainTrack) ...[
                           Text(
                             '${originalPrice.toStringAsFixed(2)} ج.م',
                             style: const TextStyle(
@@ -293,10 +432,113 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ],
                       ],
                     ),
+                    if (_isCurtainTrack && _curtainLengthOk) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'إجمالي المسار الواحد: ${_curtainLineUnitTotal().toStringAsFixed(2)} ج.م (بعد الطول والخيارات)',
+                        style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                    ],
                     const SizedBox(height: 16),
 
+                    // ─── مسار ستائر — تخصيص (نفس فكرة المسح) ───
+                    if (_isCurtainTrack) ...[
+                      const Text('طول المسار (سم) *',
+                          style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 15)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _curtainLengthCmCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          hintText: 'مثال: 260',
+                          helperText:
+                              'حد أدنى ${_curtainMinCm.toStringAsFixed(0)} — حد أقصى ${_curtainMaxCm.toStringAsFixed(0)} سم',
+                          filled: true,
+                          fillColor: AppThemeDecorations.pageBackground(context),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('اتجاه الفتح *',
+                          style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 15)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('يسار'),
+                            selected: _curtainDirection == 'left',
+                            onSelected: (_) => setState(() => _curtainDirection = 'left'),
+                          ),
+                          ChoiceChip(
+                            label: const Text('منتصف'),
+                            selected: _curtainDirection == 'center',
+                            onSelected: (_) => setState(() => _curtainDirection = 'center'),
+                          ),
+                          ChoiceChip(
+                            label: const Text('يمين'),
+                            selected: _curtainDirection == 'right',
+                            onSelected: (_) => setState(() => _curtainDirection = 'right'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('مسار العجلة *',
+                          style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 15)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Normal'),
+                            selected: !_curtainWheelWave,
+                            onSelected: (_) => setState(() => _curtainWheelWave = false),
+                          ),
+                          ChoiceChip(
+                            label: Text('Wave (+${_curtainWaveFee.toStringAsFixed(0)} ج.م)'),
+                            selected: _curtainWheelWave,
+                            onSelected: (_) => setState(() => _curtainWheelWave = true),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('الموتور',
+                          style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 15)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: _curtainMotorsList().map((m) {
+                          final id = m['id']?.toString() ?? '';
+                          final label = m['labelAr']?.toString() ?? id;
+                          final extra = (m['price'] as num?)?.toDouble() ??
+                              double.tryParse(m['price']?.toString() ?? '0') ??
+                              0;
+                          final sel = _curtainMotorId == id;
+                          return ChoiceChip(
+                            label: Text(extra > 0 ? '$label (+${extra.toStringAsFixed(0)})' : label),
+                            selected: sel,
+                            onSelected: (_) => setState(() => _curtainMotorId = id),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _curtainNotesCtrl,
+                        maxLines: 3,
+                        maxLength: 500,
+                        decoration: InputDecoration(
+                          labelText: 'ملاحظات خاصة (اختياري)',
+                          filled: true,
+                          fillColor: AppThemeDecorations.pageBackground(context),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
                     // ─── اختيار اللون ───
-                    if (variants.isNotEmpty) ...[
+                    if (!_isCurtainTrack && variants.isNotEmpty) ...[
                       const Text('اختر اللون:',
                           style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 15)),
                       const SizedBox(height: 10),
@@ -351,7 +593,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ],
 
                     // ─── اختيار النوع ───
-                    if (types.isNotEmpty) ...[
+                    if (!_isCurtainTrack && types.isNotEmpty) ...[
                       const Text('اختر النوع:',
                           style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 15)),
                       const SizedBox(height: 10),
@@ -469,6 +711,36 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             selectedVariant = types[_selectedTypeIndex!]['name'] as String?;
                           }
 
+                          if (_isCurtainTrack) {
+                            final cfg = _curtainConfiguration();
+                            if (cfg == null) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'أدخل طولاً بين ${_curtainMinCm.toStringAsFixed(0)} و ${_curtainMaxCm.toStringAsFixed(0)} سم',
+                                  ),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                              return;
+                            }
+                            selectedVariant = _curtainVariantSummary();
+                          }
+
+                          final unitLinePrice =
+                              _isCurtainTrack ? _curtainLineUnitTotal() : _currentPrice;
+                          if (_isCurtainTrack && unitLinePrice <= 0) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('تعذر حساب السعر — تحقق من الطول'),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
+                            return;
+                          }
+
                           if (isOutOfStock) {
                             try {
                               await ApiService.mutate('orders.create', input: {
@@ -476,12 +748,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   {
                                     'productId': p['id'],
                                     'quantity': _qty,
-                                    'unitPrice': _currentPrice.toString(),
+                                    'unitPrice': unitLinePrice.toString(),
                                     if (selectedVariant != null) 'variant': selectedVariant,
+                                    if (_isCurtainTrack) 'configuration': _curtainConfiguration(),
                                     'isPreorder': true,
                                   }
                                 ],
-                                'totalAmount': (_currentPrice * _qty).toString(),
+                                'totalAmount': (unitLinePrice * _qty).toString(),
                                 'status': 'preorder',
                                 'notes': 'Pre-order from mobile app',
                               });
@@ -507,11 +780,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             context.read<CartProvider>().addItem(CartItem(
                                   productId: p['id'],
                                   name: p['name'] ?? '',
-                                  price: _currentPrice,
-                                  originalPrice: originalPrice > 0 ? originalPrice : null,
+                                  price: unitLinePrice,
+                                  originalPrice: (!_isCurtainTrack && originalPrice > 0)
+                                      ? originalPrice
+                                      : null,
                                   image: images.isNotEmpty ? images[0] : null,
                                   quantity: _qty,
                                   variant: selectedVariant,
+                                  configuration: _curtainConfiguration(),
                                 ));
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -530,8 +806,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ),
                         label: Text(
                           isOutOfStock
-                              ? 'طلب مسبق - ${_currentPrice.toStringAsFixed(2)} ج.م'
-                              : 'أضف للسلة - ${_currentPrice.toStringAsFixed(2)} ج.م',
+                              ? 'طلب مسبق - ${(_isCurtainTrack ? _curtainLineUnitTotal() * _qty : _currentPrice * _qty).toStringAsFixed(2)} ج.م'
+                              : 'أضف للسلة - ${(_isCurtainTrack ? _curtainLineUnitTotal() * _qty : _currentPrice * _qty).toStringAsFixed(2)} ج.م',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         style: ElevatedButton.styleFrom(

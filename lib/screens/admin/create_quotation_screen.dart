@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
+import '../../utils/curtain_pricing.dart';
 
 class CreateQuotationScreen extends StatefulWidget {
   final int? preselectedClientUserId;
@@ -49,6 +50,11 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
   final _discountFixedCtrl = TextEditingController();
   bool _submitting = false;
 
+  List<Map<String, dynamic>> _dealers = [];
+  int? _selectedDealerId;
+  String? _selectedDealerName;
+  bool _previewingDealer = false;
+
   // Variant selection modal
   Map<String, dynamic>? _variantModalProduct;
   String? _selectedColor;
@@ -70,6 +76,70 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
     }
     _loadCategories();
     if (!widget.forceExternalClient) _loadClients();
+    _loadDealers();
+  }
+
+  Future<void> _loadDealers() async {
+    try {
+      final res = await ApiService.query('clients.allUsers', input: {});
+      final users = (res['data'] as List? ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      setState(() {
+        _dealers = users
+            .where((u) => (u['role'] == 'dealer' || u['role'] == 'reseller'))
+            .map((u) => u)
+            .toList();
+      });
+    } catch (_) {}
+  }
+
+  bool _sameConfigurationMap(dynamic a, dynamic b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    if (a is! Map || b is! Map) return false;
+    final ma = Map<String, dynamic>.from(a as Map);
+    final mb = Map<String, dynamic>.from(b as Map);
+    if (ma.length != mb.length) return false;
+    for (final k in ma.keys) {
+      if (ma[k]?.toString() != mb[k]?.toString()) return false;
+    }
+    return true;
+  }
+
+  Future<void> _applyDealerPricesToCart() async {
+    if (_selectedDealerId == null || _cartItems.isEmpty) return;
+    setState(() => _previewingDealer = true);
+    try {
+      final res = await ApiService.mutate('discounts.previewQuotationItems', input: {
+        'dealerUserId': _selectedDealerId,
+        'items': _cartItems
+            .map((e) => {
+                  'productId': e['productId'],
+                  'unitPrice': ((e['officialUnitPrice'] ?? e['unitPrice']) as num).toDouble(),
+                })
+            .toList(),
+      });
+      final data = res['data'];
+      final out = data is Map<String, dynamic> ? data['items'] as List? : null;
+      if (out == null || out.length != _cartItems.length) return;
+      setState(() {
+        for (var i = 0; i < _cartItems.length; i++) {
+          final m = out[i];
+          if (m is! Map) continue;
+          final up = double.tryParse(m['unitPrice']?.toString() ?? '') ??
+              (( _cartItems[i]['unitPrice'] as num?)?.toDouble() ?? 0);
+          final off = double.tryParse(m['officialUnitPrice']?.toString() ?? '') ??
+              (( _cartItems[i]['officialUnitPrice'] ?? _cartItems[i]['unitPrice']) as num).toDouble();
+          _cartItems[i]['officialUnitPrice'] = off;
+          _cartItems[i]['unitPrice'] = up;
+          _cartItems[i]['dealerDiscountPercent'] = m['dealerDiscountPercent'];
+          _cartItems[i]['dealerDiscountWaiting'] = m['dealerDiscountWaiting'];
+        }
+      });
+    } catch (_) {
+      /* ignore */
+    } finally {
+      if (mounted) setState(() => _previewingDealer = false);
+    }
   }
 
   @override
@@ -144,6 +214,10 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
   }
 
   void _addToCart(Map<String, dynamic> product) {
+    if (product['pricingMode']?.toString() == 'curtain_per_meter') {
+      _showCurtainConfigurator(product);
+      return;
+    }
     // variants = ألوان ({color, colorHex, price}), types = أنواع ({name, price})
     final variants = (product['variants'] as List?) ?? [];
     final types = (product['types'] as List?) ?? [];
@@ -158,7 +232,210 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
     }
   }
 
-  void _addToCartDirect(Map<String, dynamic> product, String? color, String? variant) {
+  List<Map<String, dynamic>> _curtainMotorsForProduct(Map<String, dynamic> p) {
+    final raw = p['curtainMotors'];
+    if (raw is List && raw.isNotEmpty) {
+      return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    return [
+      {'id': 'none', 'labelAr': 'بدون موتور', 'price': 0},
+      {'id': 'dt82', 'labelAr': 'Dooya DT82', 'price': 0},
+      {'id': 'wistar', 'labelAr': 'Wistar', 'price': 0},
+      {'id': 'aqara', 'labelAr': 'Aqara', 'price': 0},
+      {'id': 'somfy', 'labelAr': 'Somfy', 'price': 0},
+      {'id': 'lm', 'labelAr': 'LM', 'price': 0},
+    ];
+  }
+
+  void _showCurtainConfigurator(Map<String, dynamic> product) {
+    final lenCtrl = TextEditingController();
+    String direction = 'center';
+    bool wave = false;
+    String motorId = 'none';
+    final notesCtrl = TextEditingController();
+    final minCm = (product['curtainLengthMinCm'] as num?)?.toDouble() ?? 50;
+    final maxCm = (product['curtainLengthMaxCm'] as num?)?.toDouble() ?? 1200;
+    final waveFee = (product['curtainWaveSurcharge'] as num?)?.toDouble() ?? 200;
+    final motors = _curtainMotorsForProduct(product);
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppThemeDecorations.cardColor(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: StatefulBuilder(
+            builder: (ctx, setModal) {
+              double? cm() => double.tryParse(lenCtrl.text.replaceAll('،', '.').replaceAll(',', '.'));
+              double motorExtra() {
+                for (final m in motors) {
+                  if (m['id']?.toString() == motorId) {
+                    final p = m['price'];
+                    if (p is num) return p.toDouble();
+                    return double.tryParse(p?.toString() ?? '0') ?? 0;
+                  }
+                }
+                return 0;
+              }
+
+              double? lineUnit() {
+                final c = cm();
+                if (c == null || c < minCm || c > maxCm) return null;
+                final rate = double.tryParse((product['originalPrice'] ?? product['price'])?.toString() ?? '0') ?? 0;
+                final comm = curtainCommercialMetersFromCm(c);
+                var t = comm * rate;
+                if (wave) t += waveFee;
+                t += motorExtra();
+                return t;
+              }
+
+              String summary() {
+                final c = cm();
+                if (c == null) return '';
+                final comm = curtainCommercialMetersFromCm(c);
+                final dirAr = direction == 'left'
+                    ? 'يسار'
+                    : (direction == 'right' ? 'يمين' : 'منتصف');
+                final wAr = wave ? 'Wave' : 'عادي';
+                String mAr = motorId;
+                for (final m in motors) {
+                  if (m['id']?.toString() == motorId) {
+                    mAr = m['labelAr']?.toString() ?? motorId;
+                    break;
+                  }
+                }
+                return 'طول فعلي ${c.toStringAsFixed(0)} سم ← $comm م تجاري | $dirAr | $wAr | $mAr';
+              }
+
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(product['nameAr'] ?? product['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 8),
+                    Text('سعر المتر التجاري: ${(double.tryParse((product['originalPrice'] ?? product['price'])?.toString() ?? '0') ?? 0).toStringAsFixed(0)} ج.م',
+                        style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: lenCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => setModal(() {}),
+                      decoration: InputDecoration(
+                        labelText: 'الطول (سم)',
+                        hintText: '$minCm – $maxCm',
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('الاتجاه', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    Row(
+                      children: [
+                        for (final d in ['left', 'center', 'right'])
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: ChoiceChip(
+                                label: Text(d == 'left' ? 'يسار' : (d == 'right' ? 'يمين' : 'منتصف')),
+                                selected: direction == d,
+                                onSelected: (_) => setModal(() => direction = d),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilterChip(
+                            label: const Text('عادي'),
+                            selected: !wave,
+                            onSelected: (_) => setModal(() => wave = false),
+                          ),
+                        ),
+                        Expanded(
+                          child: FilterChip(
+                            label: Text('Wave (+${waveFee.toStringAsFixed(0)})'),
+                            selected: wave,
+                            onSelected: (_) => setModal(() => wave = true),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      children: motors.map((m) {
+                        final id = m['id']?.toString() ?? '';
+                        return ChoiceChip(
+                          label: Text(m['labelAr']?.toString() ?? id, style: const TextStyle(fontSize: 11)),
+                          selected: motorId == id,
+                          onSelected: (_) => setModal(() => motorId = id),
+                        );
+                      }).toList(),
+                    ),
+                    TextField(
+                      controller: notesCtrl,
+                      maxLines: 2,
+                      decoration: const InputDecoration(labelText: 'ملاحظات (اختياري)', border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 12),
+                    if (lineUnit() != null)
+                      Text('سعر السطر: ${lineUnit()!.toStringAsFixed(2)} ج.م',
+                          style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 15)),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        final c = cm();
+                        if (c == null || c < minCm || c > maxCm) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('أدخل طولاً بين $minCm و $maxCm سم'), backgroundColor: AppColors.error),
+                          );
+                          return;
+                        }
+                        final u = lineUnit();
+                        if (u == null || u <= 0) return;
+                        final comm = curtainCommercialMetersFromCm(c);
+                        final cfg = <String, dynamic>{
+                          'pricingMode': 'curtain_per_meter',
+                          'curtainLengthCm': c,
+                          'curtainCommercialM': comm,
+                          'direction': direction,
+                          'wheel': wave ? 'wave' : 'normal',
+                          'motorId': motorId,
+                          if (notesCtrl.text.trim().isNotEmpty) 'notes': notesCtrl.text.trim(),
+                        };
+                        _addToCartDirect(product, null, null, configuration: cfg, configurationSummary: summary());
+                        Navigator.pop(ctx);
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 14)),
+                      child: const Text('إضافة للسلة'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    ).then((_) {
+      lenCtrl.dispose();
+      notesCtrl.dispose();
+    });
+  }
+
+  void _addToCartDirect(
+    Map<String, dynamic> product,
+    String? color,
+    String? variant, {
+    Map<String, dynamic>? configuration,
+    String? configurationSummary,
+  }) {
     // When the dealer module applies discounts, backend may return:
     // - `price` = discounted price
     // - `originalPrice` = official price
@@ -192,11 +469,11 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
     }
 
     setState(() {
-      // Check if same product+color+variant already in cart
       final existing = _cartItems.indexWhere((item) =>
           item['productId'] == product['id'] &&
           item['selectedColor'] == color &&
-          item['selectedVariant'] == variant);
+          item['selectedVariant'] == variant &&
+          _sameConfigurationMap(item['configuration'], configuration));
       if (existing >= 0) {
         _cartItems[existing]['qty'] = (_cartItems[existing]['qty'] as int) + 1;
       } else {
@@ -210,19 +487,29 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                   : null),
           'selectedColor': color,
           'selectedVariant': variant,
+          if (configuration != null) 'configuration': configuration,
+          if (configurationSummary != null && configurationSummary.isNotEmpty) 'configurationSummary': configurationSummary,
           'unitPrice': unitPrice,
+          'officialUnitPrice': unitPrice,
           'qty': 1,
         });
       }
       _variantModalProduct = null;
     });
+    if (_selectedDealerId != null) {
+      _applyDealerPricesToCart();
+    }
   }
 
   void _removeFromCart(int index) {
     setState(() => _cartItems.removeAt(index));
   }
 
-  double get _subtotal => _cartItems.fold(0, (sum, item) => sum + (item['unitPrice'] as double) * (item['qty'] as int));
+  double get _subtotal => _cartItems.fold(0.0, (sum, item) {
+        final up = (item['unitPrice'] as num?)?.toDouble() ?? 0.0;
+        final q = (item['qty'] as int?) ?? 1;
+        return sum + up * q;
+      });
   double get _installationAmount => _addInstallation ? _subtotal * _installationPercent / 100 : 0;
   double get _discountAmount {
     if (!_addDiscount) return 0;
@@ -268,6 +555,33 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
           if (item['selectedVariant'] != null && item['selectedVariant'].toString().isNotEmpty) {
             descParts.add('النوع: ${item['selectedVariant']}');
           }
+          if (item['configurationSummary'] != null && item['configurationSummary'].toString().isNotEmpty) {
+            descParts.add(item['configurationSummary'].toString());
+          }
+          final cfg = item['configuration'];
+          if (cfg is Map) {
+            final cm = cfg['curtainLengthCm'];
+            if (cm != null) descParts.add('المقاس الفعلي: ${cm is num ? (cm as num).toStringAsFixed(0) : cm} سم');
+            final comm = cfg['curtainCommercialM'];
+            if (comm != null) {
+              descParts.add('المتر التجاري: ${comm is num ? (comm as num).toStringAsFixed(1) : comm} م');
+            }
+            final dir = cfg['direction']?.toString();
+            if (dir != null && dir.isNotEmpty) {
+              final dirAr = dir == 'left' ? 'يسار' : (dir == 'right' ? 'يمين' : 'منتصف');
+              descParts.add('الاتجاه: $dirAr');
+            }
+            final wh = cfg['wheel']?.toString();
+            if (wh != null && wh.isNotEmpty) {
+              descParts.add(wh == 'wave' ? 'ويفي' : 'عادي');
+            }
+            if (cfg['motorId'] != null && cfg['motorId'].toString().isNotEmpty && cfg['motorId'].toString() != 'none') {
+              descParts.add('الموتور: ${cfg['motorId']}');
+            }
+            if (cfg['notes'] != null && cfg['notes'].toString().trim().isNotEmpty) {
+              descParts.add('ملاحظات: ${cfg['notes']}');
+            }
+          }
           return {
             'productId': item['productId'] is int ? item['productId'] as int : int.tryParse(item['productId'].toString()),
             'productName': item['productName'] as String,
@@ -275,7 +589,9 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
             'description': descParts.isEmpty ? null : descParts.join(' | '),
             'imageUrl': item['productImage'],
             'quantity': item['qty'] as int,
-            'unitPrice': (item['unitPrice'] as double),
+            'unitPrice': (item['unitPrice'] as num).toDouble(),
+            if (item['officialUnitPrice'] != null) 'officialUnitPrice': (item['officialUnitPrice'] as num).toDouble(),
+            if (cfg is Map) 'configuration': Map<String, dynamic>.from(cfg as Map),
             'sortOrder': idx,
           };
         }).toList(),
@@ -284,6 +600,10 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
         'discountAmount': _addDiscount && !_discountIsPercent ? _discountFixed : 0.0,
         'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       };
+
+      if (_selectedDealerId != null) {
+        input['dealerUserId'] = _selectedDealerId;
+      }
 
       if (_clientType == 'registered' && _selectedClientId != null) {
         input['clientUserId'] = _selectedClientId;
@@ -296,6 +616,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
 
       await ApiService.mutate('quotations.create', input: input);
       if (mounted) {
+        setState(() => _submitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('✅ تم إنشاء عرض السعر بنجاح'), backgroundColor: AppColors.success),
         );
@@ -433,7 +754,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                           itemCount: _filteredProducts.length,
                           itemBuilder: (context, i) {
                             final p = _filteredProducts[i];
-                            final inCart = _cartItems.where((c) => c['productId'] == p['id']).fold(0, (sum, c) => sum + (c['qty'] as int));
+                            final cartLines = _cartItems.where((c) => c['productId'] == p['id']).length;
                             final price = double.tryParse((p['originalPrice'] ?? p['price'])?.toString() ?? '0') ?? 0;
                             // variants = ألوان, types = أنواع
                             final variantsList = (p['variants'] as List?) ?? [];
@@ -446,7 +767,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                                   color: AppThemeDecorations.cardColor(context),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: inCart > 0 ? AppColors.primary.withOpacity(0.5) : AppColors.border,
+                                    color: cartLines > 0 ? AppColors.primary.withOpacity(0.5) : AppColors.border,
                                   ),
                                 ),
                                 child: ListTile(
@@ -499,7 +820,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                                         Text('S/N: ${p['serialNumber']}', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
                                     ],
                                   ),
-                                  trailing: inCart > 0
+                                  trailing: cartLines > 0
                                       ? Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                           decoration: BoxDecoration(
@@ -507,7 +828,10 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                                             borderRadius: BorderRadius.circular(20),
                                             border: Border.all(color: AppColors.primary.withOpacity(0.4)),
                                           ),
-                                          child: Text('$inCart في السلة', style: const TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+                                          child: Text(
+                                            cartLines == 1 ? '1 في السلة' : '$cartLines أسطر في السلة',
+                                            style: const TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
+                                          ),
                                         )
                                       : ElevatedButton(
                                           onPressed: () => _addToCart(p),
@@ -568,6 +892,71 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
           // Cart review
           const Text('📋 ملخص المنتجات', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 8),
+          if (_dealers.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppThemeDecorations.pageBackground(context),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('تاجر (تطبيق خصومات الموديول على أسعار البنود)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<int?>(
+                    value: _selectedDealerId,
+                    decoration: const InputDecoration(
+                      labelText: 'اختياري — خصم حسب قواعد التاجر',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: [
+                      const DropdownMenuItem<int?>(value: null, child: Text('بدون تاجر')),
+                      ..._dealers.map((d) {
+                        final id = d['id'] is int ? d['id'] as int : int.tryParse(d['id'].toString());
+                        if (id == null) return const DropdownMenuItem<int?>(value: null, child: SizedBox.shrink());
+                        return DropdownMenuItem<int?>(
+                          value: id,
+                          child: Text(d['name']?.toString() ?? '#$id', overflow: TextOverflow.ellipsis),
+                        );
+                      }),
+                    ],
+                    onChanged: _previewingDealer
+                        ? null
+                        : (v) async {
+                            setState(() {
+                              _selectedDealerId = v;
+                              if (v == null) {
+                                _selectedDealerName = null;
+                                for (final item in _cartItems) {
+                                  if (item['officialUnitPrice'] != null) {
+                                    item['unitPrice'] = (item['officialUnitPrice'] as num).toDouble();
+                                  }
+                                  item.remove('dealerDiscountPercent');
+                                  item.remove('dealerDiscountWaiting');
+                                }
+                              } else {
+                                _selectedDealerName = null;
+                                for (final d in _dealers) {
+                                  final id = d['id'] is int ? d['id'] as int : int.tryParse(d['id'].toString());
+                                  if (id == v) {
+                                    _selectedDealerName = d['name']?.toString();
+                                    break;
+                                  }
+                                }
+                              }
+                            });
+                            if (v != null) await _applyDealerPricesToCart();
+                          },
+                  ),
+                  if (_previewingDealer) const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Container(
             decoration: BoxDecoration(color: AppThemeDecorations.cardColor(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
             child: Column(
@@ -588,7 +977,19 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                                 Text('لون: ${item['selectedColor']}', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
                               if (item['selectedVariant'] != null)
                                 Text('نوع: ${item['selectedVariant']}', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
-                              Text('${(item['unitPrice'] as double).toStringAsFixed(0)} × ${item['qty']} = ${((item['unitPrice'] as double) * (item['qty'] as int)).toStringAsFixed(0)} ج.م',
+                              if (item['configurationSummary'] != null && item['configurationSummary'].toString().isNotEmpty)
+                                Text(item['configurationSummary'].toString(), style: const TextStyle(color: AppColors.text, fontSize: 11)),
+                              if (item['dealerDiscountPercent'] != null &&
+                                  (item['dealerDiscountPercent'] as num) > 0 &&
+                                  item['officialUnitPrice'] != null)
+                                Text(
+                                  'بعد خصم التاجر: ${(item['unitPrice'] as num).toStringAsFixed(2)} ج.م (قبل الخصم ${(item['officialUnitPrice'] as num).toStringAsFixed(2)})',
+                                  style: const TextStyle(color: AppColors.success, fontSize: 10),
+                                ),
+                              if (item['dealerDiscountWaiting'] != null && item['dealerDiscountWaiting'].toString().isNotEmpty)
+                                Text(item['dealerDiscountWaiting'].toString(), style: const TextStyle(color: AppColors.error, fontSize: 10)),
+                              Text(
+                                  '${(item['unitPrice'] as num).toStringAsFixed(0)} × ${item['qty']} = ${((item['unitPrice'] as num).toDouble() * (item['qty'] as int)).toStringAsFixed(0)} ج.م',
                                   style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
                             ],
                           ),

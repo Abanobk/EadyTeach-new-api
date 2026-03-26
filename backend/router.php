@@ -1008,6 +1008,10 @@ try {
             $result = discounts_deleteRule($input, $ctx);
             break;
 
+        case 'discounts.previewQuotationItems':
+            $result = discounts_previewQuotationItems($input, $ctx);
+            break;
+
         // ── Store Settings ─────────────────────────────────────
         case 'storeSettings.get':
             $result = [

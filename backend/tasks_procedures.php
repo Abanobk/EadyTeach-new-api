@@ -964,6 +964,7 @@ function _ensureQuotationsTable() {
     try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS purchase_items LONGTEXT NULL'); } catch(\Exception $e) {}
     try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS purchase_total_amount DECIMAL(12,2) DEFAULT 0'); } catch(\Exception $e) {}
     try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS purchase_accepted_at DATETIME NULL'); } catch(\Exception $e) {}
+    try { $db->exec('ALTER TABLE quotations ADD COLUMN IF NOT EXISTS dealer_user_id INT NULL'); } catch(\Exception $e) {}
 }
 
 function quotations_list($ctx) {
@@ -980,9 +981,11 @@ function quotations_list($ctx) {
 function quotations_create($input, $ctx) {
     global $db;
     _ensureQuotationsTable();
+    require_once __DIR__ . '/discounts_procedures.php';
 
     $createdBy = isset($ctx['userId']) ? (int)$ctx['userId'] : null;
     $clientUserId = isset($input['clientUserId']) ? (int)$input['clientUserId'] : null;
+    $dealerUserId = isset($input['dealerUserId']) ? (int)$input['dealerUserId'] : null;
     $clientName = $input['clientName'] ?? null;
     $clientEmail = $input['clientEmail'] ?? null;
     $clientPhone = $input['clientPhone'] ?? null;
@@ -996,6 +999,30 @@ function quotations_create($input, $ctx) {
     foreach ($items as &$item) {
         $qty = (int)($item['quantity'] ?? $item['qty'] ?? 1);
         $unitPrice = (float)($item['unitPrice'] ?? 0);
+        $pid = (int)($item['productId'] ?? 0);
+
+        if ($dealerUserId > 0 && $pid > 0) {
+            $pStmt = $db->prepare('SELECT id, category_id, stock FROM products WHERE id = ?');
+            $pStmt->execute([$pid]);
+            $prow = $pStmt->fetch(PDO::FETCH_ASSOC);
+            if ($prow) {
+                $catId = isset($prow['category_id']) ? (int)$prow['category_id'] : null;
+                $stock = (int)($prow['stock'] ?? 0);
+                $rule = discounts_fetchDealerRuleForProduct($db, $dealerUserId, $pid, $catId);
+                if ($rule) {
+                    $item['officialUnitPrice'] = $unitPrice;
+                    $applied = discounts_applyDealerRuleToUnitPrice($unitPrice, $rule, $stock);
+                    $unitPrice = $applied['finalUnitPrice'];
+                    $item['unitPrice'] = $unitPrice;
+                    $item['dealerDiscountPercent'] = $applied['discountPercent'];
+                    $item['dealerDiscountValuePerUnit'] = $applied['discountValuePerUnit'];
+                    if (!empty($applied['waitingMessage'])) {
+                        $item['dealerDiscountWaiting'] = $applied['waitingMessage'];
+                    }
+                }
+            }
+        }
+
         $item['qty'] = $qty;
         $item['totalPrice'] = $unitPrice * $qty;
         $subtotal += $item['totalPrice'];
@@ -1015,8 +1042,8 @@ function quotations_create($input, $ctx) {
     try { $db->exec('ALTER TABLE quotations ADD COLUMN discount_percent DECIMAL(10,2) DEFAULT 0'); } catch (\Exception $e) {}
     try { $db->exec('ALTER TABLE quotations ADD COLUMN discount_amount DECIMAL(10,2) DEFAULT 0'); } catch (\Exception $e) {}
 
-    $stmt = $db->prepare('INSERT INTO quotations (ref_number, created_by, client_user_id, client_name, client_email, client_phone, items, subtotal, installation_percent, installation_amount, discount_percent, discount_amount, total_amount, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    $stmt->execute([$refNumber, $createdBy, $clientUserId, $clientName, $clientEmail, $clientPhone, json_encode($items), $subtotal, $installPct, $installAmt, $discountPct, $discountAmt, $totalAmt, $notes]);
+    $stmt = $db->prepare('INSERT INTO quotations (ref_number, created_by, client_user_id, dealer_user_id, client_name, client_email, client_phone, items, subtotal, installation_percent, installation_amount, discount_percent, discount_amount, total_amount, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$refNumber, $createdBy, $clientUserId, $dealerUserId > 0 ? $dealerUserId : null, $clientName, $clientEmail, $clientPhone, json_encode($items, JSON_UNESCAPED_UNICODE), $subtotal, $installPct, $installAmt, $discountPct, $discountAmt, $totalAmt, $notes]);
     return ['id' => (int)$db->lastInsertId()];
 }
 
@@ -1666,6 +1693,7 @@ function quotations_delete($input, $ctx) {
 }
 
 function _formatQuotation($r) {
+    global $db;
     $items = $r['items'] ? json_decode($r['items'], true) : [];
     foreach ($items as &$item) {
         $qty = (int)($item['quantity'] ?? $item['qty'] ?? 1);
@@ -1675,11 +1703,27 @@ function _formatQuotation($r) {
     }
     unset($item);
 
+    $dealerName = null;
+    if (!empty($r['dealer_user_id']) && isset($db)) {
+        try {
+            $ds = $db->prepare('SELECT name FROM users WHERE id = ?');
+            $ds->execute([(int)$r['dealer_user_id']]);
+            $dealerName = $ds->fetchColumn();
+            if ($dealerName === false) {
+                $dealerName = null;
+            }
+        } catch (\Exception $e) {
+            $dealerName = null;
+        }
+    }
+
     return [
         'id' => (int)$r['id'],
         'refNumber' => $r['ref_number'] ?? ('QT-' . $r['id']),
         'createdBy' => isset($r['created_by']) && $r['created_by'] ? (int)$r['created_by'] : null,
         'clientUserId' => isset($r['client_user_id']) && $r['client_user_id'] ? (int)$r['client_user_id'] : null,
+        'dealerUserId' => isset($r['dealer_user_id']) && $r['dealer_user_id'] ? (int)$r['dealer_user_id'] : null,
+        'dealerName' => $dealerName,
         'clientName' => $r['client_name'] ?? null,
         'clientEmail' => $r['client_email'] ?? null,
         'clientPhone' => $r['client_phone'] ?? null,

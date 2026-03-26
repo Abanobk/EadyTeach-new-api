@@ -565,6 +565,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
               pw.Text('العميل: ${q['clientName'] ?? '-'}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
               if (q['clientPhone'] != null) pw.Text('الهاتف: ${q['clientPhone']}', style: const pw.TextStyle(fontSize: 11)),
               if (q['clientEmail'] != null) pw.Text('البريد: ${q['clientEmail']}', style: const pw.TextStyle(fontSize: 11)),
+              if (q['dealerName'] != null && q['dealerName'].toString().isNotEmpty)
+                pw.Text('التاجر (خصم الموديول): ${q['dealerName']}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue700)),
             ]),
             pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
               pw.Text('التاريخ: ${_formatDate(q['createdAt'])}', style: const pw.TextStyle(fontSize: 11)),
@@ -611,7 +613,29 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                 )),
                 pw.Expanded(flex: 4, child: pw.Padding(
                   padding: const pw.EdgeInsets.symmetric(horizontal: 4),
-                  child: pw.Text(item['productName'] ?? '', style: const pw.TextStyle(fontSize: 10)),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(item['productName'] ?? '', style: const pw.TextStyle(fontSize: 10)),
+                      if (item['description'] != null && item['description'].toString().trim().isNotEmpty)
+                        pw.Text(
+                          item['description'].toString(),
+                          style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
+                        ),
+                      if (item['officialUnitPrice'] != null &&
+                          item['dealerDiscountPercent'] != null &&
+                          (double.tryParse(item['dealerDiscountPercent'].toString()) ?? 0) > 0)
+                        pw.Text(
+                          'سعر القائمة ${(double.tryParse(item['officialUnitPrice'].toString()) ?? 0).toStringAsFixed(0)} ← بعد خصم التاجر ${(double.tryParse(item['unitPrice'].toString()) ?? 0).toStringAsFixed(0)} ج.م',
+                          style: const pw.TextStyle(fontSize: 7, color: PdfColors.blue700),
+                        ),
+                      if (item['dealerDiscountWaiting'] != null && item['dealerDiscountWaiting'].toString().isNotEmpty)
+                        pw.Text(
+                          item['dealerDiscountWaiting'].toString(),
+                          style: const pw.TextStyle(fontSize: 7, color: PdfColors.orange),
+                        ),
+                    ],
+                  ),
                 )),
                 pw.Expanded(flex: 1, child: pw.Text('$qty', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center)),
                 pw.Expanded(flex: 2, child: pw.Text('${up.toStringAsFixed(0)} ج.م', style: const pw.TextStyle(fontSize: 9), textAlign: pw.TextAlign.center)),

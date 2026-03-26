@@ -160,3 +160,163 @@ function discounts_deleteRule($input, $ctx) {
     return ['success' => true];
 }
 
+/**
+ * جلب قاعدة خصم التاجر لمنتج (نفس أولوية المنتج ثم الفئة في router).
+ */
+function discounts_fetchDealerRuleForProduct(PDO $db, int $dealerId, int $productId, ?int $categoryId): ?array {
+    $stmt = $db->prepare("SELECT * FROM discount_rules
+                          WHERE target_type = 'dealer' AND target_id = ? AND is_active = 1
+                            AND scope_type = 'product' AND product_id = ?
+                          ORDER BY id DESC LIMIT 1");
+    $stmt->execute([$dealerId, $productId]);
+    $r = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($r) {
+        return $r;
+    }
+    if ($categoryId) {
+        $stmt = $db->prepare("SELECT * FROM discount_rules
+                              WHERE target_type = 'dealer' AND target_id = ? AND is_active = 1
+                                AND scope_type = 'category' AND category_id = ?
+                              ORDER BY id DESC LIMIT 1");
+        $stmt->execute([$dealerId, $categoryId]);
+        $r = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($r) {
+            return $r;
+        }
+    }
+    return null;
+}
+
+/**
+ * تطبيق قاعدة الخصم على سعر وحدة (نفس منطق formatProduct للمستخدم).
+ * @return array{finalUnitPrice: float, discountPercent: float, discountValuePerUnit: float, waitingMessage: ?string}
+ */
+function discounts_applyDealerRuleToUnitPrice(float $officialUnit, array $rule, int $stock): array {
+    $minStock = (int)($rule['min_stock'] ?? 0);
+    $percent = (float)($rule['discount_percent'] ?? 0);
+    $amount = (float)($rule['discount_amount'] ?? 0);
+    if ($percent < 0) {
+        $percent = 0;
+    }
+    if ($amount < 0) {
+        $amount = 0;
+    }
+
+    if ($stock === 0 || ($minStock > 0 && $stock < $minStock)) {
+        $msg = $stock === 0
+            ? 'كمية الصفر — خصم التاجر معلق حتى توفر المخزون'
+            : "المخزون أقل من شرط الخصم ($minStock)";
+
+        return [
+            'finalUnitPrice' => $officialUnit,
+            'discountPercent' => $percent,
+            'discountValuePerUnit' => 0.0,
+            'waitingMessage' => $msg,
+        ];
+    }
+
+    $discountValue = $percent > 0 ? $officialUnit * $percent / 100.0 : $amount;
+    if ($discountValue < 0) {
+        $discountValue = 0;
+    }
+    if ($discountValue > $officialUnit) {
+        $discountValue = $officialUnit;
+    }
+
+    return [
+        'finalUnitPrice' => max(0.0, $officialUnit - $discountValue),
+        'discountPercent' => $percent,
+        'discountValuePerUnit' => $discountValue,
+        'waitingMessage' => null,
+    ];
+}
+
+/**
+ * معاينة أسعار بنود عرض السعر بعد خصم التاجر (للواجهة قبل الحفظ).
+ * input: { dealerUserId?: int, items: [{ productId, unitPrice }] }
+ */
+function discounts_previewQuotationItems($input, $ctx) {
+    global $db;
+    _ensureDiscountsSchema();
+
+    $dealerId = isset($input['dealerUserId']) ? (int)$input['dealerUserId'] : 0;
+    $lines = $input['items'] ?? [];
+    if (!is_array($lines)) {
+        $lines = [];
+    }
+
+    $out = [];
+    foreach ($lines as $ln) {
+        if (!is_array($ln)) {
+            continue;
+        }
+        $pid = (int)($ln['productId'] ?? 0);
+        $official = (float)($ln['unitPrice'] ?? 0);
+        if ($pid <= 0) {
+            $out[] = [
+                'productId' => $pid,
+                'officialUnitPrice' => $official,
+                'unitPrice' => $official,
+                'dealerDiscountPercent' => 0.0,
+                'dealerDiscountValuePerUnit' => 0.0,
+                'dealerDiscountWaiting' => null,
+            ];
+            continue;
+        }
+
+        if ($dealerId <= 0) {
+            $out[] = [
+                'productId' => $pid,
+                'officialUnitPrice' => $official,
+                'unitPrice' => $official,
+                'dealerDiscountPercent' => 0.0,
+                'dealerDiscountValuePerUnit' => 0.0,
+                'dealerDiscountWaiting' => null,
+            ];
+            continue;
+        }
+
+        $pStmt = $db->prepare('SELECT id, category_id, stock FROM products WHERE id = ?');
+        $pStmt->execute([$pid]);
+        $prow = $pStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$prow) {
+            $out[] = [
+                'productId' => $pid,
+                'officialUnitPrice' => $official,
+                'unitPrice' => $official,
+                'dealerDiscountPercent' => 0.0,
+                'dealerDiscountValuePerUnit' => 0.0,
+                'dealerDiscountWaiting' => null,
+            ];
+            continue;
+        }
+
+        $catId = isset($prow['category_id']) ? (int)$prow['category_id'] : null;
+        $stock = (int)($prow['stock'] ?? 0);
+        $rule = discounts_fetchDealerRuleForProduct($db, $dealerId, $pid, $catId);
+        if (!$rule) {
+            $out[] = [
+                'productId' => $pid,
+                'officialUnitPrice' => $official,
+                'unitPrice' => $official,
+                'dealerDiscountPercent' => 0.0,
+                'dealerDiscountValuePerUnit' => 0.0,
+                'dealerDiscountWaiting' => null,
+            ];
+            continue;
+        }
+
+        $applied = discounts_applyDealerRuleToUnitPrice($official, $rule, $stock);
+        $out[] = [
+            'productId' => $pid,
+            'officialUnitPrice' => $official,
+            'unitPrice' => $applied['finalUnitPrice'],
+            'dealerDiscountPercent' => $applied['discountPercent'],
+            'dealerDiscountValuePerUnit' => $applied['discountValuePerUnit'],
+            'dealerDiscountWaiting' => $applied['waitingMessage'],
+        ];
+    }
+
+    return ['items' => $out];
+}
+

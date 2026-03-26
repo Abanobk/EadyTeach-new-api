@@ -1030,6 +1030,18 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     }
   }
 
+  Future<void> _openEditQuotation() async {
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateQuotationScreen(
+          quotationIdToEdit: widget.quotationId,
+        ),
+      ),
+    );
+    if (ok == true && mounted) await _loadQuotation();
+  }
+
   String _formatDate(dynamic ts) {
     if (ts == null) return '-';
     try {
@@ -1052,6 +1064,11 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     final purchaseRequestStatus = _quotation?['purchaseRequestStatus'] ?? 'none';
     final purchaseRequestStatusNorm = purchaseRequestStatus.toString().trim().toLowerCase();
     final purchaseRequestStatusRaw = purchaseRequestStatus.toString().trim();
+    final canAccessAdmin = auth.user?.canAccessAdmin ?? false;
+    final isQuoteOwner = dealerId != null && quoteCreatedById != null && dealerId == quoteCreatedById;
+    final canEditQuotation = (canAccessAdmin || isQuoteOwner) &&
+        purchaseRequestStatusNorm != 'requested' &&
+        purchaseRequestStatusNorm != 'accepted';
     final purchaseItems = (_quotation?['purchaseItems'] as List? ?? []);
     final qSubtotal = double.tryParse(_quotation?['subtotal']?.toString() ?? '0') ?? 0.0;
     // For dealer admin pricing we must exclude "تركيبات/installation" and exclude client-wide discount effects
@@ -1095,6 +1112,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             onPressed: () => Navigator.pop(context),
           ),
           actions: [
+            if (_quotation != null && canEditQuotation)
+              IconButton(
+                tooltip: 'تعديل عرض السعر',
+                icon: const Icon(Icons.edit_note, color: AppColors.primary),
+                onPressed: _openEditQuotation,
+              ),
             if (_quotation != null && _quotation!['status'] != 'accepted')
               IconButton(
                 icon: _deleting
@@ -1394,24 +1417,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                               ),
                             ),
                           ),
-                          if (!isDealer && purchaseRequestStatusNorm != 'requested' && purchaseRequestStatusNorm != 'accepted') ...[
+                          if (canEditQuotation) ...[
                             const SizedBox(height: 10),
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
-                                onPressed: () async {
-                                  final ok = await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => CreateQuotationScreen(
-                                        quotationIdToEdit: widget.quotationId,
-                                      ),
-                                    ),
-                                  );
-                                  if (ok == true) {
-                                    await _loadQuotation();
-                                  }
-                                },
+                                onPressed: _openEditQuotation,
                                 icon: const Icon(Icons.edit_note, color: Colors.white),
                                 label: const Text('تعديل عرض السعر'),
                                 style: ElevatedButton.styleFrom(

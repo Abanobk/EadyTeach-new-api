@@ -47,40 +47,46 @@ class ApiService {
   static String proxyImageUrl(String? url) {
     if (url == null || url.isEmpty) return '';
 
+    var resolved = url.trim();
+    // روابط نسبية (/uploads/... أو backend/...) لا تُحمَّل على الموبايل بدون scheme+host
+    if (!resolved.startsWith('http://') && !resolved.startsWith('https://')) {
+      resolved = _absoluteUrl(resolved.startsWith('/') ? resolved.substring(1) : resolved);
+    }
+
     // لو الرابط نفسه هو الـ image-proxy نتاكد إنه مطلق (absolute) من نفس الـ origin
-    if (url.contains('image-proxy')) {
+    if (resolved.contains('image-proxy')) {
       // إن كان نسبي (يبدأ بـ /api/...) نحوله لمطلق على api.easytecheg.net
-      if (url.startsWith('/')) {
-        return _absoluteUrl(url);
+      if (resolved.startsWith('/')) {
+        return _absoluteUrl(resolved);
       }
-      return url;
+      return resolved;
     }
 
     // لو الصورة على Firebase Storage أو نطاق خارجي مشابه
-    final uri = Uri.tryParse(url);
+    final uri = Uri.tryParse(resolved);
     final host = uri?.host.toLowerCase() ?? '';
 
     if (kIsWeb) {
       // على الويب: نمرّر Firebase و /uploads عبر proxy (router.php) لتفادي CORS
       if (host.contains('firebasestorage.googleapis.com') ||
-          url.startsWith('/uploads') ||
+          (uri?.path.contains('/uploads') ?? false) ||
           host == Uri.tryParse(_apiOrigin)?.host) {
-        final absolute = url.startsWith('http') ? url : _absoluteUrl(url);
+        final absolute = resolved.startsWith('http') ? resolved : _absoluteUrl(resolved);
         final encoded = Uri.encodeComponent(absolute);
         // نستخدم router.php مباشرة لضمان عمله بدون إعدادات خاصة في Apache
         return '$_apiOrigin/backend/router.php?image-proxy=1&url=$encoded';
       }
       // أي دومينات خارجية أخرى نستخدمها مباشرة
-      return url;
+      return resolved;
     }
 
     // على الموبايل: نستخدم Firebase / الروابط الخارجية مباشرة
     if (host.contains('firebasestorage.googleapis.com')) {
-      return url;
+      return resolved;
     }
 
-    // غير كده نرجّع الرابط كما هو.
-    return url;
+    // غير كده نرجّع الرابط كما هو (مطلق بعد التطبيع أعلاه).
+    return resolved;
   }
 
   static bool _persistSession = true;

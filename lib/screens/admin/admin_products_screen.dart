@@ -92,6 +92,15 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     return null;
   }
 
+  /// صورة النوع قد تُخزَّن كـ imageUrl أو image أو image_url حسب مصدر البيانات.
+  String? _typeImageUrlFromMap(Map<String, dynamic> t) {
+    for (final key in ['imageUrl', 'image', 'image_url']) {
+      final v = t[key];
+      if (v != null && v.toString().trim().isNotEmpty) return v.toString().trim();
+    }
+    return null;
+  }
+
   bool _isCurtainPerMeter(Map<String, dynamic> p) =>
       p['pricingMode']?.toString() == 'curtain_per_meter';
 
@@ -389,13 +398,37 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           children: [
                             if (imageUrl != null && imageUrl.isNotEmpty) ...[
                               ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(8),
                                 child: Image.network(
                                   ApiService.proxyImageUrl(imageUrl),
-                                  width: 40,
-                                  height: 40,
+                                  width: 52,
+                                  height: 52,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 22, color: AppColors.muted),
+                                  filterQuality: FilterQuality.medium,
+                                  loadingBuilder: (context, child, progress) {
+                                    if (progress == null) return child;
+                                    return SizedBox(
+                                      width: 52,
+                                      height: 52,
+                                      child: Center(
+                                        child: SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            value: progress.expectedTotalBytes != null
+                                                ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                                : null,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (_, __, ___) => const SizedBox(
+                                    width: 52,
+                                    height: 52,
+                                    child: Icon(Icons.broken_image_outlined, size: 28, color: AppColors.muted),
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -442,6 +475,8 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                     );
                                     setModalState(() {
                                       uploadingTypeImage = false;
+                                      types[idx].remove('image');
+                                      types[idx].remove('image_url');
                                       types[idx]['imageUrl'] = url;
                                     });
                                   } catch (e) {
@@ -465,7 +500,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                 final priceController = TextEditingController(text: t['price']?.toString() ?? '');
                                 final stockController = TextEditingController(text: t['stock']?.toString() ?? '');
                                 final partController = TextEditingController(text: t['partNumber']?.toString() ?? '');
-                                final imageController = TextEditingController(text: t['imageUrl']?.toString() ?? '');
+                                final imageController = TextEditingController(text: _typeImageUrlFromMap(Map<String, dynamic>.from(t)) ?? '');
 
                                 final ok = await showDialog<bool>(
                                   context: ctx,
@@ -606,7 +641,11 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                                     }
                                     if (imageController.text.trim().isEmpty) {
                                       types[idx].remove('imageUrl');
+                                      types[idx].remove('image');
+                                      types[idx].remove('image_url');
                                     } else {
+                                      types[idx].remove('image');
+                                      types[idx].remove('image_url');
                                       types[idx]['imageUrl'] = imageController.text.trim();
                                     }
                                   });

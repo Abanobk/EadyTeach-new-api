@@ -115,6 +115,9 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
             .map((e) => {
                   'productId': e['productId'],
                   'unitPrice': ((e['officialUnitPrice'] ?? e['unitPrice']) as num).toDouble(),
+                  if (e['selectedVariant'] != null &&
+                      e['selectedVariant'].toString().trim().isNotEmpty)
+                    'variantName': e['selectedVariant'].toString().trim(),
                 })
             .toList(),
       });

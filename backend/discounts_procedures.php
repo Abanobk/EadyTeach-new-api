@@ -6,8 +6,8 @@
  * Allows defining discount rules:
  *  - target_type: client | dealer
  *  - target_id: user id of the client/dealer
- *  - scope_type: category | product
- *  - category_id / product_id
+ *  - scope_type: category | product | product_type
+ *  - category_id / product_id / variant_name
  *  - discount_percent / discount_amount
  *  - min_stock (optional)
  */
@@ -19,9 +19,10 @@ function _ensureDiscountsSchema() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         target_type ENUM('client','dealer') NOT NULL,
         target_id INT NOT NULL,
-        scope_type ENUM('category','product') NOT NULL,
+        scope_type ENUM('category','product','product_type') NOT NULL,
         category_id INT DEFAULT NULL,
         product_id INT DEFAULT NULL,
+        variant_name VARCHAR(191) DEFAULT NULL,
         discount_percent DECIMAL(5,2) DEFAULT 0,
         discount_amount DECIMAL(12,2) DEFAULT 0,
         min_stock INT DEFAULT 0,
@@ -31,8 +32,23 @@ function _ensureDiscountsSchema() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_target (target_type, target_id),
         INDEX idx_scope_cat (scope_type, category_id),
-        INDEX idx_scope_prod (scope_type, product_id)
+        INDEX idx_scope_prod (scope_type, product_id),
+        INDEX idx_scope_prod_type (scope_type, product_id, variant_name)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // Backward-compatible upgrades for existing installations.
+    try {
+        $db->exec("ALTER TABLE discount_rules
+                   MODIFY COLUMN scope_type ENUM('category','product','product_type') NOT NULL");
+    } catch (\Throwable $e) {}
+    try {
+        $db->exec("ALTER TABLE discount_rules
+                   ADD COLUMN variant_name VARCHAR(191) DEFAULT NULL");
+    } catch (\Throwable $e) {}
+    try {
+        $db->exec("ALTER TABLE discount_rules
+                   ADD INDEX idx_scope_prod_type (scope_type, product_id, variant_name)");
+    } catch (\Throwable $e) {}
 }
 
 function _formatDiscountRule($r) {
@@ -43,6 +59,7 @@ function _formatDiscountRule($r) {
         'scopeType' => $r['scope_type'],
         'categoryId' => $r['category_id'] ? (int)$r['category_id'] : null,
         'productId' => $r['product_id'] ? (int)$r['product_id'] : null,
+        'variantName' => $r['variant_name'] ?? null,
         'discountPercent' => (float)$r['discount_percent'],
         'discountAmount' => (float)$r['discount_amount'],
         'minStock' => (int)$r['min_stock'],
@@ -81,6 +98,15 @@ function discounts_listRules($input, $ctx) {
         $where[] = 'product_id = ?';
         $params[] = (int)$input['productId'];
     }
+    if (array_key_exists('variantName', $input)) {
+        $v = trim((string)($input['variantName'] ?? ''));
+        if ($v !== '') {
+            $where[] = 'variant_name = ?';
+            $params[] = $v;
+        } else {
+            $where[] = '(variant_name IS NULL OR variant_name = "")';
+        }
+    }
     if (isset($input['isActive'])) {
         $where[] = 'is_active = ?';
         $params[] = $input['isActive'] ? 1 : 0;
@@ -104,9 +130,11 @@ function discounts_saveRule($input, $ctx) {
     $id = isset($input['id']) ? (int)$input['id'] : 0;
     $targetType = $input['targetType'] ?? 'client'; // client | dealer
     $targetId = (int)($input['targetId'] ?? 0);
-    $scopeType = $input['scopeType'] ?? 'product'; // product | category
+    $scopeType = $input['scopeType'] ?? 'product'; // product | category | product_type
     $categoryId = !empty($input['categoryId']) ? (int)$input['categoryId'] : null;
     $productId = !empty($input['productId']) ? (int)$input['productId'] : null;
+    $variantName = trim((string)($input['variantName'] ?? ''));
+    if ($variantName === '') $variantName = null;
     $discountPercent = (float)($input['discountPercent'] ?? 0);
     $discountAmount = (float)($input['discountAmount'] ?? 0);
     $minStock = (int)($input['minStock'] ?? 0);
@@ -123,6 +151,14 @@ function discounts_saveRule($input, $ctx) {
     if ($scopeType === 'product' && !$productId) {
         throw new Exception('productId is required for product scope');
     }
+    if ($scopeType === 'product_type') {
+        if (!$productId) {
+            throw new Exception('productId is required for product_type scope');
+        }
+        if (!$variantName) {
+            throw new Exception('variantName is required for product_type scope');
+        }
+    }
 
     // Prefer percent; if zero then use amount
     if ($discountPercent < 0) $discountPercent = 0;
@@ -130,18 +166,18 @@ function discounts_saveRule($input, $ctx) {
 
     if ($id > 0) {
         $stmt = $db->prepare("UPDATE discount_rules
-            SET target_type = ?, target_id = ?, scope_type = ?, category_id = ?, product_id = ?,
+            SET target_type = ?, target_id = ?, scope_type = ?, category_id = ?, product_id = ?, variant_name = ?,
                 discount_percent = ?, discount_amount = ?, min_stock = ?, is_active = ?, note = ?
             WHERE id = ?");
-        $stmt->execute([$targetType, $targetId, $scopeType, $categoryId, $productId,
+        $stmt->execute([$targetType, $targetId, $scopeType, $categoryId, $productId, $variantName,
             $discountPercent, $discountAmount, $minStock, $isActive, $note, $id]);
         return ['id' => $id];
     } else {
         $stmt = $db->prepare("INSERT INTO discount_rules
-            (target_type, target_id, scope_type, category_id, product_id,
+            (target_type, target_id, scope_type, category_id, product_id, variant_name,
              discount_percent, discount_amount, min_stock, is_active, note, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$targetType, $targetId, $scopeType, $categoryId, $productId,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$targetType, $targetId, $scopeType, $categoryId, $productId, $variantName,
             $discountPercent, $discountAmount, $minStock, $isActive, $note, $createdBy]);
         return ['id' => (int)$db->lastInsertId()];
     }
@@ -163,7 +199,20 @@ function discounts_deleteRule($input, $ctx) {
 /**
  * جلب قاعدة خصم التاجر لمنتج (نفس أولوية المنتج ثم الفئة في router).
  */
-function discounts_fetchDealerRuleForProduct(PDO $db, int $dealerId, int $productId, ?int $categoryId): ?array {
+function discounts_fetchDealerRuleForProduct(PDO $db, int $dealerId, int $productId, ?int $categoryId, ?string $variantName = null): ?array {
+    $variantName = trim((string)($variantName ?? ''));
+    if ($variantName !== '') {
+        $stmt = $db->prepare("SELECT * FROM discount_rules
+                              WHERE target_type = 'dealer' AND target_id = ? AND is_active = 1
+                                AND scope_type = 'product_type' AND product_id = ? AND variant_name = ?
+                              ORDER BY id DESC LIMIT 1");
+        $stmt->execute([$dealerId, $productId, $variantName]);
+        $r = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($r) {
+            return $r;
+        }
+    }
+
     $stmt = $db->prepare("SELECT * FROM discount_rules
                           WHERE target_type = 'dealer' AND target_id = ? AND is_active = 1
                             AND scope_type = 'product' AND product_id = ?
@@ -233,7 +282,7 @@ function discounts_applyDealerRuleToUnitPrice(float $officialUnit, array $rule, 
 
 /**
  * معاينة أسعار بنود عرض السعر بعد خصم التاجر (للواجهة قبل الحفظ).
- * input: { dealerUserId?: int, items: [{ productId, unitPrice }] }
+ * input: { dealerUserId?: int, items: [{ productId, unitPrice, variantName? }] }
  */
 function discounts_previewQuotationItems($input, $ctx) {
     global $db;
@@ -252,6 +301,7 @@ function discounts_previewQuotationItems($input, $ctx) {
         }
         $pid = (int)($ln['productId'] ?? 0);
         $official = (float)($ln['unitPrice'] ?? 0);
+        $variantName = trim((string)($ln['variantName'] ?? ''));
         if ($pid <= 0) {
             $out[] = [
                 'productId' => $pid,
@@ -293,7 +343,7 @@ function discounts_previewQuotationItems($input, $ctx) {
 
         $catId = isset($prow['category_id']) ? (int)$prow['category_id'] : null;
         $stock = (int)($prow['stock'] ?? 0);
-        $rule = discounts_fetchDealerRuleForProduct($db, $dealerId, $pid, $catId);
+        $rule = discounts_fetchDealerRuleForProduct($db, $dealerId, $pid, $catId, $variantName);
         if (!$rule) {
             $out[] = [
                 'productId' => $pid,

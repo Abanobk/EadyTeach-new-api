@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
-import '../../providers/auth_provider.dart';
 
 class AdminDiscountsScreen extends StatefulWidget {
   const AdminDiscountsScreen({super.key});
@@ -97,13 +95,22 @@ class _AdminDiscountsScreenState extends State<AdminDiscountsScreen>
           'targetId': _selectedTargetId,
           'scopeType': 'product',
         }),
+        ApiService.query('discounts.listRules', input: {
+          'targetType': _targetType,
+          'targetId': _selectedTargetId,
+          'scopeType': 'product_type',
+        }),
       ]);
       _categoryRules = (res[0]['data'] as List? ?? [])
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-      _productRules = (res[1]['data'] as List? ?? [])
+      final productRules = (res[1]['data'] as List? ?? [])
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
+      final productTypeRules = (res[2]['data'] as List? ?? [])
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      _productRules = [...productTypeRules, ...productRules];
       if (mounted) setState(() => _loading = false);
     } catch (e) {
       if (mounted) {
@@ -149,6 +156,19 @@ class _AdminDiscountsScreenState extends State<AdminDiscountsScreen>
     );
     if (p.isEmpty) return '-';
     return (p['nameAr'] ?? p['name'] ?? '').toString();
+  }
+
+  List<String> _productTypes(int? productId) {
+    if (productId == null) return const [];
+    final p = _products.firstWhere((e) => e['id'] == productId, orElse: () => {});
+    if (p.isEmpty) return const [];
+    final raw = p['types'];
+    if (raw is! List) return const [];
+    return raw
+        .map((e) => (e is Map ? (e['name'] ?? '') : '').toString().trim())
+        .where((n) => n.isNotEmpty)
+        .toSet()
+        .toList();
   }
 
   @override
@@ -462,6 +482,16 @@ class _AdminDiscountsScreenState extends State<AdminDiscountsScreen>
                   foregroundColor: Colors.black,
                 ),
               ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: () => _showRuleDialog(scopeType: 'product_type'),
+                icon: const Icon(Icons.tune),
+                label: const Text('خصم على نوع'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal,
+                  foregroundColor: Colors.white,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -478,6 +508,8 @@ class _AdminDiscountsScreenState extends State<AdminDiscountsScreen>
                       final amt = (r['discountAmount'] as num).toDouble();
                       final minStock = (r['minStock'] as num).toInt();
                       final active = r['isActive'] == true;
+                      final scope = (r['scopeType'] ?? 'product').toString();
+                      final variantName = (r['variantName'] ?? '').toString();
                       final label = pct > 0
                           ? '${pct.toStringAsFixed(0)}%'
                           : '${amt.toStringAsFixed(0)} ج.م';
@@ -514,6 +546,11 @@ class _AdminDiscountsScreenState extends State<AdminDiscountsScreen>
                                 style:
                                     const TextStyle(color: AppColors.muted, fontSize: 11),
                               ),
+                            if (scope == 'product_type' && variantName.isNotEmpty)
+                              Text(
+                                'النوع: $variantName',
+                                style: const TextStyle(color: Colors.teal, fontSize: 11, fontWeight: FontWeight.w600),
+                              ),
                           ],
                         ),
                         trailing: Row(
@@ -524,14 +561,14 @@ class _AdminDiscountsScreenState extends State<AdminDiscountsScreen>
                               onChanged: (v) async {
                                 await _saveRule(
                                   data: {...r, 'isActive': v},
-                                  scopeType: 'product',
+                                  scopeType: scope,
                                 );
                               },
                             ),
                             IconButton(
                               icon: const Icon(Icons.edit, color: AppColors.primary),
                               onPressed: () =>
-                                  _showRuleDialog(scopeType: 'product', existing: r),
+                                  _showRuleDialog(scopeType: scope, existing: r),
                             ),
                             IconButton(
                               icon:
@@ -552,13 +589,14 @@ class _AdminDiscountsScreenState extends State<AdminDiscountsScreen>
   }
 
   Future<void> _showRuleDialog({
-    required String scopeType, // category | product
+    required String scopeType, // category | product | product_type
     Map<String, dynamic>? existing,
   }) async {
     if (_selectedTargetId == null) return;
     final isEdit = existing != null;
     int? categoryId = existing?['categoryId'] as int?;
     int? productId = existing?['productId'] as int?;
+    String? variantName = existing?['variantName']?.toString();
     double pct =
         (existing?['discountPercent'] as num?)?.toDouble() ?? 0;
     double amt =
@@ -650,6 +688,25 @@ class _AdminDiscountsScreenState extends State<AdminDiscountsScreen>
                           .toList(),
                       onChanged: (v) => setState(() => productId = v),
                     ),
+                    if (scopeType == 'product_type') ...[
+                      const SizedBox(height: 12),
+                      const Text('النوع داخل المنتج', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String?>(
+                        value: variantName,
+                        decoration: _inputDec(hint: 'اختر نوعاً'),
+                        dropdownColor: AppThemeDecorations.cardColor(context),
+                        items: _productTypes(productId)
+                            .map(
+                              (t) => DropdownMenuItem<String?>(
+                                value: t,
+                                child: Text(t, style: const TextStyle(color: AppColors.text)),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) => setState(() => variantName = v),
+                      ),
+                    ],
                   ],
                   const SizedBox(height: 16),
                   const Text('نسبة الخصم (%)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
@@ -738,6 +795,24 @@ class _AdminDiscountsScreenState extends State<AdminDiscountsScreen>
                 );
                 return;
               }
+              if (scopeType == 'product_type' && productId == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('برجاء اختيار المنتج أولاً'),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+                return;
+              }
+              if (scopeType == 'product_type' && (variantName == null || variantName!.trim().isEmpty)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('برجاء اختيار النوع داخل المنتج'),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+                return;
+              }
 
               final finalScopeType = scopeType == 'category'
                   ? (productId != null ? 'product' : 'category')
@@ -751,6 +826,8 @@ class _AdminDiscountsScreenState extends State<AdminDiscountsScreen>
                   'scopeType': finalScopeType,
                   if (finalScopeType == 'category') 'categoryId': categoryId,
                   if (finalScopeType == 'product') 'productId': productId,
+                  if (finalScopeType == 'product_type') 'productId': productId,
+                  if (finalScopeType == 'product_type') 'variantName': variantName?.trim(),
                   'discountPercent': pct,
                   'discountAmount': pct > 0 ? 0 : amt,
                   'minStock': minStock,

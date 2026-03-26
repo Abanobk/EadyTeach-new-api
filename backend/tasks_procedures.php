@@ -1972,10 +1972,23 @@ function admin_updateOrderPricing($input, $ctx) {
     $newItems = $input['items'] ?? null;
     if (!is_array($newItems) || count($newItems) === 0) throw new Exception('INVALID_ARGUMENT');
 
-    // Load order to validate status
-    $stmt = $db->prepare("SELECT status FROM orders WHERE id = ?");
+    // Load order to validate status + original lines (للحفاظ على configuration / variant عند حفظ أسعار الطلب المسبق)
+    $stmt = $db->prepare("SELECT status, items FROM orders WHERE id = ?");
     $stmt->execute([$orderId]);
-    $status = $stmt->fetchColumn();
+    $orderRow = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$orderRow) {
+        throw new Exception('INVALID_ARGUMENT');
+    }
+    $status = $orderRow['status'] ?? null;
+    $origItems = [];
+    if (!empty($orderRow['items'])) {
+        try {
+            $decoded = json_decode($orderRow['items'], true);
+            $origItems = is_array($decoded) ? $decoded : [];
+        } catch (\Exception $e) {
+            $origItems = [];
+        }
+    }
     $statusNorm = $status ? strtolower(trim((string)$status)) : '';
     if ($statusNorm !== 'preorder') {
         throw new Exception('لا يمكن تعديل السعر إلا في حالة طلب مسبق');
@@ -1983,6 +1996,7 @@ function admin_updateOrderPricing($input, $ctx) {
 
     $approvedItems = [];
     $total = 0.0;
+    $seq = 0;
     foreach ($newItems as $it) {
         if (!is_array($it)) continue;
         $pid = (int)($it['productId'] ?? 0);
@@ -1993,11 +2007,14 @@ function admin_updateOrderPricing($input, $ctx) {
         if ($unit < 0) $unit = 0.0;
         $lineTotal = $unit * $qty;
         $total += $lineTotal;
-        $approvedItems[] = [
+        $origIdx = isset($it['lineIndex']) ? (int)$it['lineIndex'] : $seq;
+        $seq++;
+        $base = (isset($origItems[$origIdx]) && is_array($origItems[$origIdx])) ? $origItems[$origIdx] : [];
+        $approvedItems[] = array_merge($base, [
             'productId' => $pid,
             'quantity' => $qty,
             'unitPrice' => $unit,
-        ];
+        ]);
     }
     if (!$approvedItems) throw new Exception('INVALID_ARGUMENT');
 

@@ -49,7 +49,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   double get _curtainMaxCm =>
       (widget.product['curtainLengthMaxCm'] as num?)?.toDouble() ?? 1200;
   double get _curtainWaveFee =>
-      (widget.product['curtainWaveSurcharge'] as num?)?.toDouble() ?? 100;
+      (widget.product['curtainWaveSurcharge'] as num?)?.toDouble() ?? 200;
 
   List<Map<String, dynamic>> _curtainMotorsList() {
     final raw = widget.product['curtainMotors'];
@@ -749,6 +749,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     'productId': p['id'],
                                     'quantity': _qty,
                                     'unitPrice': unitLinePrice.toString(),
+                                    'name': (p['nameAr'] ?? p['name'] ?? '').toString(),
                                     if (selectedVariant != null) 'variant': selectedVariant,
                                     if (_isCurtainTrack) 'configuration': _curtainConfiguration(),
                                     'isPreorder': true,

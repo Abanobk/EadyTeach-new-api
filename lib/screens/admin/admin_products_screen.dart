@@ -92,6 +92,28 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     return null;
   }
 
+  bool _isCurtainPerMeter(Map<String, dynamic> p) =>
+      p['pricingMode']?.toString() == 'curtain_per_meter';
+
+  /// يظهر في البطاقة عندما يكون المنتج مفعّلًا كـ «مسار بالمتر التجاري» (ليس منتجًا جديدًا في القائمة).
+  Widget _curtainTrackModeChip(Map<String, dynamic> p) {
+    if (!_isCurtainPerMeter(p)) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'مسار: متر تجاري',
+          style: TextStyle(color: AppColors.primary, fontSize: 9, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+
   Future<void> _toggleActive(Map<String, dynamic> product) async {
     final newActive = !(product['isActive'] == true);
     try {
@@ -159,7 +181,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
       text: '${product?['curtainLengthMaxCm'] ?? 1200}',
     );
     final curtainWaveCtrl = TextEditingController(
-      text: '${product?['curtainWaveSurcharge'] ?? 100}',
+      text: '${product?['curtainWaveSurcharge'] ?? 200}',
     );
     bool curtainTrackMode = product?['pricingMode']?.toString() == 'curtain_per_meter';
     String? mainImageUrl = product?['mainImageUrl'] as String?;
@@ -912,7 +934,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                             int.tryParse(curtainMaxCtrl.text.trim()) ?? 1200;
                         body['curtainWaveSurcharge'] = double.tryParse(
                                 curtainWaveCtrl.text.trim().replaceAll(',', '.')) ??
-                            100;
+                            200;
                         body['pricingMode'] =
                             curtainTrackMode ? 'curtain_per_meter' : '';
                         if (isEdit) {
@@ -1260,6 +1282,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   ),
                   if (catName.isNotEmpty)
                     Text(catName, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  _curtainTrackModeChip(p),
                   if (p['partNumber'] != null && p['partNumber'].toString().isNotEmpty)
                     Text(
                       'بارت: ${p['partNumber']}',
@@ -1269,7 +1292,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                     ),
                   const SizedBox(height: 4),
                   Text(
-                    '${price.toStringAsFixed(0)} ج.م',
+                    _isCurtainPerMeter(p)
+                        ? '${price.toStringAsFixed(0)} ج.م / متر'
+                        : '${price.toStringAsFixed(0)} ج.م',
                     style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   const Spacer(),
@@ -1402,6 +1427,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                 const SizedBox(height: 3),
                 if (catName.isNotEmpty)
                   Text(catName, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+                _curtainTrackModeChip(p),
                 if (p['partNumber'] != null && p['partNumber'].toString().isNotEmpty)
                   Text(
                     'بارت: ${p['partNumber']}',
@@ -1416,7 +1442,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
             SizedBox(
               width: 100,
               child: Text(
-                '${price.toStringAsFixed(0)} ج.م',
+                _isCurtainPerMeter(p)
+                    ? '${price.toStringAsFixed(0)} ج.م / متر'
+                    : '${price.toStringAsFixed(0)} ج.م',
                 style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
@@ -1428,7 +1456,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           ],
           if (!isWide)
             Text(
-              '${price.toStringAsFixed(0)} ج.م',
+              _isCurtainPerMeter(p)
+                  ? '${price.toStringAsFixed(0)} ج.م / م'
+                  : '${price.toStringAsFixed(0)} ج.م',
               style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 13),
             ),
           const SizedBox(width: 8),

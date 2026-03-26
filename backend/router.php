@@ -454,7 +454,7 @@ function _ensureProductCurtainColumns(PDO $db): void {
         'ALTER TABLE products ADD COLUMN pricing_mode VARCHAR(32) NULL DEFAULT NULL',
         'ALTER TABLE products ADD COLUMN curtain_length_min_cm INT DEFAULT 50',
         'ALTER TABLE products ADD COLUMN curtain_length_max_cm INT DEFAULT 1200',
-        'ALTER TABLE products ADD COLUMN curtain_wave_surcharge DECIMAL(12,2) DEFAULT 100.00',
+        'ALTER TABLE products ADD COLUMN curtain_wave_surcharge DECIMAL(12,2) DEFAULT 200.00',
         'ALTER TABLE products ADD COLUMN curtain_motors_json LONGTEXT NULL',
     ];
     foreach ($stmts as $sql) {
@@ -463,6 +463,12 @@ function _ensureProductCurtainColumns(PDO $db): void {
         } catch (\Exception $e) {
             // column exists
         }
+    }
+    try {
+        $db->exec(
+            "UPDATE products SET curtain_wave_surcharge = 200 WHERE pricing_mode = 'curtain_per_meter' AND curtain_wave_surcharge = 100"
+        );
+    } catch (\Exception $e) {
     }
     $done = true;
 }
@@ -916,7 +922,7 @@ try {
             $pricingMode = $pricingModeRaw !== '' ? $pricingModeRaw : null;
             $curtainMinCm = isset($input['curtainLengthMinCm']) ? (int) $input['curtainLengthMinCm'] : 50;
             $curtainMaxCm = isset($input['curtainLengthMaxCm']) ? (int) $input['curtainLengthMaxCm'] : 1200;
-            $curtainWave = isset($input['curtainWaveSurcharge']) ? (float) $input['curtainWaveSurcharge'] : 100.0;
+            $curtainWave = isset($input['curtainWaveSurcharge']) ? (float) $input['curtainWaveSurcharge'] : 200.0;
             $curtainMotorsJson = null;
             if (!empty($input['curtainMotors']) && is_array($input['curtainMotors'])) {
                 $curtainMotorsJson = json_encode($input['curtainMotors'], JSON_UNESCAPED_UNICODE);
@@ -960,7 +966,7 @@ try {
             $pricingMode = $pricingModeRaw !== '' ? $pricingModeRaw : null;
             $curtainMinCm = isset($input['curtainLengthMinCm']) ? (int) $input['curtainLengthMinCm'] : 50;
             $curtainMaxCm = isset($input['curtainLengthMaxCm']) ? (int) $input['curtainLengthMaxCm'] : 1200;
-            $curtainWave = isset($input['curtainWaveSurcharge']) ? (float) $input['curtainWaveSurcharge'] : 100.0;
+            $curtainWave = isset($input['curtainWaveSurcharge']) ? (float) $input['curtainWaveSurcharge'] : 200.0;
             $curtainMotorsJson = null;
             if (!empty($input['curtainMotors']) && is_array($input['curtainMotors'])) {
                 $curtainMotorsJson = json_encode($input['curtainMotors'], JSON_UNESCAPED_UNICODE);

@@ -441,6 +441,11 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                 'productId': i.productId,
                 'quantity': i.quantity,
                 'unitPrice': i.price.toString(),
+                if (i.name.isNotEmpty) 'name': i.name,
+                if (i.variant != null && i.variant!.trim().isNotEmpty)
+                  'variant': i.variant!.trim(),
+                if (i.configuration != null && i.configuration!.isNotEmpty)
+                  'configuration': i.configuration,
               })
           .toList();
 

@@ -3,6 +3,49 @@ import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 
+Map<String, dynamic>? _asStrKeyMap(dynamic v) {
+  if (v == null) return null;
+  if (v is Map<String, dynamic>) return v;
+  if (v is Map) return Map<String, dynamic>.from(v);
+  return null;
+}
+
+/// عرض بيانات مسار الستائر (للإدارة — للقراءة فقط).
+List<String> _curtainConfigLines(Map<String, dynamic> cfg) {
+  final lines = <String>[];
+  final cm = cfg['curtainLengthCm'];
+  if (cm != null) {
+    lines.add('المقاس الفعلي (العميل): ${cm is num ? cm.toStringAsFixed(0) : cm.toString()} سم');
+  }
+  final comm = cfg['curtainCommercialM'];
+  if (comm != null) {
+    lines.add('المقاس التقريبي التجاري: ${comm is num ? (comm as num).toStringAsFixed(1) : comm.toString()} م');
+  }
+  final dir = cfg['direction']?.toString();
+  if (dir != null && dir.isNotEmpty) {
+    final dirAr = switch (dir) {
+      'left' => 'يسار',
+      'right' => 'يمين',
+      'center' => 'منتصف',
+      _ => dir,
+    };
+    lines.add('الاتجاه: $dirAr');
+  }
+  final wheel = cfg['wheel']?.toString();
+  if (wheel != null && wheel.isNotEmpty) {
+    lines.add(wheel == 'wave' ? 'العجلة: Wave (ويفي)' : 'العجلة: عادي');
+  }
+  final motor = cfg['motorId']?.toString();
+  if (motor != null && motor.isNotEmpty && motor != 'none') {
+    lines.add('المحرك: $motor');
+  }
+  final notes = cfg['notes']?.toString();
+  if (notes != null && notes.trim().isNotEmpty) {
+    lines.add('ملاحظات العميل: $notes');
+  }
+  return lines;
+}
+
 class AdminOrdersScreen extends StatefulWidget {
   const AdminOrdersScreen({super.key});
 
@@ -168,6 +211,36 @@ class _AdminOrderCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Divider(color: AppColors.border),
+                if (items.isNotEmpty) ...[
+                  const Text(
+                    'بنود الطلب وبيانات القياس',
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'للعرض فقط — يمكن تعديل سعر الوحدة من «تعديل أسعار الطلب المسبق» عند حالة طلب مسبق.',
+                    style: TextStyle(color: AppColors.muted, fontSize: 11),
+                  ),
+                  const SizedBox(height: 10),
+                  ...List.generate(items.length, (i) {
+                    final raw = items[i];
+                    if (raw is! Map) return const SizedBox.shrink();
+                    final m = Map<String, dynamic>.from(raw);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _AdminOrderLineCard(
+                        line: m,
+                        lineIndex: i,
+                        approvedItems: approvedItems,
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 4),
+                ],
                 if (paymentMethod == 'transfer') ...[
                   const Text('إثبات التحويل:', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w600, fontSize: 13)),
                   const SizedBox(height: 8),
@@ -268,6 +341,95 @@ class _AdminOrderCard extends StatelessWidget {
   }
 }
 
+class _AdminOrderLineCard extends StatelessWidget {
+  final Map<String, dynamic> line;
+  final int lineIndex;
+  final List? approvedItems;
+
+  const _AdminOrderLineCard({
+    required this.line,
+    required this.lineIndex,
+    required this.approvedItems,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pid = line['productId'];
+    final name = (line['name'] ?? line['productName'] ?? 'منتج #$pid').toString();
+    final qty = int.tryParse(line['quantity']?.toString() ?? line['qty']?.toString() ?? '') ?? 1;
+    final unitRequested =
+        double.tryParse(line['unitPrice']?.toString() ?? line['price']?.toString() ?? '') ?? 0.0;
+    double? unitApproved;
+    final a = approvedItems;
+    if (a != null && lineIndex < a.length && a[lineIndex] is Map) {
+      final am = _asStrKeyMap(a[lineIndex]);
+      final rawU = am?['unitPrice']?.toString();
+      if (rawU != null && rawU.trim().isNotEmpty) {
+        unitApproved = double.tryParse(rawU.replaceAll('،', '.'));
+      }
+    }
+    final variant = line['variant']?.toString();
+    final cfg = _asStrKeyMap(line['configuration']);
+    final curtainLines = (cfg != null &&
+            (cfg['pricingMode']?.toString() == 'curtain_per_meter' ||
+                cfg['curtainLengthCm'] != null ||
+                cfg['curtainCommercialM'] != null))
+        ? _curtainConfigLines(cfg)
+        : <String>[];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppThemeDecorations.pageBackground(context),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            name,
+            style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+          const SizedBox(height: 4),
+          Text('الكمية: $qty', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+          if (variant != null && variant.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'ملخص المواصفات: $variant',
+                style: const TextStyle(color: AppColors.text, fontSize: 12),
+              ),
+            ),
+          if (curtainLines.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text('تفاصيل مسار / ستائر:', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 12)),
+            const SizedBox(height: 4),
+            ...curtainLines.map(
+              (t) => Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text('• $t', style: const TextStyle(color: AppColors.text, fontSize: 11, height: 1.25)),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            unitApproved != null
+                ? 'سعر الوحدة (طلب العميل): ${unitRequested.toStringAsFixed(2)} ج.م  ←  بعد الموافقة: ${unitApproved.toStringAsFixed(2)} ج.م'
+                : 'سعر الوحدة في الطلب: ${unitRequested.toStringAsFixed(2)} ج.م',
+            style: const TextStyle(color: AppColors.muted, fontSize: 11),
+          ),
+          Text(
+            'إجمالي السطر: ${((unitApproved ?? unitRequested) * qty).toStringAsFixed(2)} ج.م',
+            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AdminOrderPricingEditor extends StatefulWidget {
   final dynamic orderId;
   final List items;
@@ -286,13 +448,13 @@ class _AdminOrderPricingEditor extends StatefulWidget {
 }
 
 class _AdminOrderPricingEditorState extends State<_AdminOrderPricingEditor> {
-  final Map<int, TextEditingController> _controllers = {};
+  final List<TextEditingController> _controllers = [];
   bool _open = false;
   bool _saving = false;
 
   @override
   void dispose() {
-    for (final c in _controllers.values) {
+    for (final c in _controllers) {
       c.dispose();
     }
     _controllers.clear();
@@ -301,24 +463,25 @@ class _AdminOrderPricingEditorState extends State<_AdminOrderPricingEditor> {
 
   void _ensureControllers() {
     if (_controllers.isNotEmpty) return;
-    final approvedByPid = <int, double>{};
     final a = widget.approvedItems;
-    if (a != null) {
-      for (final raw in a) {
-        if (raw is! Map) continue;
+    for (var i = 0; i < widget.items.length; i++) {
+      var unit = 0.0;
+      final raw = widget.items[i];
+      if (raw is Map) {
         final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
-        if (pid <= 0) continue;
-        final unit = double.tryParse(raw['unitPrice']?.toString() ?? '') ?? 0.0;
-        approvedByPid[pid] = unit;
+        if (pid > 0) {
+          unit = double.tryParse(raw['unitPrice']?.toString() ?? '') ?? 0.0;
+          if (a != null && i < a.length && a[i] is Map) {
+            final am = _asStrKeyMap(a[i]);
+            final rawU = am?['unitPrice']?.toString();
+            if (rawU != null && rawU.trim().isNotEmpty) {
+              final au = double.tryParse(rawU.replaceAll('،', '.'));
+              if (au != null) unit = au;
+            }
+          }
+        }
       }
-    }
-    for (final raw in widget.items) {
-      if (raw is! Map) continue;
-      final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
-      if (pid <= 0) continue;
-      final unit = approvedByPid[pid] ??
-          (double.tryParse(raw['unitPrice']?.toString() ?? '') ?? 0.0);
-      _controllers[pid] = TextEditingController(text: unit.toStringAsFixed(2));
+      _controllers.add(TextEditingController(text: unit.toStringAsFixed(2)));
     }
   }
 
@@ -346,15 +509,21 @@ class _AdminOrderPricingEditorState extends State<_AdminOrderPricingEditor> {
     try {
       _ensureControllers();
       final payload = <Map<String, dynamic>>[];
-      for (final raw in widget.items) {
+      for (var i = 0; i < widget.items.length; i++) {
+        final raw = widget.items[i];
         if (raw is! Map) continue;
         final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
         if (pid <= 0) continue;
         final qty = int.tryParse(raw['quantity']?.toString() ?? raw['qty']?.toString() ?? '') ?? 1;
-        final ctrl = _controllers[pid];
-        if (ctrl == null) continue;
+        if (i >= _controllers.length) continue;
+        final ctrl = _controllers[i];
         final unit = double.tryParse(_normalizeNumeric(ctrl.text)) ?? 0.0;
-        payload.add({'productId': pid, 'quantity': qty, 'unitPrice': unit});
+        payload.add({
+          'lineIndex': i,
+          'productId': pid,
+          'quantity': qty,
+          'unitPrice': unit,
+        });
       }
 
       await ApiService.mutate('admin.updateOrderPricing', input: {
@@ -412,14 +581,15 @@ class _AdminOrderPricingEditorState extends State<_AdminOrderPricingEditor> {
             ),
             child: Column(
               children: [
-                ...widget.items.map((raw) {
+                ...List.generate(widget.items.length, (i) {
+                  final raw = widget.items[i];
                   if (raw is! Map) return const SizedBox.shrink();
                   final pid = int.tryParse(raw['productId']?.toString() ?? '') ?? 0;
                   if (pid <= 0) return const SizedBox.shrink();
                   final name = raw['name']?.toString() ?? raw['productName']?.toString() ?? 'منتج';
                   final qty = int.tryParse(raw['quantity']?.toString() ?? raw['qty']?.toString() ?? '') ?? 1;
-                  final ctrl = _controllers[pid];
-                  if (ctrl == null) return const SizedBox.shrink();
+                  if (i >= _controllers.length) return const SizedBox.shrink();
+                  final ctrl = _controllers[i];
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Row(
@@ -449,7 +619,7 @@ class _AdminOrderPricingEditorState extends State<_AdminOrderPricingEditor> {
                       ],
                     ),
                   );
-                }).toList(),
+                }),
                 const SizedBox(height: 6),
                 SizedBox(
                   width: double.infinity,

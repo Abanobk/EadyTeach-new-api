@@ -1015,17 +1015,25 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isWide = screenWidth > 700;
     final filtered = _filteredProducts;
+    final isSmallScreen = screenWidth < 420;
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: AppThemeDecorations.pageBackground(context),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => _showProductDialog(null),
-          backgroundColor: AppColors.primary,
-          icon: const Icon(Icons.add, color: Colors.black),
-          label: const Text('إضافة منتج', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        ),
+        floatingActionButton: isSmallScreen
+            ? FloatingActionButton(
+                onPressed: () => _showProductDialog(null),
+                backgroundColor: AppColors.primary,
+                child: const Icon(Icons.add, color: Colors.black),
+              )
+            : FloatingActionButton.extended(
+                onPressed: () => _showProductDialog(null),
+                backgroundColor: AppColors.primary,
+                icon: const Icon(Icons.add, color: Colors.black),
+                label: const Text('إضافة منتج', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         body: Column(
           children: [
             // ─── Header ───
@@ -1231,8 +1239,11 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
       crossAxisCount = 2;
     }
 
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    // Extra bottom space so the FAB never blocks the last row actions.
+    final bottomSafePadding = bottomInset + 96;
     return GridView.builder(
-      padding: EdgeInsets.all(isWide ? 20 : 12),
+      padding: EdgeInsets.fromLTRB(isWide ? 20 : 12, isWide ? 20 : 12, isWide ? 20 : 12, bottomSafePadding),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
         childAspectRatio: 0.72,
@@ -1396,8 +1407,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
 
   // ─── List View ───
   Widget _buildListView(List<dynamic> products, bool isWide) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
     return ListView.builder(
-      padding: EdgeInsets.fromLTRB(isWide ? 24 : 12, 12, isWide ? 24 : 12, 80),
+      padding: EdgeInsets.fromLTRB(isWide ? 24 : 12, 12, isWide ? 24 : 12, bottomInset + 96),
       itemCount: products.length,
       itemBuilder: (ctx, i) => _buildListRow(products[i], isWide),
     );

@@ -1234,15 +1234,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                                                 children: [
                                                                   if (waitingMsg.isNotEmpty)
                                                                     Text(waitingMsg, style: const TextStyle(color: AppColors.error, fontSize: 10)),
-                                                                  if (officialUnit > 0 && dealerUnit > 0)
-                                                                    Text(
-                                                                      'سعر شراء التاجر: ${dealerUnit.toStringAsFixed(0)} ج.م',
-                                                                      style: TextStyle(
-                                                                        color: dealerUnit < unitPrice ? AppColors.success : AppColors.muted,
-                                                                        fontSize: 10,
-                                                                      ),
+                                                                  Text(
+                                                                    'سعر شراء التاجر: ${dealerUnit.toStringAsFixed(0)} ج.م (السعر الرسمي ${officialUnit.toStringAsFixed(0)})',
+                                                                    style: TextStyle(
+                                                                      color: dealerUnit < unitPrice ? AppColors.success : AppColors.muted,
+                                                                      fontSize: 10,
                                                                     ),
-                                                                  if (dealerUnit > 0)
+                                                                  ),
+                                                                  if (unitPrice > 0)
                                                                     Text(
                                                                       'مكسب البند: ${profitTotal.toStringAsFixed(0)} ج.م',
                                                                       style: TextStyle(
@@ -1386,7 +1385,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                               ),
                             ),
                           ),
-                          if (_isDealerForCurrentQuote ||
+                          if (isDealer ||
                               ((_quotation?['purchaseItems'] as List?)
                                       ?.isNotEmpty ??
                                   false))

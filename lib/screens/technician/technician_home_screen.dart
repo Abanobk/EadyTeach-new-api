@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'dart:async';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
@@ -28,6 +29,8 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
   bool _openingSettings = false;
   DateTime? _lastPermRefreshAt;
   late final _LifecycleHook _lifecycleHook;
+  Timer? _statusTimer;
+  bool _shownLocationSnackOnce = false;
 
   @override
   void initState() {
@@ -39,11 +42,20 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
       if (mounted) _loadTasks(context);
       if (mounted) _checkAndPromptLocationPermission();
     });
+
+    // Auto refresh status every 30 minutes (while app is running).
+    _statusTimer = Timer.periodic(const Duration(minutes: 30), (_) {
+      if (mounted) {
+        // ignore: unawaited_futures
+        _checkAndPromptLocationPermission(silent: true);
+      }
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(_lifecycleHook);
+    _statusTimer?.cancel();
     super.dispose();
   }
 
@@ -54,10 +66,10 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
     if (last != null && now.difference(last).inMilliseconds < 1200) return;
     _lastPermRefreshAt = now;
     if (!mounted) return;
-    await _checkAndPromptLocationPermission();
+    await _checkAndPromptLocationPermission(silent: true);
   }
 
-  Future<void> _checkAndPromptLocationPermission() async {
+  Future<void> _checkAndPromptLocationPermission({bool silent = false}) async {
     if (_checkingLocationPerm) return;
     setState(() => _checkingLocationPerm = true);
     try {
@@ -110,7 +122,8 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
       } catch (_) {}
 
       // (اختياري) إشعار بسيط مرة واحدة بدون تفاصيل تقنية.
-      if (!ok && mounted) {
+      if (!silent && !ok && mounted && !_shownLocationSnackOnce) {
+        _shownLocationSnackOnce = true;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('فضلاً فعّل استخدام الموقع للتطبيق.'),

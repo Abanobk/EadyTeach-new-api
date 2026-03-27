@@ -25,6 +25,8 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
   bool _settingManual = false;
   bool _requestingNow = false;
   bool _savingPlace = false;
+  bool _checkingStatusNow = false;
+  bool _lastStatusCheckOk = false;
 
   @override
   void initState() {
@@ -457,6 +459,57 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
     }
   }
 
+  Future<void> _requestStatusCheckNow() async {
+    final techId = _selectedTechId;
+    if (techId == null || _checkingStatusNow) return;
+    setState(() {
+      _checkingStatusNow = true;
+      _lastStatusCheckOk = false;
+    });
+    try {
+      final res = await ApiService.mutate('technicianStatus.requestNow', input: {'technicianId': techId});
+      final reqId = (res['data'] is Map) ? (res['data']['requestId']) : null;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(reqId != null ? 'تم إرسال اختبار الحالة (ID: $reqId)…' : 'تم إرسال اختبار الحالة…'), backgroundColor: Colors.green),
+        );
+      }
+      if (reqId == null) return;
+
+      // Poll request status (up to ~30s)
+      for (int i = 0; i < 10; i++) {
+        if (!mounted) return;
+        await Future.delayed(const Duration(seconds: 3));
+        final st = await ApiService.query('technicianStatus.requestStatus', input: {'requestId': reqId});
+        final data = st['data'];
+        if (data is Map) {
+          final status = (data['status'] ?? '').toString();
+          if (status == 'fulfilled') {
+            await _loadTechniciansStatus();
+            if (mounted) setState(() => _lastStatusCheckOk = true);
+            break;
+          }
+          if (status == 'failed') {
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل اختبار الحالة: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _checkingStatusNow = false);
+      if (mounted && _lastStatusCheckOk) {
+        Future.delayed(const Duration(seconds: 4), () {
+          if (mounted) setState(() => _lastStatusCheckOk = false);
+        });
+      }
+    }
+  }
+
   Future<void> _openSavePlaceDialog() async {
     if (_savingPlace) return;
     final techId = _selectedTechId;
@@ -677,21 +730,37 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
             ),
           ),
           if (_selectedTechId != null)
-            Container(
+            InkWell(
+              onTap: _checkingStatusNow ? null : _requestStatusCheckNow,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: (okAlways ? Colors.green : Colors.orange).withOpacity(0.12),
+                color: (_lastStatusCheckOk ? Colors.green : (okAlways ? Colors.green : Colors.orange)).withOpacity(0.12),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: (okAlways ? Colors.green : Colors.orange).withOpacity(0.35)),
+                border: Border.all(color: (_lastStatusCheckOk ? Colors.green : (okAlways ? Colors.green : Colors.orange)).withOpacity(0.35)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(okAlways ? Icons.gps_fixed : Icons.gps_off, size: 18, color: okAlways ? Colors.green : Colors.orange),
+                  if (_checkingStatusNow)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                    )
+                  else
+                    Icon(okAlways ? Icons.gps_fixed : Icons.gps_off, size: 18, color: okAlways ? Colors.green : Colors.orange),
                   const SizedBox(width: 6),
                   Text(
-                    okAlways ? 'Always' : (perm.isEmpty ? 'غير معروف' : perm),
-                    style: TextStyle(color: okAlways ? Colors.green : Colors.orange, fontWeight: FontWeight.w900, fontSize: 12),
+                    _checkingStatusNow
+                        ? 'جاري الاختبار…'
+                        : (_lastStatusCheckOk ? 'تم التحقق ✅' : (okAlways ? 'Always' : (perm.isEmpty ? 'غير معروف' : perm))),
+                    style: TextStyle(
+                      color: _lastStatusCheckOk ? Colors.green : (okAlways ? Colors.green : Colors.orange),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                    ),
                   ),
                   if (updatedAt.isNotEmpty) ...[
                     const SizedBox(width: 6),
@@ -703,6 +772,7 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
                   ],
                 ],
               ),
+            ),
             ),
           OutlinedButton.icon(
             onPressed: _openTechPicker,
@@ -935,6 +1005,109 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
                                   }
                                 },
                                 child: const Text('فتح', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                              ),
+                              IconButton(
+                                tooltip: 'تسمية هذا المكان',
+                                icon: const Icon(Icons.bookmark_add_outlined, color: AppColors.primary),
+                                onPressed: () async {
+                                  // Name this exact point (no new coordinates).
+                                  final nameCtrl = TextEditingController(text: placeName.isNotEmpty ? placeName : 'الشركة');
+                                  final radiusCtrl = TextEditingController(text: '150');
+                                  await showModalBottomSheet<void>(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (bctx) => Padding(
+                                      padding: EdgeInsets.only(bottom: MediaQuery.of(bctx).viewInsets.bottom),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: AppThemeDecorations.cardColor(context),
+                                          borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                                        ),
+                                        child: Directionality(
+                                          textDirection: TextDirection.rtl,
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                                            children: [
+                                              const Row(
+                                                children: [
+                                                  Icon(Icons.bookmark_add_outlined, color: AppColors.primary),
+                                                  SizedBox(width: 8),
+                                                  Text('تسمية اللوكيشن', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w900, fontSize: 16)),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Text('Lat/Lng: $lat, $lng', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                                              const SizedBox(height: 12),
+                                              TextField(
+                                                controller: nameCtrl,
+                                                style: const TextStyle(color: AppColors.text),
+                                                decoration: InputDecoration(
+                                                  labelText: 'اسم المكان',
+                                                  labelStyle: const TextStyle(color: AppColors.muted),
+                                                  filled: true,
+                                                  fillColor: AppThemeDecorations.pageBackground(context),
+                                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              TextField(
+                                                controller: radiusCtrl,
+                                                keyboardType: TextInputType.number,
+                                                style: const TextStyle(color: AppColors.text),
+                                                decoration: InputDecoration(
+                                                  labelText: 'نطاق المكان بالمتر (Radius)',
+                                                  labelStyle: const TextStyle(color: AppColors.muted),
+                                                  filled: true,
+                                                  fillColor: AppThemeDecorations.pageBackground(context),
+                                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 14),
+                                              ElevatedButton(
+                                                onPressed: () async {
+                                                  final name = nameCtrl.text.trim();
+                                                  final radius = int.tryParse(radiusCtrl.text.trim()) ?? 150;
+                                                  if (name.isEmpty) return;
+                                                  try {
+                                                    await ApiService.mutate('namedLocation.save', input: {
+                                                      'name': name,
+                                                      'latitude': lat,
+                                                      'longitude': lng,
+                                                      'radiusM': radius,
+                                                    });
+                                                    if (mounted) Navigator.pop(bctx);
+                                                    await _loadTrack();
+                                                    if (mounted) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        const SnackBar(content: Text('تم حفظ المكان ✅'), backgroundColor: Colors.green),
+                                                      );
+                                                    }
+                                                  } catch (e) {
+                                                    if (mounted) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(content: Text('فشل: $e'), backgroundColor: Colors.red),
+                                                      );
+                                                    }
+                                                  }
+                                                },
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: AppColors.primary,
+                                                  foregroundColor: Colors.black,
+                                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                ),
+                                                child: const Text('حفظ', style: TextStyle(fontWeight: FontWeight.w900)),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),

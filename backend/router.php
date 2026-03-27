@@ -1209,6 +1209,12 @@ try {
         case 'technicianStatus.update':
             $result = technicianStatus_update($input ?? [], $ctx);
             break;
+        case 'technicianStatus.requestNow':
+            $result = technicianStatus_requestNow($input ?? [], $ctx);
+            break;
+        case 'technicianStatus.requestStatus':
+            $result = technicianStatus_requestStatus($input ?? [], $ctx);
+            break;
         case 'namedLocation.list':
             $result = namedLocation_list($input ?? [], $ctx);
             break;

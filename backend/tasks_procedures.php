@@ -1676,9 +1676,35 @@ function technicianLocation_technicians($input, $ctx) {
     return ['rows' => $out];
 }
 
+function _ensureTechnicianStatusRequestsSchema(): void {
+    global $db;
+    static $done = false;
+    if ($done) return;
+    try {
+        $db->exec("CREATE TABLE IF NOT EXISTS technician_status_requests (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            requested_by INT NOT NULL,
+            technician_id INT NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            error TEXT NULL,
+            result_location_permission VARCHAR(32) NULL,
+            result_location_service_enabled TINYINT(1) NULL,
+            result_device_platform VARCHAR(16) NULL,
+            result_app_version VARCHAR(32) NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            fulfilled_at DATETIME NULL,
+            INDEX idx_status_req_tech_time (technician_id, created_at),
+            INDEX idx_status_req_status_time (status, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (\Exception $e) {
+        // ignore
+    }
+    $done = true;
+}
+
 /**
  * Technician device: update latest permission/service status for admin monitoring.
- * input: { locationPermission: 'always'|'while_in_use'|'denied'|'denied_forever'|'unknown', locationServiceEnabled: bool, appVersion?: string, devicePlatform?: string }
+ * input: { locationPermission: 'always'|'while_in_use'|'denied'|'denied_forever'|'unknown', locationServiceEnabled: bool, appVersion?: string, devicePlatform?: string, requestId?: number }
  */
 function technicianStatus_update($input, $ctx) {
     global $db;
@@ -1693,6 +1719,7 @@ function technicianStatus_update($input, $ctx) {
     }
 
     _ensureTechnicianDeviceStatusSchema();
+    _ensureTechnicianStatusRequestsSchema();
 
     $perm = strtolower(trim((string)($input['locationPermission'] ?? 'unknown')));
     $allowed = ['always', 'while_in_use', 'denied', 'denied_forever', 'unknown'];
@@ -1714,7 +1741,87 @@ function technicianStatus_update($input, $ctx) {
             updated_at = CURRENT_TIMESTAMP
     ");
     $stmt->execute([$techId, $perm, $svc, $appVer, $plat]);
+
+    $reqId = (int)($input['requestId'] ?? 0);
+    if ($reqId > 0) {
+        try {
+            $u = $db->prepare("UPDATE technician_status_requests
+                               SET status = 'fulfilled',
+                                   error = NULL,
+                                   fulfilled_at = NOW(),
+                                   result_location_permission = ?,
+                                   result_location_service_enabled = ?,
+                                   result_device_platform = ?,
+                                   result_app_version = ?
+                               WHERE id = ? AND technician_id = ?");
+            $u->execute([$perm, $svc, $plat, $appVer, $reqId, $techId]);
+        } catch (\Exception $e) { /* ignore */ }
+    }
     return ['success' => true];
+}
+
+/**
+ * Admin: request a silent "status_check" from technician device.
+ * input: { technicianId: number }
+ */
+function technicianStatus_requestNow($input, $ctx) {
+    global $db;
+    _requireAdminStaffSupervisor($ctx);
+    _ensureTechnicianStatusRequestsSchema();
+    require_once __DIR__ . '/notifications_procedures.php';
+
+    $adminId = (int)($ctx['userId'] ?? 0);
+    $techId = (int)($input['technicianId'] ?? 0);
+    if ($adminId <= 0 || $techId <= 0) throw new Exception('INVALID_ARGUMENT');
+
+    $u = $db->prepare("SELECT id FROM users WHERE id = ? LIMIT 1");
+    $u->execute([$techId]);
+    if (!$u->fetchColumn()) throw new Exception('INVALID_ARGUMENT');
+
+    $reqStmt = $db->prepare("INSERT INTO technician_status_requests (requested_by, technician_id, status) VALUES (?, ?, 'pending')");
+    $reqStmt->execute([$adminId, $techId]);
+    $reqId = (int)$db->lastInsertId();
+
+    $extra = [
+        'type' => 'status_check',
+        'requestId' => (string)$reqId,
+    ];
+
+    $pushQueued = _pushUserFcmOnly($techId, 'status_check', 'status_check', $extra);
+    if (!$pushQueued) {
+        $db->prepare("UPDATE technician_status_requests SET status = 'failed', error = 'push_failed' WHERE id = ?")->execute([$reqId]);
+    }
+    return ['success' => true, 'requestId' => $reqId];
+}
+
+/**
+ * Admin: get request status for status_check.
+ * input: { requestId: number }
+ */
+function technicianStatus_requestStatus($input, $ctx) {
+    global $db;
+    _requireAdminStaffSupervisor($ctx);
+    _ensureTechnicianStatusRequestsSchema();
+    $reqId = (int)($input['requestId'] ?? 0);
+    if ($reqId <= 0) throw new Exception('INVALID_ARGUMENT');
+    $stmt = $db->prepare("SELECT * FROM technician_status_requests WHERE id = ? LIMIT 1");
+    $stmt->execute([$reqId]);
+    $r = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$r) throw new Exception('NOT_FOUND');
+    return [
+        'id' => (int)$r['id'],
+        'technicianId' => (int)$r['technician_id'],
+        'status' => $r['status'] ?? 'pending',
+        'error' => $r['error'] ?? null,
+        'result' => [
+            'locationPermission' => $r['result_location_permission'] ?? null,
+            'locationServiceEnabled' => $r['result_location_service_enabled'] === null ? null : ((int)$r['result_location_service_enabled'] === 1),
+            'devicePlatform' => $r['result_device_platform'] ?? null,
+            'appVersion' => $r['result_app_version'] ?? null,
+        ],
+        'createdAt' => $r['created_at'] ?? null,
+        'fulfilledAt' => $r['fulfilled_at'] ?? null,
+    ];
 }
 
 /**

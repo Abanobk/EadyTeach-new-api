@@ -162,7 +162,8 @@ function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
     $typeNorm = strtolower(trim((string)($dataStr['type'] ?? '')));
     // Silent requests (مثل طلب الموقع): لا نعرض إشعار في الشريط ولا نرسل sound/badge.
     // على أندرويد: data-only لضمان تشغيل background handler.
-    $isSilent = ($typeNorm === 'location_request');
+    $isSilentTypes = ['location_request', 'status_check'];
+    $isSilent = in_array($typeNorm, $isSilentTypes, true);
     $isAndroidSilent = ($platformNorm === 'android' && $isSilent);
 
     if (!$isAndroidSilent) {

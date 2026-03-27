@@ -43,7 +43,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     }
     debugPrint('[FCM Background] Received: ${message.notification?.title ?? message.data['title']}');
 
-    // Handle admin "location_request" silently: technician sends current location now.
+    // Handle silent admin commands.
     final type = (message.data['type'] ?? message.data['refType'] ?? message.data['notification_type'])?.toString().toLowerCase().trim();
     if (type == 'location_request') {
       try {
@@ -64,6 +64,40 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         });
       } catch (e) {
         debugPrint('[LocationRequest] background failed: $e');
+      }
+      return;
+    }
+
+    if (type == 'status_check') {
+      try {
+        final reqId = int.tryParse((message.data['requestId'] ?? message.data['refId'] ?? '').toString());
+        final enabled = await Geolocator.isLocationServiceEnabled();
+        var perm = await Geolocator.checkPermission();
+        if (perm == LocationPermission.denied) {
+          perm = await Geolocator.requestPermission();
+        }
+        final permStr = () {
+          switch (perm) {
+            case LocationPermission.always:
+              return 'always';
+            case LocationPermission.whileInUse:
+              return 'while_in_use';
+            case LocationPermission.denied:
+              return 'denied';
+            case LocationPermission.deniedForever:
+              return 'denied_forever';
+            case LocationPermission.unableToDetermine:
+              return 'unknown';
+          }
+        }();
+        await ApiService.mutate('technicianStatus.update', input: {
+          'locationPermission': permStr,
+          'locationServiceEnabled': enabled,
+          'devicePlatform': 'android',
+          if (reqId != null) 'requestId': reqId,
+        });
+      } catch (e) {
+        debugPrint('[StatusCheck] background failed: $e');
       }
       return;
     }
@@ -370,6 +404,39 @@ class NotificationService {
         });
       } catch (e) {
         debugPrint('[LocationRequest] foreground failed: $e');
+      }
+      return;
+    }
+
+    if (type == 'status_check') {
+      try {
+        final reqId = int.tryParse((message.data['requestId'] ?? message.data['refId'] ?? '').toString());
+        final enabled = await Geolocator.isLocationServiceEnabled();
+        var perm = await Geolocator.checkPermission();
+        if (perm == LocationPermission.denied) {
+          perm = await Geolocator.requestPermission();
+        }
+        final permStr = () {
+          switch (perm) {
+            case LocationPermission.always:
+              return 'always';
+            case LocationPermission.whileInUse:
+              return 'while_in_use';
+            case LocationPermission.denied:
+              return 'denied';
+            case LocationPermission.deniedForever:
+              return 'denied_forever';
+            case LocationPermission.unableToDetermine:
+              return 'unknown';
+          }
+        }();
+        await ApiService.mutate('technicianStatus.update', input: {
+          'locationPermission': permStr,
+          'locationServiceEnabled': enabled,
+          if (reqId != null) 'requestId': reqId,
+        });
+      } catch (e) {
+        debugPrint('[StatusCheck] foreground failed: $e');
       }
       return;
     }

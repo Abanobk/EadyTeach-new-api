@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
@@ -85,7 +87,20 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
         if (!mounted) return;
         await _loadQuotationForEdit(widget.quotationIdToEdit!);
       });
+    } else {
+      // الجلسة قد تكتمل بعد أول إطار — نعيد محاولة ربط التاجر بالحساب الحالي.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _autoSelectDealerForCurrentUser();
+        Future<void>.delayed(const Duration(milliseconds: 600), () {
+          if (mounted) _autoSelectDealerForCurrentUser();
+        });
+      });
     }
+  }
+
+  bool _loggedInUserIsDealer() {
+    final r = context.read<AuthProvider>().user?.role.trim().toLowerCase() ?? '';
+    return r == 'dealer' || r == 'reseller';
   }
 
   Future<void> _loadQuotationForEdit(int id) async {
@@ -176,13 +191,49 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
     try {
       final res = await ApiService.query('clients.allUsers', input: {});
       final users = (res['data'] as List? ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (!mounted) return;
       setState(() {
         _dealers = users
             .where((u) => (u['role'] == 'dealer' || u['role'] == 'reseller'))
             .map((u) => u)
             .toList();
       });
+      _autoSelectDealerForCurrentUser();
     } catch (_) {}
+  }
+
+  /// يُعرَف التاجر من الحساب الحالي (دور dealer/reseller) دون اختيار يدوي.
+  /// إن لم يظهر المستخدم في `clients.allUsers` نستخدم `user.id` مباشرة لمعاينة الخصم.
+  void _autoSelectDealerForCurrentUser() {
+    if (!mounted) return;
+    if (widget.quotationIdToEdit != null) return;
+    if (_selectedDealerId != null) return;
+    final auth = context.read<AuthProvider>();
+    final u = auth.user;
+    if (u == null) return;
+    final r = u.role.trim().toLowerCase();
+    if (r != 'dealer' && r != 'reseller') return;
+
+    int? matchId;
+    String? matchName;
+    for (final d in _dealers) {
+      final id = d['id'] is int ? d['id'] as int : int.tryParse(d['id'].toString());
+      if (id == u.id) {
+        matchId = id;
+        matchName = d['name']?.toString();
+        break;
+      }
+    }
+    matchId ??= u.id;
+    matchName ??= u.name;
+
+    setState(() {
+      _selectedDealerId = matchId;
+      _selectedDealerName = matchName;
+    });
+    if (_cartItems.isNotEmpty) {
+      _applyDealerPricesToCart();
+    }
   }
 
   bool _sameConfigurationMap(dynamic a, dynamic b) {
@@ -740,6 +791,8 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
             'unitPrice': _effectiveUnitPrice(item),
             if (item['officialUnitPrice'] != null) 'officialUnitPrice': (item['officialUnitPrice'] as num).toDouble(),
             if (item['dealerUnitPrice'] != null) 'dealerUnitPrice': (item['dealerUnitPrice'] as num).toDouble(),
+            if (item['selectedVariant'] != null && item['selectedVariant'].toString().trim().isNotEmpty)
+              'variantName': item['selectedVariant'].toString(),
             if (_itemManualDiscountPercent(item) > 0) 'manualDiscountPercent': _itemManualDiscountPercent(item),
             if (_itemManualDiscountAmount(item) > 0) 'manualDiscountAmount': _itemManualDiscountAmount(item),
             if (cfg is Map) 'configuration': Map<String, dynamic>.from(cfg as Map),
@@ -1153,7 +1206,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
           // Cart review
           const Text('📋 ملخص المنتجات', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 8),
-          if (_dealers.isNotEmpty) ...[
+          if (_dealers.isNotEmpty || _loggedInUserIsDealer()) ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -1164,51 +1217,74 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('تاجر (تطبيق خصومات الموديول على أسعار البنود)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  const Text('تطبيق قواعد خصم الموزع على التسعير الرسمي', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                   const SizedBox(height: 6),
-                  DropdownButtonFormField<int?>(
-                    value: _selectedDealerId,
-                    decoration: const InputDecoration(
-                      labelText: 'اختياري — خصم حسب قواعد التاجر',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    items: [
-                      const DropdownMenuItem<int?>(value: null, child: Text('بدون تاجر')),
-                      ..._dealers.map((d) {
-                        final id = d['id'] is int ? d['id'] as int : int.tryParse(d['id'].toString());
-                        if (id == null) return const DropdownMenuItem<int?>(value: null, child: SizedBox.shrink());
-                        return DropdownMenuItem<int?>(
-                          value: id,
-                          child: Text(d['name']?.toString() ?? '#$id', overflow: TextOverflow.ellipsis),
+                  Builder(
+                    builder: (ctx) {
+                      final uid = ctx.watch<AuthProvider>().user?.id;
+                      final selfLocked =
+                          _loggedInUserIsDealer() && _selectedDealerId != null && uid != null && uid == _selectedDealerId;
+                      if (selfLocked) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'الموزع: ${_selectedDealerName ?? "حسابك"}',
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'تم ربط العرض بحسابك — لا حاجة لاختيار التاجر يدوياً.',
+                              style: TextStyle(color: AppColors.muted, fontSize: 12),
+                            ),
+                          ],
                         );
-                      }),
-                    ],
-                    onChanged: _previewingDealer
-                        ? null
-                        : (v) async {
-                            setState(() {
-                              _selectedDealerId = v;
-                              if (v == null) {
-                                _selectedDealerName = null;
-                                for (final item in _cartItems) {
-                                  item.remove('dealerUnitPrice');
-                                  item.remove('dealerDiscountPercent');
-                                  item.remove('dealerDiscountWaiting');
-                                }
-                              } else {
-                                _selectedDealerName = null;
-                                for (final d in _dealers) {
-                                  final id = d['id'] is int ? d['id'] as int : int.tryParse(d['id'].toString());
-                                  if (id == v) {
-                                    _selectedDealerName = d['name']?.toString();
-                                    break;
+                      }
+                      return DropdownButtonFormField<int?>(
+                        value: _selectedDealerId,
+                        decoration: const InputDecoration(
+                          labelText: 'اختياري — خصم حسب قواعد الموزع',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: [
+                          const DropdownMenuItem<int?>(value: null, child: Text('بدون موزع')),
+                          ..._dealers.map((d) {
+                            final id = d['id'] is int ? d['id'] as int : int.tryParse(d['id'].toString());
+                            if (id == null) return const DropdownMenuItem<int?>(value: null, child: SizedBox.shrink());
+                            return DropdownMenuItem<int?>(
+                              value: id,
+                              child: Text(d['name']?.toString() ?? '#$id', overflow: TextOverflow.ellipsis),
+                            );
+                          }),
+                        ],
+                        onChanged: _previewingDealer
+                            ? null
+                            : (v) async {
+                                setState(() {
+                                  _selectedDealerId = v;
+                                  if (v == null) {
+                                    _selectedDealerName = null;
+                                    for (final item in _cartItems) {
+                                      item.remove('dealerUnitPrice');
+                                      item.remove('dealerDiscountPercent');
+                                      item.remove('dealerDiscountWaiting');
+                                    }
+                                  } else {
+                                    _selectedDealerName = null;
+                                    for (final d in _dealers) {
+                                      final id = d['id'] is int ? d['id'] as int : int.tryParse(d['id'].toString());
+                                      if (id == v) {
+                                        _selectedDealerName = d['name']?.toString();
+                                        break;
+                                      }
+                                    }
                                   }
-                                }
-                              }
-                            });
-                            if (v != null) await _applyDealerPricesToCart();
-                          },
+                                });
+                                if (v != null) await _applyDealerPricesToCart();
+                              },
+                      );
+                    },
                   ),
                   if (_previewingDealer) const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()),
                 ],

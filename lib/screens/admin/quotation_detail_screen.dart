@@ -1,3 +1,4 @@
+import 'dart:convert' show jsonDecode;
 import 'dart:typed_data';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -519,6 +520,25 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return s;
   }
 
+  /// عروض قديمة: السيرفر كان يخزن سعر شراء التاجر في `unitPrice` بينما `officialUnitPrice` هو سعر العرض للعميل.
+  static bool _pdfItemLooksLikeDealerPriceInClientSlot(Map<String, dynamic> item) {
+    final up = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
+    final official = double.tryParse(item['officialUnitPrice']?.toString() ?? '0') ?? 0;
+    final dealer = double.tryParse(item['dealerUnitPrice']?.toString() ?? '0') ?? 0;
+    if (official <= 0 || dealer <= 0) return false;
+    if (official <= up + 0.01) return false;
+    return (up - dealer).abs() < 0.02;
+  }
+
+  static double _pdfClientUnitPriceForItem(Map<String, dynamic> item) {
+    final up = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
+    if (_pdfItemLooksLikeDealerPriceInClientSlot(item)) {
+      final official = double.tryParse(item['officialUnitPrice']?.toString() ?? '0') ?? 0;
+      if (official > 0) return official;
+    }
+    return up;
+  }
+
   /// اسم الموزع: من السيرفر (`dealer_user_id` → `dealerName`). لا نستبدله باسم المستخدم الحالي لو كان مسؤولاً (يُظهر الموزع المختار عند إنشاء العرض وليس اسم المسجل).
   String _resolvedDealerNameForPdf(Map<String, dynamic> q) {
     final dn = q['dealerName']?.toString().trim();
@@ -688,12 +708,45 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     final arabicFont = await PdfGoogleFonts.cairoRegular();
     final arabicBold = await PdfGoogleFonts.cairoBold();
     final items = (q['items'] as List? ?? []);
-    final subtotal = double.tryParse(q['subtotal']?.toString() ?? '0') ?? 0;
+    final subtotalRaw = double.tryParse(q['subtotal']?.toString() ?? '0') ?? 0;
     final installPct = double.tryParse(q['installationPercent']?.toString() ?? '0') ?? 0;
-    final installAmt = double.tryParse(q['installationAmount']?.toString() ?? '0') ?? 0;
+    final installAmtRaw = double.tryParse(q['installationAmount']?.toString() ?? '0') ?? 0;
     final discountPct = double.tryParse(q['discountPercent']?.toString() ?? '0') ?? 0;
-    final discountAmt = double.tryParse(q['discountAmount']?.toString() ?? '0') ?? 0;
-    final totalAmt = double.tryParse(q['totalAmount']?.toString() ?? '0') ?? 0;
+    final discountAmtRaw = double.tryParse(q['discountAmount']?.toString() ?? '0') ?? 0;
+    final totalAmtRaw = double.tryParse(q['totalAmount']?.toString() ?? '0') ?? 0;
+
+    double subtotal = subtotalRaw;
+    double installAmt = installAmtRaw;
+    double discountAmt = discountAmtRaw;
+    double totalAmt = totalAmtRaw;
+
+    var anyLegacyClientPrice = false;
+    var subRecalc = 0.0;
+    for (final raw in items) {
+      if (raw is! Map) continue;
+      final im = Map<String, dynamic>.from(raw);
+      final qty = int.tryParse(im['qty']?.toString() ?? im['quantity']?.toString() ?? '1') ?? 1;
+      final rawUp = double.tryParse(im['unitPrice']?.toString() ?? '0') ?? 0;
+      final cu = _pdfClientUnitPriceForItem(im);
+      if ((cu - rawUp).abs() > 0.02) anyLegacyClientPrice = true;
+      subRecalc += cu * qty;
+    }
+    if (anyLegacyClientPrice && subtotalRaw > 0) {
+      final ratio = subRecalc / subtotalRaw;
+      subtotal = subRecalc;
+      if (installPct > 0) {
+        installAmt = subRecalc * installPct / 100.0;
+      } else {
+        installAmt = installAmtRaw * ratio;
+      }
+      if (discountPct > 0) {
+        discountAmt = subRecalc * discountPct / 100.0;
+      } else {
+        discountAmt = discountAmtRaw * ratio;
+      }
+      totalAmt = subRecalc + installAmt - discountAmt;
+      if (totalAmt < 0) totalAmt = 0;
+    }
 
     final Map<int, pw.ImageProvider> itemImages = {};
     for (int i = 0; i < items.length; i++) {
@@ -751,9 +804,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           // Table rows with images
           ...List.generate(items.length, (i) {
             final item = items[i] as Map;
-            final up = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
+            final itemMap = Map<String, dynamic>.from(item);
+            final rawUp = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
+            final up = _pdfClientUnitPriceForItem(itemMap);
             final qty = int.tryParse(item['qty']?.toString() ?? item['quantity']?.toString() ?? '1') ?? 1;
-            final tp = double.tryParse(item['totalPrice']?.toString() ?? '0') ?? (up * qty);
+            final storedLine = double.tryParse(item['totalPrice']?.toString() ?? '0') ?? 0;
+            final tp = (up - rawUp).abs() > 0.02 ? (up * qty) : (storedLine > 0 ? storedLine : (rawUp * qty));
             final descriptionText = _pdfSafeText(item['description']?.toString());
             final hasImage = itemImages.containsKey(i);
             return pw.Container(
@@ -880,6 +936,69 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     }
   }
 
+  /// يفكّ `configuration` من بند العرض (Map أو JSON نصي).
+  Map<String, dynamic>? _parseQuotationItemConfiguration(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is Map) return Map<String, dynamic>.from(raw as Map);
+    if (raw is String && raw.trim().isNotEmpty) {
+      try {
+        final d = jsonDecode(raw);
+        if (d is Map) return Map<String, dynamic>.from(d as Map);
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  /// ملاحظة مسار ستائر: متر فعلي vs متر تجاري (تسعير) وسعر/م تقريبي — يُعرض تحت اسم المنتج في PDF التاجر.
+  String _dealerPdfCurtainNote(
+    Map<String, dynamic> item, {
+    double? soldUnit,
+    double? dealerUnit,
+    int qty = 1,
+  }) {
+    final cfg = _parseQuotationItemConfiguration(item['configuration']);
+    if (cfg == null || cfg['pricingMode']?.toString() != 'curtain_per_meter') return '';
+    final cmRaw = cfg['curtainLengthCm'];
+    final commRaw = cfg['curtainCommercialM'];
+    double? cmVal;
+    if (cmRaw is num) {
+      cmVal = cmRaw.toDouble();
+    } else if (cmRaw != null) {
+      cmVal = double.tryParse(cmRaw.toString());
+    }
+    double? commVal;
+    if (commRaw is num) {
+      commVal = commRaw.toDouble();
+    } else if (commRaw != null) {
+      commVal = double.tryParse(commRaw.toString());
+    }
+    final actualM = (cmVal != null && cmVal > 0) ? cmVal / 100.0 : null;
+    final lines = <String>[];
+    if (actualM != null) {
+      lines.add('متر فعلي للمسار: ${actualM.toStringAsFixed(2)} م');
+    }
+    if (commVal != null && commVal > 0) {
+      lines.add('متر تجاري (تسعير البيع، ليس الطول الفعلي فقط): ${commVal.toStringAsFixed(1)} م');
+      if (soldUnit != null && soldUnit > 0) {
+        final rateSell = soldUnit / commVal;
+        lines.add('≈ ${rateSell.toStringAsFixed(0)} ج.م/م تجاري (بيع للعميل)');
+      }
+      if (dealerUnit != null && dealerUnit > 0) {
+        final rateBuy = dealerUnit / commVal;
+        lines.add('≈ ${rateBuy.toStringAsFixed(0)} ج.م/م تجاري (شراء التاجر)');
+      }
+    }
+    if (qty > 1) {
+      if (actualM != null) {
+        lines.add('إجمالي أمتار فعلية ($qty مسار): ${(actualM * qty).toStringAsFixed(2)} م');
+      }
+      if (commVal != null && commVal > 0) {
+        lines.add('إجمالي أمتار تجارية ($qty مسار): ${(commVal * qty).toStringAsFixed(1)} م');
+      }
+    }
+    return lines.join('\n');
+  }
+
   Future<Uint8List> _buildDealerPricingPdfBytes() async {
     final q = _quotation!;
     final arabicFont = await PdfGoogleFonts.cairoRegular();
@@ -957,16 +1076,18 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           pw.SizedBox(height: 6),
           pw.Container(
             color: PdfColors.blue800,
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 5),
             child: pw.Row(
               children: [
                 _pdfHeaderCell('#', 1),
                 _pdfHeaderCell('صورة', 2),
                 _pdfHeaderCell('المنتج', 2),
                 _pdfHeaderCell('الكمية', 1),
-                _pdfHeaderCell('سعر شراء التاجر', 2),
-                _pdfHeaderCell('سعر بيع العميل', 2),
-                _pdfHeaderCell('مكسب البند', 2),
+                _pdfHeaderCell('سعر شراء (وحدة)', 1),
+                _pdfHeaderCell('سعر بيع (وحدة)', 1),
+                _pdfHeaderCell('إجمالي شراء', 1),
+                _pdfHeaderCell('إجمالي بيع', 1),
+                _pdfHeaderCell('مكسب البند', 1),
               ],
             ),
           ),
@@ -985,21 +1106,43 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                 ) ??
                 0.0;
             final lineProfit = (soldUnit - dealerUnit) * qty;
+            final dealerLineTotal = dealerUnit * qty;
+            final soldLineTotal = soldUnit * qty;
+            final summary = itemMap['configurationSummary']?.toString().trim();
+            final curtainNote = _dealerPdfCurtainNote(
+              itemMap,
+              soldUnit: soldUnit,
+              dealerUnit: dealerUnit,
+              qty: qty,
+            );
+            final subLines = <String>[];
+            if (summary != null && summary.isNotEmpty) {
+              subLines.add(summary);
+            } else if (curtainNote.isNotEmpty) {
+              subLines.add(curtainNote);
+            }
             return pw.Container(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 5),
               decoration: pw.BoxDecoration(
                 border: pw.Border.all(color: PdfColors.grey300, width: 0.5),
                 color: i.isEven ? PdfColors.white : PdfColors.grey50,
               ),
               child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   _pdfCell('${i + 1}', 1),
                   _pdfCellImage(itemImages[i], 2),
-                  _pdfCell(item['productName']?.toString() ?? '-', 2),
+                  _pdfProductCell(
+                    item['productName']?.toString() ?? '-',
+                    subLines.isEmpty ? null : subLines.join('\n'),
+                    2,
+                  ),
                   _pdfCell('$qty', 1),
-                  _pdfCell('${dealerUnit.toStringAsFixed(0)} ج.م', 2),
-                  _pdfCell('${soldUnit.toStringAsFixed(0)} ج.م', 2),
-                  _pdfCell('${lineProfit.toStringAsFixed(0)} ج.م', 2),
+                  _pdfCell('${dealerUnit.toStringAsFixed(0)} ج.م', 1),
+                  _pdfCell('${soldUnit.toStringAsFixed(0)} ج.م', 1),
+                  _pdfCell('${dealerLineTotal.toStringAsFixed(0)} ج.م', 1),
+                  _pdfCell('${soldLineTotal.toStringAsFixed(0)} ج.م', 1),
+                  _pdfCell('${lineProfit.toStringAsFixed(0)} ج.م', 1),
                 ],
               ),
             );
@@ -1025,6 +1168,29 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           text,
           style: const pw.TextStyle(fontSize: 9),
           textAlign: pw.TextAlign.center,
+        ),
+      );
+
+  pw.Widget _pdfProductCell(String title, String? subtitle, int flex) => pw.Expanded(
+        flex: flex,
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          children: [
+            pw.Text(
+              title,
+              style: const pw.TextStyle(fontSize: 9),
+              textAlign: pw.TextAlign.center,
+            ),
+            if (subtitle != null && subtitle.isNotEmpty)
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(top: 3),
+                child: pw.Text(
+                  subtitle,
+                  style: pw.TextStyle(fontSize: 7, color: PdfColors.grey800, lineSpacing: 1.2),
+                  textAlign: pw.TextAlign.center,
+                ),
+              ),
+          ],
         ),
       );
 
@@ -1355,9 +1521,13 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                 ...(_quotation!['items'] as List? ?? []).asMap().entries.map((entry) {
                                   final idx = entry.key;
                                   final item = entry.value as Map;
-                                  final unitPrice = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
+                                  final itemMap = Map<String, dynamic>.from(item);
+                                  final unitPriceRaw = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
+                                  final unitPrice = _pdfClientUnitPriceForItem(itemMap);
                                   final qty = item['qty'] as int? ?? 1;
-                                  final total = double.tryParse(item['totalPrice']?.toString() ?? '0') ?? (unitPrice * qty);
+                                  final total = (unitPrice - unitPriceRaw).abs() > 0.02
+                                      ? (unitPrice * qty)
+                                      : (double.tryParse(item['totalPrice']?.toString() ?? '0') ?? (unitPriceRaw * qty));
                                   final purchaseItemsList = (_quotation?['purchaseItems'] as List? ?? []);
                                   final purchaseByProductId = <int, Map<String, dynamic>>{};
                                   for (final raw in purchaseItemsList) {
@@ -1366,7 +1536,6 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                     if (pid > 0) purchaseByProductId[pid] = Map<String, dynamic>.from(raw);
                                   }
                                   final quoteItemsList = (_quotation!['items'] as List? ?? []);
-                                  final itemMap = Map<String, dynamic>.from(item);
                                   final previewPiRows = _dealerPurchasePreview?['purchaseItems'] as List?;
                                   final dealerUnitResolved = _dealerPurchaseUnitForLine(
                                     idx,

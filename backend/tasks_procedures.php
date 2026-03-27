@@ -1946,8 +1946,13 @@ function quotations_create($input, $ctx) {
     $subtotal = 0;
     foreach ($items as &$item) {
         $qty = (int)($item['quantity'] ?? $item['qty'] ?? 1);
-        $unitPrice = (float)($item['unitPrice'] ?? 0);
+        // سعر البيع للعميل (واجهة العرض / PDF العميل) — لا يُستبدل بسعر شراء التاجر.
+        $customerUnitPrice = (float)($item['unitPrice'] ?? 0);
         $pid = (int)($item['productId'] ?? 0);
+        $officialFromInput = isset($item['officialUnitPrice']) ? (float)$item['officialUnitPrice'] : 0.0;
+        // قاعدة الخصم تُطبَّق على السعر الرسمي من الكتالوج؛ إن لم يُرسل نستخدم سعر البيع للعميل.
+        $officialForRule = $officialFromInput > 0 ? $officialFromInput : $customerUnitPrice;
+        $unitPrice = $customerUnitPrice;
 
         if ($dealerUserId > 0 && $pid > 0) {
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS allow_discount_when_stock_zero TINYINT DEFAULT 0'); } catch (\Exception $e) {}
@@ -1958,17 +1963,26 @@ function quotations_create($input, $ctx) {
                 $catId = isset($prow['category_id']) ? (int)$prow['category_id'] : null;
                 $stock = (int)($prow['stock'] ?? 0);
                 $allowZero = (int)($prow['allow_discount_when_stock_zero'] ?? 0) === 1;
-                $rule = discounts_fetchDealerRuleForProduct($db, $dealerUserId, $pid, $catId);
+                $variantName = trim((string)($item['variantName'] ?? $item['selectedVariant'] ?? ''));
+                $rule = discounts_fetchDealerRuleForProduct(
+                    $db,
+                    $dealerUserId,
+                    $pid,
+                    $catId,
+                    $variantName !== '' ? $variantName : null
+                );
                 if ($rule) {
-                    $item['officialUnitPrice'] = $unitPrice;
-                    $applied = discounts_applyDealerRuleToUnitPrice($unitPrice, $rule, $stock, $allowZero);
-                    $unitPrice = $applied['finalUnitPrice'];
-                    $item['unitPrice'] = $unitPrice;
+                    $item['officialUnitPrice'] = $officialForRule;
+                    $applied = discounts_applyDealerRuleToUnitPrice($officialForRule, $rule, $stock, $allowZero);
+                    // سعر شراء التاجر (داخلي) — منفصل عن سعر عرض العميل.
+                    $item['dealerUnitPrice'] = $applied['finalUnitPrice'];
                     $item['dealerDiscountPercent'] = $applied['discountPercent'];
                     $item['dealerDiscountValuePerUnit'] = $applied['discountValuePerUnit'];
                     if (!empty($applied['waitingMessage'])) {
                         $item['dealerDiscountWaiting'] = $applied['waitingMessage'];
                     }
+                    $item['unitPrice'] = $customerUnitPrice;
+                    $unitPrice = $customerUnitPrice;
                 }
             }
         }

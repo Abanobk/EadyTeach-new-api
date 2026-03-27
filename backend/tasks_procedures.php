@@ -1596,12 +1596,10 @@ function technicianLocation_requestNow($input, $ctx) {
     ];
     if ($taskIdVal !== null) $extra['taskId'] = (string)$taskIdVal;
 
-    $pushQueued = _notifyUser(
+    // IMPORTANT: silent push only (no DB notification for technician)
+    $pushQueued = _pushUserFcmOnly(
         $techId,
-        'طلب إرسال الموقع الآن',
-        'سيتم إرسال موقعك تلقائياً الآن',
         'location_request',
-        $reqId,
         'location_request',
         $extra
     ) ? true : false;

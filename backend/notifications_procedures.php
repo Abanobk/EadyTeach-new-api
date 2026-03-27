@@ -160,9 +160,12 @@ function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
 
     $android = ['priority' => 'HIGH'];
     $typeNorm = strtolower(trim((string)($dataStr['type'] ?? '')));
-    // لطلبات الموقع: لازم تكون data-only على أندرويد لكي يعمل background handler حتى لو التطبيق مقفول.
-    $isAndroidLocationRequest = ($platformNorm === 'android' && $typeNorm === 'location_request');
-    if (!$isAndroidLocationRequest) {
+    // Silent requests (مثل طلب الموقع): لا نعرض إشعار في الشريط ولا نرسل sound/badge.
+    // على أندرويد: data-only لضمان تشغيل background handler.
+    $isSilent = ($typeNorm === 'location_request');
+    $isAndroidSilent = ($platformNorm === 'android' && $isSilent);
+
+    if (!$isAndroidSilent) {
         $android['notification'] = [
             // لازم تتطابق مع القناة التي ينشئها التطبيق
             'channelId' => 'easy_tech_v2',
@@ -175,24 +178,39 @@ function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
             'token' => $token,
             'data' => $dataStr,
             'android' => $android,
-            'apns' => [
-                'payload' => [
-                    'aps' => [
-                        'sound' => 'default',
-                        'badge' => 1,
+            'apns' => $isSilent
+                ? [
+                    'headers' => [
+                        'apns-push-type' => 'background',
+                        'apns-priority' => '5',
+                    ],
+                    'payload' => [
+                        'aps' => [
+                            'content-available' => 1,
+                        ],
+                    ],
+                ]
+                : [
+                    'payload' => [
+                        'aps' => [
+                            'sound' => 'default',
+                            'badge' => 1,
+                        ],
                     ],
                 ],
-            ],
-            'webpush' => [
-                'notification' => [
-                    'icon' => '/app/icons/Icon-192.png',
+            // web: لو Silent لا نرسل notification block حتى لا يظهر Toast/إشعار.
+            'webpush' => $isSilent
+                ? []
+                : [
+                    'notification' => [
+                        'icon' => '/app/icons/Icon-192.png',
+                    ],
                 ],
-            ],
         ],
     ];
 
-    // Default: send notification+data (system UI). Except Android location_request which must be data-only.
-    if (!$isAndroidLocationRequest) {
+    // Default: send notification+data (system UI). Silent requests are data-only for all platforms.
+    if (!$isSilent && !$isAndroidSilent) {
         $message['message']['notification'] = [
             'title' => $title,
             'body' => $body,
@@ -223,6 +241,43 @@ function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
         return false;
     }
     return true;
+}
+
+/**
+ * Push FCM to a user WITHOUT saving DB notification.
+ * Used for silent commands like "location_request".
+ */
+function _pushUserFcmOnly($userId, $title, $body, $data = []) {
+    global $db;
+    _ensureNotificationsSchema();
+
+    $tokenStmt = $db->prepare("SELECT token, COALESCE(platform, 'web') AS platform FROM fcm_tokens WHERE user_id = ?");
+    $tokenStmt->execute([(int)$userId]);
+    $tokens = $tokenStmt->fetchAll();
+
+    if (empty($tokens)) {
+        error_log('[FCM] pushOnly skip: user_id=' . (int)$userId . ' has NO rows in fcm_tokens. Title=' . $title);
+        return false;
+    }
+
+    $anyOk = false;
+    foreach ($tokens as $t) {
+        $plat = strtolower(trim((string)($t['platform'] ?? 'web')));
+        if ($plat === 'unknown' || $plat === '') {
+            $plat = 'android';
+        }
+        $result = _sendFcmMessage($t['token'], $title, $body, $data, $plat);
+        if ($result === 'unregistered') {
+            $db->prepare('DELETE FROM fcm_tokens WHERE token = ?')->execute([$t['token']]);
+            error_log('[FCM] removed unregistered token user_id=' . (int)$userId . ' platform=' . $plat);
+        } elseif ($result === true) {
+            $anyOk = true;
+            error_log('[FCM] pushOnly ok user_id=' . (int)$userId . ' platform=' . $plat);
+        } else {
+            error_log('[FCM] pushOnly failed user_id=' . (int)$userId . ' platform=' . $plat);
+        }
+    }
+    return $anyOk;
 }
 
 /** هل رد FCM يعني أن التوكن لم يعد صالحاً (يجب حذفه من fcm_tokens) */

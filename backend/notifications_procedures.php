@@ -158,22 +158,21 @@ function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
         $dataStr[(string)$k] = (string)$v;
     }
 
-    $android = [
-        'priority' => 'HIGH',
-        'notification' => [
+    $android = ['priority' => 'HIGH'];
+    $typeNorm = strtolower(trim((string)($dataStr['type'] ?? '')));
+    // لطلبات الموقع: لازم تكون data-only على أندرويد لكي يعمل background handler حتى لو التطبيق مقفول.
+    $isAndroidLocationRequest = ($platformNorm === 'android' && $typeNorm === 'location_request');
+    if (!$isAndroidLocationRequest) {
+        $android['notification'] = [
             // لازم تتطابق مع القناة التي ينشئها التطبيق
             'channelId' => 'easy_tech_v2',
             'sound' => 'default',
-        ],
-    ];
+        ];
+    }
 
     $message = [
         'message' => [
             'token' => $token,
-            'notification' => [
-                'title' => $title,
-                'body' => $body,
-            ],
             'data' => $dataStr,
             'android' => $android,
             'apns' => [
@@ -191,6 +190,14 @@ function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
             ],
         ],
     ];
+
+    // Default: send notification+data (system UI). Except Android location_request which must be data-only.
+    if (!$isAndroidLocationRequest) {
+        $message['message']['notification'] = [
+            'title' => $title,
+            'body' => $body,
+        ];
+    }
 
     $url = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
     $ch = curl_init($url);

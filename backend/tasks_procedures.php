@@ -1333,6 +1333,7 @@ function technicianLocation_latest($input, $ctx) {
             'technicianName' => $namesById[$tid]['name'] ?? '',
             'technicianRole' => $namesById[$tid]['role'] ?? '',
             'taskId' => $r['task_id'] !== null ? (int)$r['task_id'] : null,
+            'requestId' => $r['request_id'] !== null ? (int)$r['request_id'] : null,
             'latitude' => (float)$r['latitude'],
             'longitude' => (float)$r['longitude'],
             'accuracyM' => $r['accuracy_m'] !== null ? (float)$r['accuracy_m'] : null,
@@ -1371,7 +1372,7 @@ function technicianLocation_track($input, $ctx) {
     $toTs = "{$date} " . str_pad((string)$toHour, 2, '0', STR_PAD_LEFT) . ":59:59";
 
     $stmt = $db->prepare("
-        SELECT id, technician_id, task_id, latitude, longitude, accuracy_m, is_arrived, source, created_at
+        SELECT id, technician_id, task_id, request_id, latitude, longitude, accuracy_m, is_arrived, source, created_at
         FROM technician_locations
         WHERE technician_id = ?
           AND created_at BETWEEN ? AND ?
@@ -1394,6 +1395,7 @@ function technicianLocation_track($input, $ctx) {
             'id' => (int)$r['id'],
             'technicianId' => (int)$r['technician_id'],
             'taskId' => $r['task_id'] !== null ? (int)$r['task_id'] : null,
+            'requestId' => $r['request_id'] !== null ? (int)$r['request_id'] : null,
             'latitude' => (float)$r['latitude'],
             'longitude' => (float)$r['longitude'],
             'accuracyM' => $r['accuracy_m'] !== null ? (float)$r['accuracy_m'] : null,

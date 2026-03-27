@@ -363,18 +363,35 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
     if (techId == null || _requestingNow) return;
     setState(() => _requestingNow = true);
     try {
-      await ApiService.mutate('technicianLocation.requestNow', input: {'technicianId': techId});
+      final res = await ApiService.mutate('technicianLocation.requestNow', input: {'technicianId': techId});
+      final reqId = (res['data'] is Map) ? (res['data']['requestId']) : null;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم إرسال طلب لوكيشن للفني الآن…'), backgroundColor: Colors.green),
+          SnackBar(
+            content: Text(reqId != null ? 'تم إرسال الطلب (ID: $reqId)…' : 'تم إرسال طلب لوكيشن للفني الآن…'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
-      // Give device a moment to respond then refresh.
-      Future.delayed(const Duration(seconds: 6), () async {
-        if (!mounted) return;
-        await _loadLatest();
-        await _loadTrack();
-      });
+      // Poll a few times waiting for response.
+      Future<void> poll() async {
+        for (int i = 0; i < 6; i++) {
+          if (!mounted) return;
+          await Future.delayed(const Duration(seconds: 4));
+          await _loadLatest();
+          await _loadTrack();
+          // If latest point matches the requestId, stop early.
+          final latestPoint = _latest.firstWhere(
+            (e) => e['technicianId'].toString() == techId.toString(),
+            orElse: () => <String, dynamic>{},
+          );
+          if (reqId != null && latestPoint.isNotEmpty && latestPoint['requestId']?.toString() == reqId.toString()) {
+            break;
+          }
+        }
+      }
+      // ignore: unawaited_futures
+      poll();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -406,18 +423,33 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
         ),
         body: _loadingLatest
             ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-            : Column(
-                children: [
-                  _topBar(),
-                  Expanded(
-                    child: Row(
+            : LayoutBuilder(
+                builder: (ctx, c) {
+                  final isNarrow = c.maxWidth < 900;
+                  if (isNarrow) {
+                    // Mobile: show track full width (picker button in top bar).
+                    return Column(
                       children: [
-                        Expanded(flex: 2, child: _techniciansList()),
-                        Expanded(flex: 3, child: _trackPanel()),
+                        _topBar(),
+                        Expanded(child: _trackPanel()),
                       ],
-                    ),
-                  ),
-                ],
+                    );
+                  }
+                  // Wide screens: keep split view.
+                  return Column(
+                    children: [
+                      _topBar(),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(flex: 2, child: _techniciansList()),
+                            Expanded(flex: 3, child: _trackPanel()),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
       ),
     );
@@ -430,34 +462,30 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
         color: AppThemeDecorations.cardColor(context),
         border: Border(bottom: BorderSide(color: AppColors.border.withOpacity(0.7))),
       ),
-      child: Row(
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
         children: [
           const Icon(Icons.location_searching, color: AppColors.primary, size: 18),
           const SizedBox(width: 8),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _selectedTechName?.isNotEmpty == true ? 'الفني: $_selectedTechName' : 'اختر فني',
-                    style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w700),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: _openTechPicker,
-                  icon: const Icon(Icons.person_search, size: 18, color: AppColors.primary),
-                  label: const Text('اختر', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppColors.primary),
-                    backgroundColor: AppColors.primary.withOpacity(0.06),
-                  ),
-                ),
-              ],
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 220),
+            child: Text(
+              _selectedTechName?.isNotEmpty == true ? 'الفني: $_selectedTechName' : 'اختر فني',
+              style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w700),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
-          const SizedBox(width: 10),
+          OutlinedButton.icon(
+            onPressed: _openTechPicker,
+            icon: const Icon(Icons.person_search, size: 18, color: AppColors.primary),
+            label: const Text('اختر', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800)),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: AppColors.primary),
+              backgroundColor: AppColors.primary.withOpacity(0.06),
+            ),
+          ),
           OutlinedButton.icon(
             onPressed: _pickDay,
             icon: const Icon(Icons.calendar_month, size: 18, color: AppColors.primary),
@@ -470,7 +498,6 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
               backgroundColor: AppColors.primary.withOpacity(0.06),
             ),
           ),
-          const SizedBox(width: 10),
           ElevatedButton.icon(
             onPressed: (_selectedTechId == null || _requestingNow) ? null : _requestTechnicianLocationNow,
             icon: Icon(_requestingNow ? Icons.hourglass_top : Icons.my_location, size: 18),

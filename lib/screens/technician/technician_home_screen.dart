@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
@@ -20,6 +21,8 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
   bool _loading = true;
   String _filter = 'current';
   int _unreadNotifs = 0;
+  bool _needsAlwaysLocation = false;
+  bool _checkingLocationPerm = false;
 
   @override
   void initState() {
@@ -27,7 +30,58 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
     _loadUnreadCount();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _loadTasks(context);
+      if (mounted) _checkAndPromptLocationPermission();
     });
+  }
+
+  Future<void> _checkAndPromptLocationPermission() async {
+    if (_checkingLocationPerm) return;
+    setState(() => _checkingLocationPerm = true);
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        if (mounted) setState(() => _needsAlwaysLocation = true);
+        return;
+      }
+
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+
+      // We need Always to respond to "request location now" when app is closed.
+      final ok = perm == LocationPermission.always;
+      if (mounted) setState(() => _needsAlwaysLocation = !ok);
+
+      if (!ok && mounted) {
+        // Show an explicit prompt once (banner will remain until fixed).
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('لازم تفعّل إذن الموقع "سماح دائمًا" علشان الإدارة تقدر تطلب موقعك حتى لو التطبيق مقفول.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) setState(() => _needsAlwaysLocation = true);
+    } finally {
+      if (mounted) setState(() => _checkingLocationPerm = false);
+    }
+  }
+
+  Future<void> _openLocationSettings() async {
+    try {
+      await Geolocator.openAppSettings();
+    } catch (_) {}
+    try {
+      await Geolocator.openLocationSettings();
+    } catch (_) {}
+    // Re-check after returning.
+    if (mounted) {
+      await Future.delayed(const Duration(milliseconds: 800));
+      await _checkAndPromptLocationPermission();
+    }
   }
 
   static List<dynamic> _parseTasksResponse(dynamic data) {
@@ -247,6 +301,39 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
             ),
           ],
         ),
+              if (_needsAlwaysLocation)
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.orange.withOpacity(0.35)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined, color: Colors.orange, size: 22),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'فعّل إذن الموقع "سماح دائمًا" علشان الإدارة تقدر تطلب موقعك في أي وقت حتى لو التطبيق مقفول.',
+                          style: TextStyle(color: Colors.orange, fontSize: 12.5, fontWeight: FontWeight.w700, height: 1.25),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                        onPressed: _openLocationSettings,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('فتح الإعدادات', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                ),
             // Custody quick-access banner
             GestureDetector(
               onTap: () => Navigator.push(

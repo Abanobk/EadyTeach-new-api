@@ -1209,6 +1209,15 @@ try {
         case 'technicianStatus.update':
             $result = technicianStatus_update($input ?? [], $ctx);
             break;
+        case 'namedLocation.list':
+            $result = namedLocation_list($input ?? [], $ctx);
+            break;
+        case 'namedLocation.save':
+            $result = namedLocation_save($input ?? [], $ctx);
+            break;
+        case 'namedLocation.delete':
+            $result = namedLocation_delete($input ?? [], $ctx);
+            break;
 
         // ── Quotations ────────────────────────────────────────
         case 'quotations.list':

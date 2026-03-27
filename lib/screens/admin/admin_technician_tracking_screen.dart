@@ -24,6 +24,7 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
   Map<String, dynamic>? _track;
   bool _settingManual = false;
   bool _requestingNow = false;
+  bool _savingPlace = false;
 
   @override
   void initState() {
@@ -456,6 +457,142 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
     }
   }
 
+  Future<void> _openSavePlaceDialog() async {
+    if (_savingPlace) return;
+    final techId = _selectedTechId;
+    if (techId == null) return;
+
+    // Use latest point for selected technician when available.
+    Map<String, dynamic>? latestPoint;
+    for (final r in _latest) {
+      if (r['technicianId']?.toString() == techId.toString()) {
+        latestPoint = r;
+        break;
+      }
+    }
+    final lat = latestPoint?['latitude'];
+    final lng = latestPoint?['longitude'];
+    if (lat == null || lng == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('لا يوجد لوكيشن حديث للفني لتسميته'), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    }
+
+    final nameCtrl = TextEditingController(text: 'الشركة');
+    final radiusCtrl = TextEditingController(text: '150');
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppThemeDecorations.cardColor(context),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+          ),
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.bookmark_add_outlined, color: AppColors.primary),
+                    SizedBox(width: 8),
+                    Text('تسمية لوكيشن', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w900, fontSize: 16)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text('Lat/Lng: $lat, $lng', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameCtrl,
+                  style: const TextStyle(color: AppColors.text),
+                  decoration: InputDecoration(
+                    labelText: 'اسم المكان (مثال: الشركة)',
+                    labelStyle: const TextStyle(color: AppColors.muted),
+                    filled: true,
+                    fillColor: AppThemeDecorations.pageBackground(context),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: radiusCtrl,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: AppColors.text),
+                  decoration: InputDecoration(
+                    labelText: 'نطاق المكان بالمتر (Radius)',
+                    labelStyle: const TextStyle(color: AppColors.muted),
+                    filled: true,
+                    fillColor: AppThemeDecorations.pageBackground(context),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ElevatedButton(
+                  onPressed: _savingPlace
+                      ? null
+                      : () async {
+                          final name = nameCtrl.text.trim();
+                          final radius = int.tryParse(radiusCtrl.text.trim()) ?? 150;
+                          if (name.isEmpty) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('اكتب اسم المكان'), backgroundColor: Colors.red),
+                              );
+                            }
+                            return;
+                          }
+                          setState(() => _savingPlace = true);
+                          try {
+                            await ApiService.mutate('namedLocation.save', input: {
+                              'name': name,
+                              'latitude': lat,
+                              'longitude': lng,
+                              'radiusM': radius,
+                            });
+                            if (mounted) Navigator.pop(ctx);
+                            await _loadTrack();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('تم حفظ المكان ✅'), backgroundColor: Colors.green),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('فشل الحفظ: $e'), backgroundColor: Colors.red),
+                              );
+                            }
+                          } finally {
+                            if (mounted) setState(() => _savingPlace = false);
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(_savingPlace ? 'جاري الحفظ…' : 'حفظ'),
+                ),
+                const SizedBox(height: 6),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -470,7 +607,10 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
             IconButton(
               tooltip: 'تحديث',
               icon: const Icon(Icons.refresh, color: AppColors.primary),
-              onPressed: _loadLatest,
+              onPressed: () async {
+                await _loadLatest();
+                await _loadTechniciansStatus();
+              },
             ),
           ],
         ),
@@ -594,6 +734,15 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: _selectedTechId == null ? null : _openSavePlaceDialog,
+            icon: const Icon(Icons.bookmark_add_outlined, size: 18, color: AppColors.primary),
+            label: const Text('تسمية لوكيشن', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800)),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: AppColors.primary),
+              backgroundColor: AppColors.primary.withOpacity(0.06),
             ),
           ),
         ],
@@ -726,6 +875,8 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
                         final lat = p['latitude'];
                         final lng = p['longitude'];
                         final taskId = p['taskId'];
+                        final customerName = (p['customerName'] ?? '').toString().trim();
+                        final placeName = (p['placeName'] ?? '').toString().trim();
                         final isArrived = p['isArrived'] == true;
                         final url = 'https://www.google.com/maps?q=$lat,$lng';
 
@@ -759,10 +910,19 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
                                   children: [
                                     Text(createdAt, style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w700)),
                                     const SizedBox(height: 4),
+                                    if (placeName.isNotEmpty) ...[
+                                      Text(placeName, style: const TextStyle(color: Colors.lightBlue, fontSize: 12, fontWeight: FontWeight.w900)),
+                                      const SizedBox(height: 2),
+                                    ],
                                     Text('Lat/Lng: $lat, $lng', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
                                     if (taskId != null) ...[
                                       const SizedBox(height: 2),
-                                      Text('Task: #$taskId', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                                      Text(
+                                        customerName.isNotEmpty ? customerName : 'مهمة: #$taskId',
+                                        style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ],
                                   ],
                                 ),

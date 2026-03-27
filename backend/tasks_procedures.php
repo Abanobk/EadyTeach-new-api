@@ -1369,6 +1369,7 @@ function technicianLocation_track($input, $ctx) {
     global $db;
     _requireAdminStaffSupervisor($ctx);
     _ensureTechnicianLocationsSchema();
+    _ensureNamedLocationsSchema();
 
     $techId = (int)($input['technicianId'] ?? 0);
     $date = trim((string)($input['date'] ?? ''));
@@ -1388,14 +1389,33 @@ function technicianLocation_track($input, $ctx) {
     $toTs = "{$date} " . str_pad((string)$toHour, 2, '0', STR_PAD_LEFT) . ":59:59";
 
     $stmt = $db->prepare("
-        SELECT id, technician_id, task_id, request_id, latitude, longitude, accuracy_m, is_arrived, source, created_at
-        FROM technician_locations
-        WHERE technician_id = ?
-          AND created_at BETWEEN ? AND ?
-        ORDER BY created_at ASC, id ASC
+        SELECT tl.id, tl.technician_id, tl.task_id, tl.request_id,
+               tl.latitude, tl.longitude, tl.accuracy_m, tl.is_arrived, tl.source, tl.created_at,
+               t.customer_id, c.name AS customer_name
+        FROM technician_locations tl
+        LEFT JOIN tasks t ON t.id = tl.task_id
+        LEFT JOIN users c ON c.id = t.customer_id
+        WHERE tl.technician_id = ?
+          AND tl.created_at BETWEEN ? AND ?
+        ORDER BY tl.created_at ASC, tl.id ASC
     ");
     $stmt->execute([$techId, $fromTs, $toTs]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Load named places once for tagging points (e.g., HQ).
+    $places = [];
+    try {
+        $p = $db->query("SELECT id, name, latitude, longitude, radius_m FROM named_locations ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($p as $pr) {
+            $places[] = [
+                'id' => (int)$pr['id'],
+                'name' => $pr['name'] ?? '',
+                'latitude' => (float)$pr['latitude'],
+                'longitude' => (float)$pr['longitude'],
+                'radiusM' => (int)($pr['radius_m'] ?? 150),
+            ];
+        }
+    } catch (\Exception $e) {}
 
     // downsample to one point per interval bucket (keep earliest point in bucket)
     $bucketSec = $intervalMin * 60;
@@ -1407,10 +1427,16 @@ function technicianLocation_track($input, $ctx) {
         $b = (int)floor($t / $bucketSec);
         if (isset($seen[$b])) continue;
         $seen[$b] = true;
+        $matchedPlace = null;
+        if ($places) {
+            $matchedPlace = _matchNamedLocation((float)$r['latitude'], (float)$r['longitude'], $places);
+        }
         $out[] = [
             'id' => (int)$r['id'],
             'technicianId' => (int)$r['technician_id'],
             'taskId' => $r['task_id'] !== null ? (int)$r['task_id'] : null,
+            'customerId' => $r['customer_id'] !== null ? (int)$r['customer_id'] : null,
+            'customerName' => $r['customer_name'] ?? null,
             'requestId' => $r['request_id'] !== null ? (int)$r['request_id'] : null,
             'latitude' => (float)$r['latitude'],
             'longitude' => (float)$r['longitude'],
@@ -1418,6 +1444,8 @@ function technicianLocation_track($input, $ctx) {
             'isArrived' => (int)($r['is_arrived'] ?? 0) === 1,
             'source' => $r['source'] ?? 'mobile',
             'createdAt' => $r['created_at'] ? (string)$r['created_at'] : null,
+            'placeId' => $matchedPlace ? (int)($matchedPlace['id'] ?? 0) : null,
+            'placeName' => $matchedPlace ? ($matchedPlace['name'] ?? null) : null,
         ];
     }
 
@@ -1476,6 +1504,131 @@ function technicianLocation_adminSet($input, $ctx) {
         VALUES (?, ?, NULL, ?, ?, ?, 0, ?)");
     $stmt->execute([$techId, $taskIdVal, $latF, $lngF, $accF, $src]);
 
+    return ['success' => true];
+}
+
+// ─── Named Locations (HQ / Sites) ───────────────────────────────
+function _ensureNamedLocationsSchema(): void {
+    global $db;
+    static $done = false;
+    if ($done) return;
+    try {
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS named_locations (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(191) NOT NULL,
+                latitude DECIMAL(10,7) NOT NULL,
+                longitude DECIMAL(10,7) NOT NULL,
+                radius_m INT NOT NULL DEFAULT 150,
+                created_by INT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_named_locations_name (name)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
+    } catch (\Exception $e) {
+        // ignore
+    }
+    $done = true;
+}
+
+function _haversineMeters(float $lat1, float $lon1, float $lat2, float $lon2): float {
+    $R = 6371000.0; // meters
+    $dLat = deg2rad($lat2 - $lat1);
+    $dLon = deg2rad($lon2 - $lon1);
+    $a = sin($dLat / 2) * sin($dLat / 2) +
+         cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+         sin($dLon / 2) * sin($dLon / 2);
+    $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+    return $R * $c;
+}
+
+function _matchNamedLocation(float $lat, float $lng, array $places): ?array {
+    $best = null;
+    $bestD = null;
+    foreach ($places as $p) {
+        $plat = (float)($p['latitude'] ?? 0);
+        $plng = (float)($p['longitude'] ?? 0);
+        $rad = (int)($p['radiusM'] ?? $p['radius_m'] ?? 150);
+        $d = _haversineMeters($lat, $lng, $plat, $plng);
+        if ($d <= $rad) {
+            if ($bestD === null || $d < $bestD) {
+                $bestD = $d;
+                $best = $p;
+            }
+        }
+    }
+    return $best;
+}
+
+/**
+ * Admin: list named locations (e.g., HQ).
+ */
+function namedLocation_list($input, $ctx) {
+    global $db;
+    _requireAdminStaffSupervisor($ctx);
+    _ensureNamedLocationsSchema();
+    $stmt = $db->query("SELECT id, name, latitude, longitude, radius_m, created_at, updated_at FROM named_locations ORDER BY name ASC, id ASC");
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $out = [];
+    foreach ($rows as $r) {
+        $out[] = [
+            'id' => (int)$r['id'],
+            'name' => $r['name'] ?? '',
+            'latitude' => (float)$r['latitude'],
+            'longitude' => (float)$r['longitude'],
+            'radiusM' => (int)($r['radius_m'] ?? 150),
+            'createdAt' => $r['created_at'] ?? null,
+            'updatedAt' => $r['updated_at'] ?? null,
+        ];
+    }
+    return ['rows' => $out];
+}
+
+/**
+ * Admin: create/update a named location.
+ * input: { id?: number, name: string, latitude: number, longitude: number, radiusM?: number }
+ */
+function namedLocation_save($input, $ctx) {
+    global $db;
+    _requireAdminStaffSupervisor($ctx);
+    _ensureNamedLocationsSchema();
+
+    $id = (int)($input['id'] ?? 0);
+    $name = trim((string)($input['name'] ?? ''));
+    $lat = $input['latitude'] ?? null;
+    $lng = $input['longitude'] ?? null;
+    $radius = (int)($input['radiusM'] ?? 150);
+    if ($radius < 20) $radius = 20;
+    if ($radius > 3000) $radius = 3000;
+    if ($name === '' || $lat === null || $lng === null) throw new Exception('INVALID_ARGUMENT');
+    if (mb_strlen($name) > 60) $name = mb_substr($name, 0, 60);
+
+    $latF = (float)$lat;
+    $lngF = (float)$lng;
+    $adminId = (int)($ctx['userId'] ?? 0);
+
+    if ($id > 0) {
+        $stmt = $db->prepare("UPDATE named_locations SET name = ?, latitude = ?, longitude = ?, radius_m = ? WHERE id = ?");
+        $stmt->execute([$name, $latF, $lngF, $radius, $id]);
+        return ['success' => true, 'id' => $id];
+    }
+    $stmt = $db->prepare("INSERT INTO named_locations (name, latitude, longitude, radius_m, created_by) VALUES (?, ?, ?, ?, ?)");
+    $stmt->execute([$name, $latF, $lngF, $radius, $adminId > 0 ? $adminId : null]);
+    return ['success' => true, 'id' => (int)$db->lastInsertId()];
+}
+
+/**
+ * Admin: delete a named location.
+ * input: { id: number }
+ */
+function namedLocation_delete($input, $ctx) {
+    global $db;
+    _requireAdminStaffSupervisor($ctx);
+    _ensureNamedLocationsSchema();
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) throw new Exception('INVALID_ARGUMENT');
+    $db->prepare("DELETE FROM named_locations WHERE id = ?")->execute([$id]);
     return ['success' => true];
 }
 

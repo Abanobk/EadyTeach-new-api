@@ -26,15 +26,35 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
   bool _needsAlwaysLocation = false;
   bool _checkingLocationPerm = false;
   bool _openingSettings = false;
+  DateTime? _lastPermRefreshAt;
+  late final _LifecycleHook _lifecycleHook;
 
   @override
   void initState() {
     super.initState();
+    _lifecycleHook = _LifecycleHook(onResumed: _onAppResumed);
+    WidgetsBinding.instance.addObserver(_lifecycleHook);
     _loadUnreadCount();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _loadTasks(context);
       if (mounted) _checkAndPromptLocationPermission();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(_lifecycleHook);
+    super.dispose();
+  }
+
+  Future<void> _onAppResumed() async {
+    // When user comes back from Settings, re-check permission + report to backend.
+    final now = DateTime.now();
+    final last = _lastPermRefreshAt;
+    if (last != null && now.difference(last).inMilliseconds < 1200) return;
+    _lastPermRefreshAt = now;
+    if (!mounted) return;
+    await _checkAndPromptLocationPermission();
   }
 
   Future<void> _checkAndPromptLocationPermission() async {
@@ -568,6 +588,20 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
       ),
     ),
     );
+  }
+}
+
+/// Tiny lifecycle hook to re-check permission on resume.
+class _LifecycleHook with WidgetsBindingObserver {
+  final Future<void> Function() onResumed;
+  _LifecycleHook({required this.onResumed});
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // ignore: unawaited_futures
+      onResumed();
+    }
   }
 }
 

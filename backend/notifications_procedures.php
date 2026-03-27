@@ -119,9 +119,10 @@ function _getFcmAccessToken() {
 /**
  * @param string $platform من جدول fcm_tokens: android | ios | web
  *
- * أندرويد: نرسل notification + data بأولوية HIGH وقناة easy_tech_v2 — النظام يعرض الإشعار في الشريط
- * حتى والتطبيق مغلق (لا يعتمد على Dart background isolate). رسالة data-only كانت تفشل غالباً
- * في الظهور في الخلفية على كثير من الأجهزة.
+ * أندرويد: نرسل data-only بأولوية HIGH (بدون block "notification").
+ * هذا يضمن أن Dart (onMessage/background handler) يعرض إشعار local عبر `flutter_local_notifications`
+ * بحيث نتحكم في الصوت/الاهتزاز خصوصاً عندما التطبيق يكون في الـ foreground.
+ * (استخدام block "notification" أحياناً يؤدي لعرض بصمت في الـ foreground بحسب سلوك أندرويد/قناة الإشعارات.)
  * iOS / Web: notification + data كما سبق.
  *
  * ملاحظة: حقول android.notification في FCM HTTP v1 تستخدم camelCase (channelId، defaultVibrateTimings).
@@ -157,24 +158,16 @@ function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
         $dataStr[(string)$k] = (string)$v;
     }
 
-    // كتلة android.notification المشتركة (FCM v1 JSON = camelCase)
+    // android options للأجهزة (data-only).
+    // نترك التحكم الفعلي في الصوت/الاهتزاز للتطبيق عبر flutter_local_notifications.
     $androidNotifExtras = [
         'priority' => 'HIGH',
-        'notification' => [
-            'channelId' => 'easy_tech_v2',
-            'sound' => 'default',
-            'defaultVibrateTimings' => true,
-        ],
     ];
 
     if ($platformNorm === 'android') {
         $message = [
             'message' => [
                 'token' => $token,
-                'notification' => [
-                    'title' => $title,
-                    'body' => $body,
-                ],
                 'data' => $dataStr,
                 'android' => $androidNotifExtras,
             ],

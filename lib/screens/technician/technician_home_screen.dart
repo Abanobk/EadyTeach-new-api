@@ -25,6 +25,7 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
   int _unreadNotifs = 0;
   bool _needsAlwaysLocation = false;
   bool _checkingLocationPerm = false;
+  bool _openingSettings = false;
 
   @override
   void initState() {
@@ -105,6 +106,48 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
     }
   }
 
+  /// يحاول تفعيل "السماح طوال الوقت" بأفضل مسار متاح:
+  /// 1) طلب الإذن داخل التطبيق (قد يظهر خيار "طوال الوقت" على بعض الأجهزة/الإصدارات)
+  /// 2) إن لم يصبح Always، نفتح إعدادات التطبيق مباشرة.
+  Future<void> _enableAlwaysLocationFlow() async {
+    if (_openingSettings) return;
+    setState(() => _openingSettings = true);
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        await Geolocator.openLocationSettings();
+      }
+
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+
+      // Android لا يسمح عادةً بطلب "طوال الوقت" مباشرة من أول مرة،
+      // لكن إعادة الطلب بعد WhileInUse قد تفتح المسار المناسب/تعطي تلميح.
+      if (perm == LocationPermission.whileInUse) {
+        perm = await Geolocator.requestPermission();
+      }
+
+      // لو مازال ليس Always — افتح إعدادات التطبيق (صفحة الأذونات هناك).
+      if (perm != LocationPermission.always) {
+        await Geolocator.openAppSettings();
+      }
+
+      // بعد الرجوع، أعد الفحص لتحديث البانر وإرسال الحالة للسيرفر.
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (mounted) {
+        await _checkAndPromptLocationPermission();
+      }
+    } catch (_) {
+      try {
+        await Geolocator.openAppSettings();
+      } catch (_) {}
+    } finally {
+      if (mounted) setState(() => _openingSettings = false);
+    }
+  }
+
   void _showAlwaysLocationHowTo() {
     showDialog<void>(
       context: context,
@@ -117,7 +160,7 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
             'لتفعيل استخدام الموقع:\n'
             '1) افتح: الإعدادات → التطبيقات → Easy Tech\n'
             '2) الأذونات → الموقع\n'
-            '3) اختر: "السماح عند استخدام التطبيق" أو "السماح دائمًا" (إن وُجد)\n\n'
+            '3) اختر: "السماح طوال الوقت"\n\n'
             'ملاحظة: بعض الهواتف بتظهر "السماح دائمًا" بعد اختيار "أثناء الاستخدام" مرة أولاً.',
             style: TextStyle(color: AppColors.muted, height: 1.35),
           ),
@@ -129,7 +172,7 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(ctx);
-                _openLocationSettings();
+                _enableAlwaysLocationFlow();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.orange,
@@ -399,14 +442,17 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           ElevatedButton(
-                            onPressed: _openLocationSettings,
+                            onPressed: _openingSettings ? null : _enableAlwaysLocationFlow,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.orange,
                               foregroundColor: Colors.black,
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-                            child: const Text('فتح الإعدادات', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                            child: Text(
+                              _openingSettings ? 'جاري…' : 'تفعيل طوال الوقت',
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                            ),
                           ),
                           const SizedBox(height: 6),
                           GestureDetector(

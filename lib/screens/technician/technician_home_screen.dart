@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
@@ -52,6 +53,39 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
       // We need Always to respond to "request location now" when app is closed.
       final ok = perm == LocationPermission.always;
       if (mounted) setState(() => _needsAlwaysLocation = !ok);
+
+      // Report current status to backend so admin can see it.
+      final permStr = () {
+        switch (perm) {
+          case LocationPermission.always:
+            return 'always';
+          case LocationPermission.whileInUse:
+            return 'while_in_use';
+          case LocationPermission.denied:
+            return 'denied';
+          case LocationPermission.deniedForever:
+            return 'denied_forever';
+          case LocationPermission.unableToDetermine:
+            return 'unknown';
+        }
+      }();
+      final platform = () {
+        switch (defaultTargetPlatform) {
+          case TargetPlatform.android:
+            return 'android';
+          case TargetPlatform.iOS:
+            return 'ios';
+          default:
+            return 'unknown';
+        }
+      }();
+      try {
+        await ApiService.mutate('technicianStatus.update', input: {
+          'locationPermission': permStr,
+          'locationServiceEnabled': enabled,
+          'devicePlatform': platform,
+        });
+      } catch (_) {}
 
       if (!ok && mounted) {
         // Show an explicit prompt once (banner will remain until fixed).

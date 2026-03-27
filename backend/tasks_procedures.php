@@ -1203,6 +1203,22 @@ function _ensureTechnicianLocationRequestsSchema(): void {
     $done = true;
 }
 
+function _ensureTechnicianDeviceStatusSchema(): void {
+    global $db;
+    static $done = false;
+    if ($done) return;
+    $db->exec("CREATE TABLE IF NOT EXISTS technician_device_status (
+        technician_id INT PRIMARY KEY,
+        location_permission VARCHAR(32) NULL,
+        location_service_enabled TINYINT(1) DEFAULT 0,
+        app_version VARCHAR(32) NULL,
+        device_platform VARCHAR(16) NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_updated (updated_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $done = true;
+}
+
 function _requireAdminStaffSupervisor(array $ctx): void {
     global $db;
     $userId = (int)($ctx['userId'] ?? 0);
@@ -1470,18 +1486,21 @@ function technicianLocation_adminSet($input, $ctx) {
 function technicianLocation_technicians($input, $ctx) {
     global $db;
     _requireAdminStaffSupervisor($ctx);
+    _ensureTechnicianDeviceStatusSchema();
 
     $search = trim((string)($input['search'] ?? ''));
     $params = [];
-    $sql = "SELECT id, name, email, phone, role
-            FROM users
-            WHERE LOWER(TRIM(role)) = 'technician'";
+    $sql = "SELECT u.id, u.name, u.email, u.phone,
+                   s.location_permission, s.location_service_enabled, s.app_version, s.device_platform, s.updated_at AS status_updated_at
+            FROM users u
+            LEFT JOIN technician_device_status s ON s.technician_id = u.id
+            WHERE LOWER(TRIM(u.role)) = 'technician'";
     if ($search !== '') {
-        $sql .= " AND (name LIKE ? OR email LIKE ? OR phone LIKE ?)";
+        $sql .= " AND (u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ?)";
         $s = '%' . $search . '%';
         $params = [$s, $s, $s];
     }
-    $sql .= " ORDER BY name ASC";
+    $sql .= " ORDER BY u.name ASC";
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1492,9 +1511,57 @@ function technicianLocation_technicians($input, $ctx) {
             'name' => $r['name'] ?? '',
             'email' => $r['email'] ?? null,
             'phone' => $r['phone'] ?? null,
+            'status' => [
+                'locationPermission' => $r['location_permission'] ?? null,
+                'locationServiceEnabled' => (int)($r['location_service_enabled'] ?? 0) === 1,
+                'appVersion' => $r['app_version'] ?? null,
+                'devicePlatform' => $r['device_platform'] ?? null,
+                'updatedAt' => $r['status_updated_at'] ?? null,
+            ],
         ];
     }
     return ['rows' => $out];
+}
+
+/**
+ * Technician device: update latest permission/service status for admin monitoring.
+ * input: { locationPermission: 'always'|'while_in_use'|'denied'|'denied_forever'|'unknown', locationServiceEnabled: bool, appVersion?: string, devicePlatform?: string }
+ */
+function technicianStatus_update($input, $ctx) {
+    global $db;
+    $techId = (int)($ctx['userId'] ?? 0);
+    if ($techId <= 0) throw new Exception('UNAUTHORIZED');
+
+    $roleStmt = $db->prepare("SELECT role FROM users WHERE id = ?");
+    $roleStmt->execute([$techId]);
+    $role = strtolower(trim((string)($roleStmt->fetchColumn() ?? '')));
+    if ($role !== 'technician') {
+        // allow staff testing, but still restrict to logged-in users
+    }
+
+    _ensureTechnicianDeviceStatusSchema();
+
+    $perm = strtolower(trim((string)($input['locationPermission'] ?? 'unknown')));
+    $allowed = ['always', 'while_in_use', 'denied', 'denied_forever', 'unknown'];
+    if (!in_array($perm, $allowed, true)) $perm = 'unknown';
+    $svc = !empty($input['locationServiceEnabled']) ? 1 : 0;
+    $appVerRaw = trim((string)($input['appVersion'] ?? ''));
+    $appVer = $appVerRaw !== '' ? mb_substr($appVerRaw, 0, 32) : null;
+    $platRaw = trim((string)($input['devicePlatform'] ?? ''));
+    $plat = $platRaw !== '' ? mb_substr($platRaw, 0, 16) : null;
+
+    $stmt = $db->prepare("
+        INSERT INTO technician_device_status (technician_id, location_permission, location_service_enabled, app_version, device_platform)
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            location_permission = VALUES(location_permission),
+            location_service_enabled = VALUES(location_service_enabled),
+            app_version = VALUES(app_version),
+            device_platform = VALUES(device_platform),
+            updated_at = CURRENT_TIMESTAMP
+    ");
+    $stmt->execute([$techId, $perm, $svc, $appVer, $plat]);
+    return ['success' => true];
 }
 
 /**

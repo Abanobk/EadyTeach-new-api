@@ -105,14 +105,36 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
                     final r = techs[i];
                     final name = (r['name'] ?? 'فني').toString();
                     final id = r['id'];
+                    final st = (r['status'] is Map) ? Map<String, dynamic>.from(r['status']) : <String, dynamic>{};
+                    final perm = (st['locationPermission'] ?? '').toString();
+                    final svc = st['locationServiceEnabled'] == true;
+                    final updatedAt = (st['updatedAt'] ?? '').toString();
+                    final ok = svc && perm == 'always';
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundColor: AppColors.primary.withOpacity(0.2),
                         child: Text(name.isNotEmpty ? name.substring(0, 1) : 'ف', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
                       ),
                       title: Text(name, style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w800)),
-                      subtitle: Text((r['phone'] ?? r['email'] ?? '').toString(), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
-                      trailing: Text('#$id', style: const TextStyle(color: AppColors.muted)),
+                      subtitle: Text(
+                        '${(r['phone'] ?? r['email'] ?? '').toString()}${updatedAt.isNotEmpty ? ' • آخر تحديث: $updatedAt' : ''}',
+                        style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('#$id', style: const TextStyle(color: AppColors.muted)),
+                          const SizedBox(height: 4),
+                          Icon(
+                            ok ? Icons.gps_fixed : Icons.gps_off,
+                            size: 18,
+                            color: ok ? Colors.green : Colors.orange,
+                          ),
+                        ],
+                      ),
                       onTap: () => Navigator.pop(ctx, r),
                     );
                   },

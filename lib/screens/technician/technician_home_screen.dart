@@ -111,19 +111,19 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: AppThemeDecorations.cardColor(ctx),
-          title: Text('تفعيل استخدام الموقع', style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w900)),
+          title: Text('تفعيل استخدام الموقع', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w900)),
           content: Text(
             'لتفعيل استخدام الموقع:\n'
             '1) افتح: الإعدادات → التطبيقات → Easy Tech\n'
             '2) الأذونات → الموقع\n'
             '3) اختر: "السماح عند استخدام التطبيق" أو "السماح دائمًا" (إن وُجد)\n\n'
             'ملاحظة: بعض الهواتف بتظهر "السماح دائمًا" بعد اختيار "أثناء الاستخدام" مرة أولاً.',
-            style: const TextStyle(color: AppColors.muted, height: 1.35),
+            style: TextStyle(color: AppColors.muted, height: 1.35),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('إغلاق', style: TextStyle(color: AppColors.muted)),
+              child: Text('إغلاق', style: TextStyle(color: AppColors.muted)),
             ),
             ElevatedButton(
               onPressed: () {

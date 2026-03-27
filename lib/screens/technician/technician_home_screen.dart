@@ -87,11 +87,11 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
         });
       } catch (_) {}
 
-      // (اختياري) إشعار بسيط مرة واحدة بدون ذكر "الخلفية" أو أي تفاصيل تقنية.
+      // (اختياري) إشعار بسيط مرة واحدة بدون تفاصيل تقنية.
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('فضلاً فعّل إذن الموقع: "السماح الدائم".'),
+            content: Text('فضلاً فعّل استخدام الموقع للتطبيق.'),
             backgroundColor: Colors.orange,
             duration: Duration(seconds: 4),
           ),
@@ -111,13 +111,13 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: AppThemeDecorations.cardColor(ctx),
-          title: Text('تفعيل السماح الدائم', style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w900)),
+          title: Text('تفعيل استخدام الموقع', style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w900)),
           content: Text(
-            'لو مش لاقي اختيار "السماح الدائم":\n'
+            'لتفعيل استخدام الموقع:\n'
             '1) افتح: الإعدادات → التطبيقات → Easy Tech\n'
             '2) الأذونات → الموقع\n'
-            '3) اختر: "السماح دائمًا"\n\n'
-            'بعض الهواتف بتظهر "السماح دائمًا" بعد ما تختار "أثناء الاستخدام" مرة أولاً.',
+            '3) اختر: "السماح عند استخدام التطبيق" أو "السماح دائمًا" (إن وُجد)\n\n'
+            'ملاحظة: بعض الهواتف بتظهر "السماح دائمًا" بعد اختيار "أثناء الاستخدام" مرة أولاً.',
             style: const TextStyle(color: AppColors.muted, height: 1.35),
           ),
           actions: [
@@ -389,7 +389,7 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
                       const SizedBox(width: 10),
                       const Expanded(
                         child: Text(
-                          'فضلاً فعّل إذن الموقع: "السماح الدائم".',
+                          'فضلاً فعّل استخدام الموقع للتطبيق.',
                           style: TextStyle(color: Colors.orange, fontSize: 12.5, fontWeight: FontWeight.w700, height: 1.25),
                         ),
                       ),

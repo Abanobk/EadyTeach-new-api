@@ -1200,6 +1200,9 @@ try {
         case 'technicianLocation.adminSet':
             $result = technicianLocation_adminSet($input ?? [], $ctx);
             break;
+        case 'technicianLocation.technicians':
+            $result = technicianLocation_technicians($input ?? [], $ctx);
+            break;
 
         // ── Quotations ────────────────────────────────────────
         case 'quotations.list':

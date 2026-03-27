@@ -53,7 +53,22 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
   }
 
   Future<void> _openTechPicker() async {
-    if (_latest.isEmpty) return;
+    // Always allow picking technicians even when no location points exist.
+    List<Map<String, dynamic>> techs = [];
+    try {
+      final res = await ApiService.query('technicianLocation.technicians');
+      final raw = res['data'];
+      final rows = (raw is Map && raw['rows'] is List) ? (raw['rows'] as List) : const [];
+      techs = rows.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {}
+    if (techs.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('لا يوجد فنيين في النظام أو لا توجد صلاحيات'), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
     final picked = await showModalBottomSheet<Map<String, dynamic>?>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -84,19 +99,18 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
               const SizedBox(height: 8),
               Expanded(
                 child: ListView.builder(
-                  itemCount: _latest.length,
+                  itemCount: techs.length,
                   itemBuilder: (_, i) {
-                    final r = _latest[i];
-                    final name = (r['technicianName'] ?? 'فني').toString();
-                    final id = r['technicianId'];
-                    final createdAt = (r['createdAt'] ?? '').toString();
+                    final r = techs[i];
+                    final name = (r['name'] ?? 'فني').toString();
+                    final id = r['id'];
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundColor: AppColors.primary.withOpacity(0.2),
                         child: Text(name.isNotEmpty ? name.substring(0, 1) : 'ف', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
                       ),
                       title: Text(name, style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w800)),
-                      subtitle: Text('آخر ظهور: $createdAt', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                      subtitle: Text((r['phone'] ?? r['email'] ?? '').toString(), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
                       trailing: Text('#$id', style: const TextStyle(color: AppColors.muted)),
                       onTap: () => Navigator.pop(ctx, r),
                     );
@@ -109,7 +123,7 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
       ),
     );
     if (picked == null) return;
-    _selectTech(picked['technicianId'], picked['technicianName']);
+    _selectTech(picked['id'], picked['name']);
   }
 
   void _selectTech(dynamic id, dynamic name) {

@@ -1436,6 +1436,40 @@ function technicianLocation_adminSet($input, $ctx) {
     return ['success' => true];
 }
 
+/**
+ * Admin: list technicians for tracking module (independent of saved locations).
+ * input: { search?: string }
+ */
+function technicianLocation_technicians($input, $ctx) {
+    global $db;
+    _requireAdminStaffSupervisor($ctx);
+
+    $search = trim((string)($input['search'] ?? ''));
+    $params = [];
+    $sql = "SELECT id, name, email, phone, role
+            FROM users
+            WHERE LOWER(TRIM(role)) = 'technician'";
+    if ($search !== '') {
+        $sql .= " AND (name LIKE ? OR email LIKE ? OR phone LIKE ?)";
+        $s = '%' . $search . '%';
+        $params = [$s, $s, $s];
+    }
+    $sql .= " ORDER BY name ASC";
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $out = [];
+    foreach ($rows as $r) {
+        $out[] = [
+            'id' => (int)($r['id'] ?? 0),
+            'name' => $r['name'] ?? '',
+            'email' => $r['email'] ?? null,
+            'phone' => $r['phone'] ?? null,
+        ];
+    }
+    return ['rows' => $out];
+}
+
 // ─── Quotations ────────────────────────────────────────────────
 function _ensureQuotationsTable() {
     global $db;

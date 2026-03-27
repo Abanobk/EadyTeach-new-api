@@ -539,6 +539,51 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return up;
   }
 
+  /// إجماليات عرض السعر للعميل: مبنية على سعر البيع للعميل في كل بند.
+  /// إذا كان `subtotal` المخزّن يطابق مجموع البنود (ضمن هامش) نستخدم المخزن؛ وإلا نُعيد حساب التركيبات والخصم والنهائي (عروض قديمة خُزن فيها الإجمالي على أساس سعر التاجر).
+  Map<String, double> _clientDisplayTotals() {
+    final q = _quotation;
+    if (q == null) {
+      return {'subtotal': 0, 'installationAmount': 0, 'discountAmount': 0, 'totalAmount': 0};
+    }
+    final items = (q['items'] as List? ?? []);
+    var lineSum = 0.0;
+    for (final raw in items) {
+      if (raw is! Map) continue;
+      final im = Map<String, dynamic>.from(raw);
+      final qty = int.tryParse(im['qty']?.toString() ?? im['quantity']?.toString() ?? '1') ?? 1;
+      lineSum += _pdfClientUnitPriceForItem(im) * qty;
+    }
+    final storedSub = double.tryParse(q['subtotal']?.toString() ?? '0') ?? 0.0;
+    final instPct = double.tryParse(q['installationPercent']?.toString() ?? '0') ?? 0.0;
+    final discPct = double.tryParse(q['discountPercent']?.toString() ?? '0') ?? 0.0;
+    final instStored = double.tryParse(q['installationAmount']?.toString() ?? '0') ?? 0.0;
+    final discStored = double.tryParse(q['discountAmount']?.toString() ?? '0') ?? 0.0;
+    final totalStored = double.tryParse(q['totalAmount']?.toString() ?? '0') ?? 0.0;
+
+    const tol = 1.5;
+    if ((lineSum - storedSub).abs() <= tol) {
+      return {
+        'subtotal': storedSub,
+        'installationAmount': instStored,
+        'discountAmount': discStored,
+        'totalAmount': totalStored,
+      };
+    }
+
+    final sub = lineSum;
+    final inst = instPct > 0 ? sub * instPct / 100.0 : (storedSub > 0 ? instStored * (sub / storedSub) : instStored);
+    final disc = discPct > 0 ? sub * discPct / 100.0 : (storedSub > 0 ? discStored * (sub / storedSub) : discStored);
+    var tot = sub + inst - disc;
+    if (tot < 0) tot = 0;
+    return {
+      'subtotal': sub,
+      'installationAmount': inst,
+      'discountAmount': disc,
+      'totalAmount': tot,
+    };
+  }
+
   /// اسم الموزع: من السيرفر (`dealer_user_id` → `dealerName`). لا نستبدله باسم المستخدم الحالي لو كان مسؤولاً (يُظهر الموزع المختار عند إنشاء العرض وليس اسم المسجل).
   String _resolvedDealerNameForPdf(Map<String, dynamic> q) {
     final dn = q['dealerName']?.toString().trim();
@@ -629,9 +674,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   }
 
   Map<String, double> _dealerPricingSnapshot() {
-    final qSubtotal = double.tryParse(_quotation?['subtotal']?.toString() ?? '0') ?? 0.0;
-    final qDiscountAmount = double.tryParse(_quotation?['discountAmount']?.toString() ?? '0') ?? 0.0;
-    final qInstallationAmount = double.tryParse(_quotation?['installationAmount']?.toString() ?? '0') ?? 0.0;
+    final ct = _clientDisplayTotals();
+    final qSubtotal = ct['subtotal'] ?? 0.0;
+    final qDiscountAmount = ct['discountAmount'] ?? 0.0;
+    final qInstallationAmount = ct['installationAmount'] ?? 0.0;
     final purchaseRequestStatusNorm = (_quotation?['purchaseRequestStatus'] ?? 'none')
         .toString()
         .trim()
@@ -708,45 +754,13 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     final arabicFont = await PdfGoogleFonts.cairoRegular();
     final arabicBold = await PdfGoogleFonts.cairoBold();
     final items = (q['items'] as List? ?? []);
-    final subtotalRaw = double.tryParse(q['subtotal']?.toString() ?? '0') ?? 0;
     final installPct = double.tryParse(q['installationPercent']?.toString() ?? '0') ?? 0;
-    final installAmtRaw = double.tryParse(q['installationAmount']?.toString() ?? '0') ?? 0;
     final discountPct = double.tryParse(q['discountPercent']?.toString() ?? '0') ?? 0;
-    final discountAmtRaw = double.tryParse(q['discountAmount']?.toString() ?? '0') ?? 0;
-    final totalAmtRaw = double.tryParse(q['totalAmount']?.toString() ?? '0') ?? 0;
-
-    double subtotal = subtotalRaw;
-    double installAmt = installAmtRaw;
-    double discountAmt = discountAmtRaw;
-    double totalAmt = totalAmtRaw;
-
-    var anyLegacyClientPrice = false;
-    var subRecalc = 0.0;
-    for (final raw in items) {
-      if (raw is! Map) continue;
-      final im = Map<String, dynamic>.from(raw);
-      final qty = int.tryParse(im['qty']?.toString() ?? im['quantity']?.toString() ?? '1') ?? 1;
-      final rawUp = double.tryParse(im['unitPrice']?.toString() ?? '0') ?? 0;
-      final cu = _pdfClientUnitPriceForItem(im);
-      if ((cu - rawUp).abs() > 0.02) anyLegacyClientPrice = true;
-      subRecalc += cu * qty;
-    }
-    if (anyLegacyClientPrice && subtotalRaw > 0) {
-      final ratio = subRecalc / subtotalRaw;
-      subtotal = subRecalc;
-      if (installPct > 0) {
-        installAmt = subRecalc * installPct / 100.0;
-      } else {
-        installAmt = installAmtRaw * ratio;
-      }
-      if (discountPct > 0) {
-        discountAmt = subRecalc * discountPct / 100.0;
-      } else {
-        discountAmt = discountAmtRaw * ratio;
-      }
-      totalAmt = subRecalc + installAmt - discountAmt;
-      if (totalAmt < 0) totalAmt = 0;
-    }
+    final ct = _clientDisplayTotals();
+    final subtotal = ct['subtotal'] ?? 0.0;
+    final installAmt = ct['installationAmount'] ?? 0.0;
+    final discountAmt = ct['discountAmount'] ?? 0.0;
+    final totalAmt = ct['totalAmount'] ?? 0.0;
 
     final Map<int, pw.ImageProvider> itemImages = {};
     for (int i = 0; i < items.length; i++) {
@@ -917,7 +931,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           final clientName = _quotation!['clientName'] as String? ?? '';
           final rawPhone = (_quotation!['clientPhone'] as String? ?? '').replaceAll(RegExp(r'[^0-9]'), '');
           final intlPhone = rawPhone.startsWith('0') ? '2$rawPhone' : (rawPhone.startsWith('2') ? rawPhone : '2$rawPhone');
-          final totalAmt = double.tryParse(_quotation!['totalAmount']?.toString() ?? '0') ?? 0;
+          final totalAmt = _clientDisplayTotals()['totalAmount'] ?? 0;
           final msgText = 'مرحباً $clientName,\n\nمرفق عرض السعر رقم $refNumber\nالإجمالي: ${totalAmt.toStringAsFixed(0)} ج.م\n\nشكراً لثقتكم بنا - Easy Tech';
           await _openWhatsAppWithMessage(msgText: msgText, phone: intlPhone.isNotEmpty ? intlPhone : null);
         }
@@ -1389,12 +1403,13 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         purchaseRequestStatusNorm != 'requested' &&
         purchaseRequestStatusNorm != 'accepted';
     final purchaseItems = (_quotation?['purchaseItems'] as List? ?? []);
-    final qSubtotal = double.tryParse(_quotation?['subtotal']?.toString() ?? '0') ?? 0.0;
-    // For dealer admin pricing we must exclude "تركيبات/installation" and exclude client-wide discount effects
-    // except the manual discount the dealer entered for their client (discountAmount).
-    final qDiscountAmount = double.tryParse(_quotation?['discountAmount']?.toString() ?? '0') ?? 0.0;
-    final qOriginalTotal = qSubtotal; // official product-only total (no installation)
-    final qFinalTotal = (qSubtotal - qDiscountAmount).clamp(0.0, double.infinity); // after dealer's discount to client (no installation)
+    final clientTotals = _quotation != null ? _clientDisplayTotals() : null;
+    final qSubtotal = clientTotals?['subtotal'] ?? 0.0;
+    final qDiscountAmount = clientTotals?['discountAmount'] ?? 0.0;
+    final qClientInstallation = clientTotals?['installationAmount'] ?? 0.0;
+    final qClientTotalAmount = clientTotals?['totalAmount'] ?? 0.0;
+    final qOriginalTotal = qSubtotal;
+    final qFinalTotal = (qSubtotal - qDiscountAmount).clamp(0.0, double.infinity);
     // نفس منطق PDF: مجموع سعر شراء التاجر من البنود (dealerUnitPrice + محاذاة بالفهرس)، وليس purchaseTotalAmount من المعاينة فقط.
     final dealerSnap = _quotation != null ? _dealerPricingSnapshot() : null;
     final qDealerTotal = dealerSnap?['dealerTotal'] ?? 0.0;
@@ -1635,25 +1650,25 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                   padding: const EdgeInsets.all(12),
                                   child: Column(
                                     children: [
-                                      _TotalRow(label: 'الإجمالي الجزئي', value: '${double.tryParse(_quotation!['subtotal']?.toString() ?? '0')?.toStringAsFixed(0) ?? 0} ج.م'),
-                                      if (double.tryParse(_quotation!['installationAmount']?.toString() ?? '0') != 0)
+                                      _TotalRow(label: 'الإجمالي الجزئي', value: '${qSubtotal.toStringAsFixed(0)} ج.م'),
+                                      if (qClientInstallation != 0)
                                         _TotalRow(
-                                          label: 'تركيبات (${double.tryParse(_quotation!['installationPercent']?.toString() ?? '0')?.toStringAsFixed(0)}%)',
-                                          value: '${double.tryParse(_quotation!['installationAmount']?.toString() ?? '0')?.toStringAsFixed(0) ?? 0} ج.م',
+                                          label: 'تركيبات (${double.tryParse(_quotation!['installationPercent']?.toString() ?? '0')?.toStringAsFixed(0) ?? 0}%)',
+                                          value: '${qClientInstallation.toStringAsFixed(0)} ج.م',
                                         ),
-                                      if ((double.tryParse(_quotation!['discountAmount']?.toString() ?? '0') ?? 0) > 0)
+                                      if (qDiscountAmount > 0)
                                         _TotalRow(
                                           label: (double.tryParse(_quotation!['discountPercent']?.toString() ?? '0') ?? 0) > 0
                                               ? 'خصم (${double.tryParse(_quotation!['discountPercent']?.toString() ?? '0')?.toStringAsFixed(0)}%)'
                                               : 'خصم',
-                                          value: '- ${double.tryParse(_quotation!['discountAmount']?.toString() ?? '0')?.toStringAsFixed(0) ?? 0} ج.م',
+                                          value: '- ${qDiscountAmount.toStringAsFixed(0)} ج.م',
                                         ),
                                       const SizedBox(height: 4),
                                       Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
                                           const Text('الإجمالي النهائي', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w900, fontSize: 15)),
-                                          Text('${double.tryParse(_quotation!['totalAmount']?.toString() ?? '0')?.toStringAsFixed(0) ?? 0} ج.م',
+                                          Text('${qClientTotalAmount.toStringAsFixed(0)} ج.م',
                                               style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 18)),
                                         ],
                                       ),

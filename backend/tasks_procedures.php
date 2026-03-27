@@ -1926,6 +1926,31 @@ function quotations_list($ctx) {
     return $result;
 }
 
+/**
+ * إجمالي سطر البند: مسار ستائر بالمتر = سعر المتر × المتر التجاري لمسار واحد × عدد المسارات.
+ */
+function _quotation_item_line_total(array $item, float $unitPrice): float {
+    $qty = (int)($item['quantity'] ?? $item['qty'] ?? 1);
+    if ($qty <= 0) {
+        $qty = 1;
+    }
+    $cfg = $item['configuration'] ?? null;
+    if (is_string($cfg)) {
+        $decoded = json_decode($cfg, true);
+        $cfg = is_array($decoded) ? $decoded : null;
+    }
+    if (is_array($cfg) && ($cfg['pricingMode'] ?? '') === 'curtain_per_meter') {
+        $comm = $cfg['curtainCommercialM'] ?? null;
+        if ($comm !== null && $comm !== '') {
+            $commf = (float)$comm;
+            if ($commf > 0) {
+                return $unitPrice * $commf * $qty;
+            }
+        }
+    }
+    return $unitPrice * $qty;
+}
+
 function quotations_create($input, $ctx) {
     global $db;
     _ensureQuotationsTable();
@@ -1988,7 +2013,7 @@ function quotations_create($input, $ctx) {
         }
 
         $item['qty'] = $qty;
-        $item['totalPrice'] = $unitPrice * $qty;
+        $item['totalPrice'] = _quotation_item_line_total($item, $unitPrice);
         $subtotal += $item['totalPrice'];
     }
     unset($item);
@@ -2128,7 +2153,7 @@ function quotations_update($input, $ctx) {
         if ($qty <= 0) $qty = 1;
         $unitPrice = (float)($item['unitPrice'] ?? 0);
         $item['qty'] = $qty;
-        $item['totalPrice'] = $unitPrice * $qty;
+        $item['totalPrice'] = _quotation_item_line_total($item, $unitPrice);
         $subtotal += $item['totalPrice'];
     }
     unset($item);
@@ -2319,7 +2344,7 @@ function quotations_requestPurchase($input, $ctx) {
                     $itemSubtotal = (float)($item['totalPrice'] ?? 0);
                     if ($itemSubtotal <= 0) {
                         $qUnit = (float)($item['unitPrice'] ?? 0);
-                        $itemSubtotal = $qUnit * $qty;
+                        $itemSubtotal = _quotation_item_line_total($item, $qUnit);
                     }
                     $share = $quoteSubtotal > 0 ? ($itemSubtotal / $quoteSubtotal) : 0.0;
                     // When waiting (e.g. stock = 0 / minStock not met), no discount should be applied
@@ -2335,7 +2360,11 @@ function quotations_requestPurchase($input, $ctx) {
             }
         }
 
-        $dealerTotal = $dealerUnitPrice * $qty;
+        // عند انتظار المخزون/الخصم: سعر التاجر المُشتق يكون لكل «قطعة عدّ» وليس بالمتر — نضرب في الكمية فقط.
+        // غير ذلك: سعر/م × إجمالي أمتار تجارية (مسار ستائر) أو سعر × كمية.
+        $dealerTotal = ($waitingMessage !== null && $waitingMessage !== '')
+            ? ($dealerUnitPrice * $qty)
+            : _quotation_item_line_total($item, $dealerUnitPrice);
         $purchaseTotal += $dealerTotal;
 
         $purchaseItems[] = [
@@ -2500,7 +2529,7 @@ function quotations_previewDealerPurchase($input, $ctx) {
                     $itemSubtotal = (float)($item['totalPrice'] ?? 0);
                     if ($itemSubtotal <= 0) {
                         $qUnit = (float)($item['unitPrice'] ?? 0);
-                        $itemSubtotal = $qUnit * $qty;
+                        $itemSubtotal = _quotation_item_line_total($item, $qUnit);
                     }
                     $share = $quoteSubtotal > 0 ? ($itemSubtotal / $quoteSubtotal) : 0.0;
                     // When waiting (e.g. stock = 0 / minStock not met), no discount should be applied
@@ -2516,7 +2545,9 @@ function quotations_previewDealerPurchase($input, $ctx) {
             }
         }
 
-        $dealerTotal = $dealerUnitPrice * $qty;
+        $dealerTotal = ($waitingMessage !== null && $waitingMessage !== '')
+            ? ($dealerUnitPrice * $qty)
+            : _quotation_item_line_total($item, $dealerUnitPrice);
         $purchaseTotal += $dealerTotal;
 
         $purchaseItems[] = [
@@ -2700,7 +2731,7 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
                                     $itemSubtotal = (float)($item['totalPrice'] ?? 0);
                                     if ($itemSubtotal <= 0) {
                                         $qUnit = (float)($item['unitPrice'] ?? 0);
-                                        $itemSubtotal = $qUnit * $qty;
+                                        $itemSubtotal = _quotation_item_line_total($item, $qUnit);
                                     }
                                     $share = $quoteSubtotal > 0 ? ($itemSubtotal / $quoteSubtotal) : 0.0;
                                     // When waiting (e.g. stock = 0 / minStock not met), no discount should be applied
@@ -2718,7 +2749,9 @@ function quotations_acceptPurchaseRequest($input, $ctx) {
                 }
             }
 
-            $dealerTotal = $dealerUnitPrice * $qty;
+            $dealerTotal = ($waitingMessage !== null && $waitingMessage !== '')
+                ? ($dealerUnitPrice * $qty)
+                : _quotation_item_line_total($item, $dealerUnitPrice);
             $purchaseTotal += $dealerTotal;
 
             $purchaseItems[] = [

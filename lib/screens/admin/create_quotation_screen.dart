@@ -704,11 +704,33 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
     return out < 0 ? 0 : out;
   }
 
-  double get _subtotal => _cartItems.fold(0.0, (sum, item) {
-        final up = _effectiveUnitPrice(item);
-        final q = (item['qty'] as int?) ?? 1;
-        return sum + up * q;
-      });
+  /// متر تجاري لمسار واحد × عدد المسارات؛ `null` إن لم يكن بند مسار بالمتر.
+  double? _curtainCommercialMetersTotal(Map<String, dynamic> item) {
+    final cfg = item['configuration'];
+    if (cfg is! Map) return null;
+    if (cfg['pricingMode']?.toString() != 'curtain_per_meter') return null;
+    final commRaw = cfg['curtainCommercialM'];
+    double? comm;
+    if (commRaw is num) {
+      comm = commRaw.toDouble();
+    } else {
+      comm = double.tryParse(commRaw?.toString() ?? '');
+    }
+    if (comm == null || comm <= 0) return null;
+    final q = (item['qty'] as int?) ?? 1;
+    return comm * q;
+  }
+
+  /// إجمالي سطر السلة: للمسار = سعر/م فعّال × إجمالي الأمتار التجارية؛ وإلا سعر × كمية.
+  double _lineAmountForCartItem(Map<String, dynamic> item) {
+    final up = _effectiveUnitPrice(item);
+    final q = (item['qty'] as int?) ?? 1;
+    final meters = _curtainCommercialMetersTotal(item);
+    if (meters != null) return up * meters;
+    return up * q;
+  }
+
+  double get _subtotal => _cartItems.fold(0.0, (sum, item) => sum + _lineAmountForCartItem(item));
   double get _installationAmount => _addInstallation ? _subtotal * _installationPercent / 100 : 0;
   double get _discountAmount {
     if (!_addDiscount) return 0;
@@ -1346,7 +1368,17 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                               if (item['dealerDiscountWaiting'] != null && item['dealerDiscountWaiting'].toString().isNotEmpty)
                                 Text(item['dealerDiscountWaiting'].toString(), style: const TextStyle(color: AppColors.error, fontSize: 10)),
                               Text(
-                                  '${_effectiveUnitPrice(item).toStringAsFixed(0)} × ${item['qty']} = ${(_effectiveUnitPrice(item) * (item['qty'] as int)).toStringAsFixed(0)} ج.م',
+                                  (() {
+                                    final im = Map<String, dynamic>.from(item);
+                                    final up = _effectiveUnitPrice(im);
+                                    final line = _lineAmountForCartItem(im);
+                                    final m = _curtainCommercialMetersTotal(im);
+                                    if (m != null) {
+                                      return '${up.toStringAsFixed(0)} ج.م/م × ${m.toStringAsFixed(1)} م = ${line.toStringAsFixed(0)} ج.م';
+                                    }
+                                    final q = (item['qty'] as int?) ?? 1;
+                                    return '${up.toStringAsFixed(0)} × $q = ${line.toStringAsFixed(0)} ج.م';
+                                  })(),
                                   style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
                             ],
                           ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
+import '../../utils/quotation_line_pricing.dart';
 
 class ClientQuotationsScreen extends StatefulWidget {
   const ClientQuotationsScreen({super.key});
@@ -333,9 +334,14 @@ class _ClientQuotationDetailScreenState extends State<ClientQuotationDetailScree
                               ...(_quotation!['items'] as List? ?? []).asMap().entries.map((entry) {
                                 final idx = entry.key;
                                 final item = entry.value as Map;
-                                final unitPrice = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
-                                final qty = item['qty'] as int? ?? 1;
-                                final total = double.tryParse(item['totalPrice']?.toString() ?? '0') ?? (unitPrice * qty);
+                                final itemMap = Map<String, dynamic>.from(item);
+                                final unitPrice = quotationPdfClientUnitPriceForItem(itemMap);
+                                final qty = int.tryParse(item['qty']?.toString() ?? item['quantity']?.toString() ?? '1') ?? 1;
+                                final curtainM = quotationCurtainCommercialMetersForLine(itemMap);
+                                final storedTotal = double.tryParse(item['totalPrice']?.toString() ?? '0') ?? 0;
+                                final total = curtainM != null
+                                    ? quotationPdfClientLineAmount(itemMap)
+                                    : (storedTotal > 0 ? storedTotal : unitPrice * qty);
                                 return Column(
                                   children: [
                                     Padding(
@@ -353,7 +359,12 @@ class _ClientQuotationDetailScreenState extends State<ClientQuotationDetailScree
                                                   Text('لون: ${item['selectedColor']}', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
                                                 if (item['selectedVariant'] != null)
                                                   Text('نوع: ${item['selectedVariant']}', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
-                                                Text('${unitPrice.toStringAsFixed(0)} ج.م / قطعة', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+                                                Text(
+                                                  curtainM != null
+                                                      ? '${unitPrice.toStringAsFixed(0)} ج.م / م (تجاري)'
+                                                      : '${unitPrice.toStringAsFixed(0)} ج.م / قطعة',
+                                                  style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                                                ),
                                               ],
                                             ),
                                           ),

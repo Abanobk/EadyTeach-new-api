@@ -1,4 +1,3 @@
-import 'dart:convert' show jsonDecode;
 import 'dart:typed_data';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -17,6 +16,7 @@ import '../../providers/cart_provider.dart';
 import 'create_quotation_screen.dart';
 import '../../utils/pdf_saver_stub.dart'
     if (dart.library.html) '../../utils/pdf_saver_web.dart' as pdf_saver;
+import '../../utils/quotation_line_pricing.dart';
 
 class QuotationDetailScreen extends StatefulWidget {
   final int quotationId;
@@ -520,25 +520,6 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return s;
   }
 
-  /// عروض قديمة: السيرفر كان يخزن سعر شراء التاجر في `unitPrice` بينما `officialUnitPrice` هو سعر العرض للعميل.
-  static bool _pdfItemLooksLikeDealerPriceInClientSlot(Map<String, dynamic> item) {
-    final up = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
-    final official = double.tryParse(item['officialUnitPrice']?.toString() ?? '0') ?? 0;
-    final dealer = double.tryParse(item['dealerUnitPrice']?.toString() ?? '0') ?? 0;
-    if (official <= 0 || dealer <= 0) return false;
-    if (official <= up + 0.01) return false;
-    return (up - dealer).abs() < 0.02;
-  }
-
-  static double _pdfClientUnitPriceForItem(Map<String, dynamic> item) {
-    final up = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
-    if (_pdfItemLooksLikeDealerPriceInClientSlot(item)) {
-      final official = double.tryParse(item['officialUnitPrice']?.toString() ?? '0') ?? 0;
-      if (official > 0) return official;
-    }
-    return up;
-  }
-
   /// إجماليات عرض السعر للعميل: مبنية على سعر البيع للعميل في كل بند.
   /// إذا كان `subtotal` المخزّن يطابق مجموع البنود (ضمن هامش) نستخدم المخزن؛ وإلا نُعيد حساب التركيبات والخصم والنهائي (عروض قديمة خُزن فيها الإجمالي على أساس سعر التاجر).
   Map<String, double> _clientDisplayTotals() {
@@ -551,8 +532,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     for (final raw in items) {
       if (raw is! Map) continue;
       final im = Map<String, dynamic>.from(raw);
-      final qty = int.tryParse(im['qty']?.toString() ?? im['quantity']?.toString() ?? '1') ?? 1;
-      lineSum += _pdfClientUnitPriceForItem(im) * qty;
+      lineSum += quotationPdfClientLineAmount(im);
     }
     final storedSub = double.tryParse(q['subtotal']?.toString() ?? '0') ?? 0.0;
     final instPct = double.tryParse(q['installationPercent']?.toString() ?? '0') ?? 0.0;
@@ -717,7 +697,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           allLinesResolved = false;
           break;
         }
-        sumLines += du * qty;
+        final curtainM = quotationCurtainCommercialMetersForLine(item);
+        sumLines += du * (curtainM ?? qty);
       }
       if (allLinesResolved) {
         qDealerTotal = sumLines;
@@ -820,10 +801,13 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             final item = items[i] as Map;
             final itemMap = Map<String, dynamic>.from(item);
             final rawUp = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
-            final up = _pdfClientUnitPriceForItem(itemMap);
+            final up = quotationPdfClientUnitPriceForItem(itemMap);
             final qty = int.tryParse(item['qty']?.toString() ?? item['quantity']?.toString() ?? '1') ?? 1;
             final storedLine = double.tryParse(item['totalPrice']?.toString() ?? '0') ?? 0;
-            final tp = (up - rawUp).abs() > 0.02 ? (up * qty) : (storedLine > 0 ? storedLine : (rawUp * qty));
+            final curtainM = quotationCurtainCommercialMetersForLine(itemMap);
+            final tp = curtainM != null
+                ? quotationPdfClientLineAmount(itemMap)
+                : ((up - rawUp).abs() > 0.02 ? (up * qty) : (storedLine > 0 ? storedLine : (rawUp * qty)));
             final descriptionText = _pdfSafeText(item['description']?.toString());
             final hasImage = itemImages.containsKey(i);
             return pw.Container(
@@ -950,19 +934,6 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     }
   }
 
-  /// يفكّ `configuration` من بند العرض (Map أو JSON نصي).
-  Map<String, dynamic>? _parseQuotationItemConfiguration(dynamic raw) {
-    if (raw == null) return null;
-    if (raw is Map) return Map<String, dynamic>.from(raw as Map);
-    if (raw is String && raw.trim().isNotEmpty) {
-      try {
-        final d = jsonDecode(raw);
-        if (d is Map) return Map<String, dynamic>.from(d as Map);
-      } catch (_) {}
-    }
-    return null;
-  }
-
   /// ملاحظة مسار ستائر: متر فعلي vs متر تجاري (تسعير) وسعر/م تقريبي — يُعرض تحت اسم المنتج في PDF التاجر.
   String _dealerPdfCurtainNote(
     Map<String, dynamic> item, {
@@ -970,7 +941,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     double? dealerUnit,
     int qty = 1,
   }) {
-    final cfg = _parseQuotationItemConfiguration(item['configuration']);
+    final cfg = parseQuotationItemConfiguration(item['configuration']);
     if (cfg == null || cfg['pricingMode']?.toString() != 'curtain_per_meter') return '';
     final cmRaw = cfg['curtainLengthCm'];
     final commRaw = cfg['curtainCommercialM'];
@@ -994,12 +965,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     if (commVal != null && commVal > 0) {
       lines.add('متر تجاري (تسعير البيع، ليس الطول الفعلي فقط): ${commVal.toStringAsFixed(1)} م');
       if (soldUnit != null && soldUnit > 0) {
-        final rateSell = soldUnit / commVal;
-        lines.add('≈ ${rateSell.toStringAsFixed(0)} ج.م/م تجاري (بيع للعميل)');
+        lines.add('${soldUnit.toStringAsFixed(0)} ج.م/م (بيع للعميل)');
       }
       if (dealerUnit != null && dealerUnit > 0) {
-        final rateBuy = dealerUnit / commVal;
-        lines.add('≈ ${rateBuy.toStringAsFixed(0)} ج.م/م تجاري (شراء التاجر)');
+        lines.add('${dealerUnit.toStringAsFixed(0)} ج.م/م (شراء التاجر)');
       }
     }
     if (qty > 1) {
@@ -1109,7 +1078,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             final item = items[i] as Map;
             final itemMap = Map<String, dynamic>.from(item);
             final qty = int.tryParse(item['qty']?.toString() ?? item['quantity']?.toString() ?? '1') ?? 1;
-            final soldUnit = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0.0;
+            final soldUnit = quotationPdfClientUnitPriceForItem(itemMap);
             final dealerUnit = _dealerPurchaseUnitForLine(
                   i,
                   itemMap,
@@ -1119,9 +1088,11 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                   purchaseByProductId,
                 ) ??
                 0.0;
-            final lineProfit = (soldUnit - dealerUnit) * qty;
-            final dealerLineTotal = dealerUnit * qty;
-            final soldLineTotal = soldUnit * qty;
+            final curtainM = quotationCurtainCommercialMetersForLine(itemMap);
+            final lineMult = curtainM ?? qty.toDouble();
+            final lineProfit = (soldUnit - dealerUnit) * lineMult;
+            final dealerLineTotal = dealerUnit * lineMult;
+            final soldLineTotal = soldUnit * lineMult;
             final summary = itemMap['configurationSummary']?.toString().trim();
             final curtainNote = _dealerPdfCurtainNote(
               itemMap,
@@ -1538,11 +1509,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                   final item = entry.value as Map;
                                   final itemMap = Map<String, dynamic>.from(item);
                                   final unitPriceRaw = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
-                                  final unitPrice = _pdfClientUnitPriceForItem(itemMap);
-                                  final qty = item['qty'] as int? ?? 1;
-                                  final total = (unitPrice - unitPriceRaw).abs() > 0.02
-                                      ? (unitPrice * qty)
-                                      : (double.tryParse(item['totalPrice']?.toString() ?? '0') ?? (unitPriceRaw * qty));
+                                  final unitPrice = quotationPdfClientUnitPriceForItem(itemMap);
+                                  final qty = int.tryParse(item['qty']?.toString() ?? item['quantity']?.toString() ?? '1') ?? 1;
+                                  final curtainM = quotationCurtainCommercialMetersForLine(itemMap);
+                                  final total = curtainM != null
+                                      ? quotationPdfClientLineAmount(itemMap)
+                                      : ((unitPrice - unitPriceRaw).abs() > 0.02
+                                          ? (unitPrice * qty)
+                                          : (double.tryParse(item['totalPrice']?.toString() ?? '0') ?? (unitPriceRaw * qty)));
                                   final purchaseItemsList = (_quotation?['purchaseItems'] as List? ?? []);
                                   final purchaseByProductId = <int, Map<String, dynamic>>{};
                                   for (final raw in purchaseItemsList) {
@@ -1586,7 +1560,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                                           Text('لون: ${item['selectedColor']}', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
                                                         if (item['selectedVariant'] != null)
                                                           Text('نوع: ${item['selectedVariant']}', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
-                                                        Text('${unitPrice.toStringAsFixed(0)} ج.م / قطعة', style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+                                                        Text(
+                                                          curtainM != null
+                                                              ? '${unitPrice.toStringAsFixed(0)} ج.م / م (تجاري)'
+                                                              : '${unitPrice.toStringAsFixed(0)} ج.م / قطعة',
+                                                          style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                                                        ),
                                                         if (isDealer && dealerUnitResolved != null)
                                                           Builder(
                                                             builder: (_) {
@@ -1594,7 +1573,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                                                                   unitPrice;
                                                               final dealerUnit = dealerUnitResolved;
                                                               final profitPerUnit = unitPrice - dealerUnit;
-                                                              final profitTotal = profitPerUnit * qty;
+                                                              final lineMult = curtainM ?? qty.toDouble();
+                                                              final profitTotal = profitPerUnit * lineMult;
                                                               final wm = waitingMsg?.trim() ?? '';
 
                                                               return Column(

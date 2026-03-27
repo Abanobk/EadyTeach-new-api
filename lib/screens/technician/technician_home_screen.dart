@@ -87,13 +87,13 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
         });
       } catch (_) {}
 
+      // (اختياري) إشعار بسيط مرة واحدة بدون ذكر "الخلفية" أو أي تفاصيل تقنية.
       if (!ok && mounted) {
-        // Show an explicit prompt once (banner will remain until fixed).
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('لازم تفعّل إذن الموقع "سماح دائمًا" علشان الإدارة تقدر تطلب موقعك حتى لو التطبيق مقفول.'),
+            content: Text('فضلاً فعّل إذن الموقع: "السماح الدائم".'),
             backgroundColor: Colors.orange,
-            duration: Duration(seconds: 5),
+            duration: Duration(seconds: 4),
           ),
         );
       }
@@ -102,6 +102,45 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
     } finally {
       if (mounted) setState(() => _checkingLocationPerm = false);
     }
+  }
+
+  void _showAlwaysLocationHowTo() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: AppThemeDecorations.cardColor(ctx),
+          title: const Text('تفعيل السماح الدائم', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w900)),
+          content: const Text(
+            'لو مش لاقي اختيار "السماح الدائم":\n'
+            '1) افتح: الإعدادات → التطبيقات → Easy Tech\n'
+            '2) الأذونات → الموقع\n'
+            '3) اختر: "السماح دائمًا"\n\n'
+            'بعض الهواتف بتظهر "السماح دائمًا" بعد ما تختار "أثناء الاستخدام" مرة أولاً.',
+            style: TextStyle(color: AppColors.muted, height: 1.35),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إغلاق', style: TextStyle(color: AppColors.muted)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _openLocationSettings();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('فتح الإعدادات', style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _openLocationSettings() async {
@@ -350,20 +389,33 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
                       const SizedBox(width: 10),
                       const Expanded(
                         child: Text(
-                          'فعّل إذن الموقع "سماح دائمًا" علشان الإدارة تقدر تطلب موقعك في أي وقت حتى لو التطبيق مقفول.',
+                          'فضلاً فعّل إذن الموقع: "السماح الدائم".',
                           style: TextStyle(color: Colors.orange, fontSize: 12.5, fontWeight: FontWeight.w700, height: 1.25),
                         ),
                       ),
                       const SizedBox(width: 10),
-                      ElevatedButton(
-                        onPressed: _openLocationSettings,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Text('فتح الإعدادات', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ElevatedButton(
+                            onPressed: _openLocationSettings,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text('فتح الإعدادات', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                          ),
+                          const SizedBox(height: 6),
+                          GestureDetector(
+                            onTap: _showAlwaysLocationHowTo,
+                            child: const Text(
+                              'ازاي؟',
+                              style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w900, fontSize: 12, decoration: TextDecoration.underline),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

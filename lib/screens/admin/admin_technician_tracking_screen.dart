@@ -22,6 +22,7 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
   DateTime _day = DateTime.now();
   Map<String, dynamic>? _track;
   bool _settingManual = false;
+  bool _requestingNow = false;
 
   @override
   void initState() {
@@ -357,6 +358,34 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
     );
   }
 
+  Future<void> _requestTechnicianLocationNow() async {
+    final techId = _selectedTechId;
+    if (techId == null || _requestingNow) return;
+    setState(() => _requestingNow = true);
+    try {
+      await ApiService.mutate('technicianLocation.requestNow', input: {'technicianId': techId});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم إرسال طلب لوكيشن للفني الآن…'), backgroundColor: Colors.green),
+        );
+      }
+      // Give device a moment to respond then refresh.
+      Future.delayed(const Duration(seconds: 6), () async {
+        if (!mounted) return;
+        await _loadLatest();
+        await _loadTrack();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل إرسال الطلب: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _requestingNow = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -443,9 +472,9 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
           ),
           const SizedBox(width: 10),
           ElevatedButton.icon(
-            onPressed: (_selectedTechId == null) ? null : _openManualSetDialog,
-            icon: const Icon(Icons.edit_location_alt, size: 18),
-            label: const Text('تحديد يدوي', style: TextStyle(fontWeight: FontWeight.w800)),
+            onPressed: (_selectedTechId == null || _requestingNow) ? null : _requestTechnicianLocationNow,
+            icon: Icon(_requestingNow ? Icons.hourglass_top : Icons.my_location, size: 18),
+            label: Text(_requestingNow ? 'جاري الطلب…' : 'اطلب موقع الآن', style: const TextStyle(fontWeight: FontWeight.w800)),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.lightBlue,
               foregroundColor: Colors.white,

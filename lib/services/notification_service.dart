@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import '../screens/admin/admin_secretary_screen.dart';
@@ -41,6 +42,31 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       await Firebase.initializeApp();
     }
     debugPrint('[FCM Background] Received: ${message.notification?.title ?? message.data['title']}');
+
+    // Handle admin "location_request" silently: technician sends current location now.
+    final type = (message.data['type'] ?? message.data['refType'] ?? message.data['notification_type'])?.toString().toLowerCase().trim();
+    if (type == 'location_request') {
+      try {
+        final reqId = int.tryParse((message.data['requestId'] ?? message.data['refId'] ?? '').toString());
+        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) return;
+        LocationPermission perm = await Geolocator.checkPermission();
+        if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+        if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+        final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+        await ApiService.mutate('technicianLocation.update', input: {
+          'latitude': pos.latitude,
+          'longitude': pos.longitude,
+          'accuracy': pos.accuracy,
+          'source': 'request',
+          if (reqId != null) 'requestId': reqId,
+          if (message.data['taskId'] != null) 'taskId': int.tryParse(message.data['taskId'].toString()),
+        });
+      } catch (e) {
+        debugPrint('[LocationRequest] background failed: $e');
+      }
+      return;
+    }
 
     // نعرض إشعار محلي بالصوت والاهتزاز حتى لو كانت رسالة data فقط
     final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -322,6 +348,32 @@ class NotificationService {
   /// Show local notification for foreground messages
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
     debugPrint('[FCM Foreground] ${message.notification?.title}');
+
+    final type = (message.data['type'] ?? message.data['refType'] ?? message.data['notification_type'])?.toString().toLowerCase().trim();
+    if (type == 'location_request') {
+      // Technician device: send location immediately, no need to show UI notification.
+      try {
+        final reqId = int.tryParse((message.data['requestId'] ?? message.data['refId'] ?? '').toString());
+        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) return;
+        LocationPermission perm = await Geolocator.checkPermission();
+        if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+        if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+        final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+        await ApiService.mutate('technicianLocation.update', input: {
+          'latitude': pos.latitude,
+          'longitude': pos.longitude,
+          'accuracy': pos.accuracy,
+          'source': 'request',
+          if (reqId != null) 'requestId': reqId,
+          if (message.data['taskId'] != null) 'taskId': int.tryParse(message.data['taskId'].toString()),
+        });
+      } catch (e) {
+        debugPrint('[LocationRequest] foreground failed: $e');
+      }
+      return;
+    }
+
     final notification = message.notification;
     final title = notification?.title ??
         message.data['title']?.toString() ??

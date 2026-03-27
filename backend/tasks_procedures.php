@@ -1168,6 +1168,7 @@ function _ensureTechnicianLocationsSchema(): void {
         id INT AUTO_INCREMENT PRIMARY KEY,
         technician_id INT NOT NULL,
         task_id INT NULL,
+        request_id INT NULL,
         latitude DECIMAL(10,7) NOT NULL,
         longitude DECIMAL(10,7) NOT NULL,
         accuracy_m DECIMAL(10,2) NULL,
@@ -1175,7 +1176,29 @@ function _ensureTechnicianLocationsSchema(): void {
         source VARCHAR(32) DEFAULT 'mobile',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_tech_time (technician_id, created_at),
-        INDEX idx_task_time (task_id, created_at)
+        INDEX idx_task_time (task_id, created_at),
+        INDEX idx_req_time (request_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // Migrate older deployments
+    try { $db->exec("ALTER TABLE technician_locations ADD COLUMN IF NOT EXISTS request_id INT NULL"); } catch (\Exception $e) {}
+    try { $db->exec("ALTER TABLE technician_locations ADD INDEX idx_req_time (request_id, created_at)"); } catch (\Exception $e) {}
+    $done = true;
+}
+
+function _ensureTechnicianLocationRequestsSchema(): void {
+    global $db;
+    static $done = false;
+    if ($done) return;
+    $db->exec("CREATE TABLE IF NOT EXISTS technician_location_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        requested_by INT NOT NULL,
+        technician_id INT NOT NULL,
+        task_id INT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        error TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        fulfilled_at DATETIME NULL,
+        INDEX idx_tech_status_time (technician_id, status, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $done = true;
 }
@@ -1205,6 +1228,7 @@ function technicianLocation_update($input, $ctx) {
     $arrived = $input['arrived'] ?? false;
     $accuracy = $input['accuracy'] ?? null;
     $source = $input['source'] ?? 'mobile';
+    $requestId = $input['requestId'] ?? null;
 
     if ($lat !== null && $lng !== null) {
         try {
@@ -1216,10 +1240,11 @@ function technicianLocation_update($input, $ctx) {
             $arr = !empty($arrived) ? 1 : 0;
             $src = trim((string)$source);
             if ($src === '') $src = 'mobile';
+            $reqVal = ($requestId === null || $requestId === '') ? null : (int)$requestId;
             $stmt = $db->prepare("INSERT INTO technician_locations
-                (technician_id, task_id, latitude, longitude, accuracy_m, is_arrived, source)
-                VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$userId, $taskIdVal, $latF, $lngF, $accF, $arr, $src]);
+                (technician_id, task_id, request_id, latitude, longitude, accuracy_m, is_arrived, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$userId, $taskIdVal, $reqVal, $latF, $lngF, $accF, $arr, $src]);
         } catch (\Exception $e) {
             // ignore location storage errors
         }
@@ -1429,8 +1454,8 @@ function technicianLocation_adminSet($input, $ctx) {
     }
 
     $stmt = $db->prepare("INSERT INTO technician_locations
-        (technician_id, task_id, latitude, longitude, accuracy_m, is_arrived, source)
-        VALUES (?, ?, ?, ?, ?, 0, ?)");
+        (technician_id, task_id, request_id, latitude, longitude, accuracy_m, is_arrived, source)
+        VALUES (?, ?, NULL, ?, ?, ?, 0, ?)");
     $stmt->execute([$techId, $taskIdVal, $latF, $lngF, $accF, $src]);
 
     return ['success' => true];
@@ -1468,6 +1493,51 @@ function technicianLocation_technicians($input, $ctx) {
         ];
     }
     return ['rows' => $out];
+}
+
+/**
+ * Admin: ask technician device to send location now (via FCM).
+ * input: { technicianId: number, taskId?: number }
+ */
+function technicianLocation_requestNow($input, $ctx) {
+    global $db;
+    _requireAdminStaffSupervisor($ctx);
+    _ensureTechnicianLocationsSchema();
+    _ensureTechnicianLocationRequestsSchema();
+    require_once __DIR__ . '/notifications_procedures.php';
+
+    $adminId = (int)($ctx['userId'] ?? 0);
+    $techId = (int)($input['technicianId'] ?? 0);
+    if ($adminId <= 0 || $techId <= 0) throw new Exception('INVALID_ARGUMENT');
+
+    $taskId = $input['taskId'] ?? null;
+    $taskIdVal = ($taskId === null || $taskId === '') ? null : (int)$taskId;
+
+    $u = $db->prepare("SELECT id FROM users WHERE id = ? LIMIT 1");
+    $u->execute([$techId]);
+    if (!$u->fetchColumn()) throw new Exception('INVALID_ARGUMENT');
+
+    $reqStmt = $db->prepare("INSERT INTO technician_location_requests (requested_by, technician_id, task_id, status) VALUES (?, ?, ?, 'pending')");
+    $reqStmt->execute([$adminId, $techId, $taskIdVal]);
+    $reqId = (int)$db->lastInsertId();
+
+    $extra = [
+        'type' => 'location_request',
+        'requestId' => (string)$reqId,
+    ];
+    if ($taskIdVal !== null) $extra['taskId'] = (string)$taskIdVal;
+
+    $pushQueued = _notifyUser(
+        $techId,
+        'طلب إرسال الموقع الآن',
+        'سيتم إرسال موقعك تلقائياً الآن',
+        'location_request',
+        $reqId,
+        'location_request',
+        $extra
+    ) ? true : false;
+
+    return ['success' => true, 'requestId' => $reqId, 'pushQueued' => $pushQueued];
 }
 
 // ─── Quotations ────────────────────────────────────────────────

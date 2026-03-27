@@ -1203,6 +1203,9 @@ try {
         case 'technicianLocation.technicians':
             $result = technicianLocation_technicians($input ?? [], $ctx);
             break;
+        case 'technicianLocation.requestNow':
+            $result = technicianLocation_requestNow($input ?? [], $ctx);
+            break;
 
         // ── Quotations ────────────────────────────────────────
         case 'quotations.list':

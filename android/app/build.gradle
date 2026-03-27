@@ -7,15 +7,34 @@ plugins {
     id "com.google.gms.google-services"
 }
 
-// قراءة ملف key.properties إذا كان موجوداً
+// Load signing credentials from android/key.properties (do not commit secrets).
+// Google Play requires all release AAB/APKs to be signed with your upload key; this wires that keystore to the release build type.
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
-if (keystorePropertiesFile.exists()) {
+if (keystorePropertiesFile.exists() && keystorePropertiesFile.length() > 0) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+// Resolve keystore path once (android/app/<storeFile>) — same as file("upload-keystore.jks") from this module.
+def releaseKeystoreFile = keystorePropertiesFile.exists()
+    ? rootProject.file("app/${keystoreProperties.getProperty('storeFile', 'upload-keystore.jks')}")
+    : null
+
+// Pre-read strings so signingConfigs closure always gets non-null assignments when key.properties is present.
+def ksStorePassword = keystoreProperties.getProperty('storePassword')
+def ksKeyPassword = keystoreProperties.getProperty('keyPassword')
+def ksKeyAlias = keystoreProperties.getProperty('keyAlias')
+def hasUploadSigning = ksStorePassword && ksKeyPassword && ksKeyAlias && releaseKeystoreFile != null && releaseKeystoreFile.exists()
+
 android {
     namespace = "com.easytech.easy_tech_flutter"
+    // Fail fast only when key.properties is complete but the keystore file is missing.
+    if (ksStorePassword && ksKeyPassword && ksKeyAlias && releaseKeystoreFile != null && !releaseKeystoreFile.exists()) {
+        throw new GradleException(
+            "Release keystore not found: ${releaseKeystoreFile.absolutePath}. " +
+            "Place your upload-keystore.jks under android/app/ or update storeFile in android/key.properties."
+        )
+    }
     // ملاحظة: geolocator_android يتطلب Android SDK 36
     compileSdk = 36
     ndkVersion = "26.1.10909125"
@@ -38,15 +57,16 @@ android {
         versionName = flutter.versionName
     }
 
+    // Release signing: values from key.properties only (no passwords in this file).
     signingConfigs {
         release {
-            if (keystorePropertiesFile.exists()) {
-                keyAlias = keystoreProperties['keyAlias']
-                keyPassword = keystoreProperties['keyPassword']
-                storeFile = file(keystoreProperties['storeFile'])
-                storePassword = keystoreProperties['storePassword']
+            if (hasUploadSigning) {
+                keyAlias = ksKeyAlias
+                keyPassword = ksKeyPassword
+                storePassword = ksStorePassword
+                storeFile = releaseKeystoreFile
             } else {
-                // استخدام debug keystore تلقائياً
+                // No valid key.properties + keystore yet: debug signing (not for Play). Save a non-empty android/key.properties to use upload keystore.
                 storeFile = file("${System.getProperty('user.home')}/.android/debug.keystore")
                 storePassword = "android"
                 keyAlias = "androiddebugkey"

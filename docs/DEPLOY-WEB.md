@@ -1,5 +1,7 @@
 # نشر تحديثات الويب (عشان التعديلات تظهر على الموقع)
 
+**ملخص الطريقة الموحّدة الناجحة من جهازك:** `cloudflared access login` ثم `./scripts/deploy-web.sh` (بدون `USE_DIRECT_SSH`). انظر أيضاً [DEPLOY.md](./DEPLOY.md).
+
 ## نشر تلقائي من GitHub (بعد الإعداد مرة واحدة)
 
 الـ workflow **Remote Update** يبني الويب ويرفعه على السيرفر مع كل **push إلى main**. تحتاج تضبط الـ Secrets مرة واحدة حسب الطريقة اللي عندك:

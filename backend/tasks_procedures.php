@@ -1160,13 +1160,70 @@ function taskItemMessages_add($input, $ctx) {
 }
 
 // ─── technicianLocation.update ─────────────────────────────────
+function _ensureTechnicianLocationsSchema(): void {
+    global $db;
+    static $done = false;
+    if ($done) return;
+    $db->exec("CREATE TABLE IF NOT EXISTS technician_locations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        technician_id INT NOT NULL,
+        task_id INT NULL,
+        latitude DECIMAL(10,7) NOT NULL,
+        longitude DECIMAL(10,7) NOT NULL,
+        accuracy_m DECIMAL(10,2) NULL,
+        is_arrived TINYINT(1) DEFAULT 0,
+        source VARCHAR(32) DEFAULT 'mobile',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_tech_time (technician_id, created_at),
+        INDEX idx_task_time (task_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $done = true;
+}
+
+function _requireAdminStaffSupervisor(array $ctx): void {
+    global $db;
+    $userId = (int)($ctx['userId'] ?? 0);
+    if ($userId <= 0) throw new Exception('UNAUTHORIZED');
+    $roleStmt = $db->prepare("SELECT role FROM users WHERE id = ?");
+    $roleStmt->execute([$userId]);
+    $role = $roleStmt->fetchColumn();
+    $roleLower = $role ? strtolower(trim((string)$role)) : '';
+    if (!in_array($roleLower, ['admin', 'staff', 'supervisor'], true)) {
+        throw new Exception('FORBIDDEN');
+    }
+}
+
 function technicianLocation_update($input, $ctx) {
     global $db;
+
+    $userId = (int)($ctx['userId'] ?? 0);
+    if ($userId <= 0) throw new Exception('UNAUTHORIZED');
 
     $lat = $input['latitude'] ?? null;
     $lng = $input['longitude'] ?? null;
     $taskId = $input['taskId'] ?? null;
     $arrived = $input['arrived'] ?? false;
+    $accuracy = $input['accuracy'] ?? null;
+    $source = $input['source'] ?? 'mobile';
+
+    if ($lat !== null && $lng !== null) {
+        try {
+            _ensureTechnicianLocationsSchema();
+            $latF = (float)$lat;
+            $lngF = (float)$lng;
+            $accF = ($accuracy === null || $accuracy === '') ? null : (float)$accuracy;
+            $taskIdVal = ($taskId === null || $taskId === '') ? null : (int)$taskId;
+            $arr = !empty($arrived) ? 1 : 0;
+            $src = trim((string)$source);
+            if ($src === '') $src = 'mobile';
+            $stmt = $db->prepare("INSERT INTO technician_locations
+                (technician_id, task_id, latitude, longitude, accuracy_m, is_arrived, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$userId, $taskIdVal, $latF, $lngF, $accF, $arr, $src]);
+        } catch (\Exception $e) {
+            // ignore location storage errors
+        }
+    }
 
     // تسجيل وقت الوصول + إشعار الإدارة
     if ($arrived && $taskId) {
@@ -1192,6 +1249,189 @@ function technicianLocation_update($input, $ctx) {
             );
         } catch (\Exception $e) { /* ignore */ }
     }
+
+    return ['success' => true];
+}
+
+/**
+ * Admin: latest known location for each technician (optionally within last N hours).
+ * input: { sinceHours?: number }
+ */
+function technicianLocation_latest($input, $ctx) {
+    global $db;
+    _requireAdminStaffSupervisor($ctx);
+    _ensureTechnicianLocationsSchema();
+
+    $sinceHours = (int)($input['sinceHours'] ?? 24);
+    if ($sinceHours <= 0) $sinceHours = 24;
+    if ($sinceHours > 24 * 30) $sinceHours = 24 * 30;
+
+    // Latest row per technician in the last window
+    $stmt = $db->prepare("
+        SELECT tl.*
+        FROM technician_locations tl
+        INNER JOIN (
+            SELECT technician_id, MAX(id) AS max_id
+            FROM technician_locations
+            WHERE created_at >= (NOW() - INTERVAL ? HOUR)
+            GROUP BY technician_id
+        ) x ON x.technician_id = tl.technician_id AND x.max_id = tl.id
+        ORDER BY tl.created_at DESC
+    ");
+    $stmt->execute([$sinceHours]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // attach technician names
+    $ids = [];
+    foreach ($rows as $r) $ids[] = (int)$r['technician_id'];
+    $namesById = [];
+    if ($ids) {
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $u = $db->prepare("SELECT id, name, role FROM users WHERE id IN ($in)");
+        $u->execute($ids);
+        foreach ($u->fetchAll(PDO::FETCH_ASSOC) as $ur) {
+            $namesById[(int)$ur['id']] = ['name' => $ur['name'] ?? '', 'role' => $ur['role'] ?? ''];
+        }
+    }
+
+    $out = [];
+    foreach ($rows as $r) {
+        $tid = (int)$r['technician_id'];
+        $role = $namesById[$tid]['role'] ?? '';
+        $roleLower = strtolower(trim((string)$role));
+        // Return technicians only (module is for technicians tracking)
+        if ($roleLower !== 'technician') {
+            continue;
+        }
+        $out[] = [
+            'technicianId' => $tid,
+            'technicianName' => $namesById[$tid]['name'] ?? '',
+            'technicianRole' => $namesById[$tid]['role'] ?? '',
+            'taskId' => $r['task_id'] !== null ? (int)$r['task_id'] : null,
+            'latitude' => (float)$r['latitude'],
+            'longitude' => (float)$r['longitude'],
+            'accuracyM' => $r['accuracy_m'] !== null ? (float)$r['accuracy_m'] : null,
+            'isArrived' => (int)($r['is_arrived'] ?? 0) === 1,
+            'source' => $r['source'] ?? 'mobile',
+            'createdAt' => $r['created_at'] ? (string)$r['created_at'] : null,
+        ];
+    }
+    return $out;
+}
+
+/**
+ * Admin: track points for a technician on a given day/time window.
+ * input: { technicianId: number, date: 'YYYY-MM-DD', fromHour?: number, toHour?: number, intervalMin?: number }
+ */
+function technicianLocation_track($input, $ctx) {
+    global $db;
+    _requireAdminStaffSupervisor($ctx);
+    _ensureTechnicianLocationsSchema();
+
+    $techId = (int)($input['technicianId'] ?? 0);
+    $date = trim((string)($input['date'] ?? ''));
+    if ($techId <= 0 || $date === '') throw new Exception('INVALID_ARGUMENT');
+
+    $fromHour = (int)($input['fromHour'] ?? 9);
+    $toHour = (int)($input['toHour'] ?? 19);
+    if ($fromHour < 0) $fromHour = 0;
+    if ($toHour > 23) $toHour = 23;
+    if ($toHour < $fromHour) $toHour = $fromHour;
+
+    $intervalMin = (int)($input['intervalMin'] ?? 30);
+    if ($intervalMin < 1) $intervalMin = 1;
+    if ($intervalMin > 240) $intervalMin = 240;
+
+    $fromTs = "{$date} " . str_pad((string)$fromHour, 2, '0', STR_PAD_LEFT) . ":00:00";
+    $toTs = "{$date} " . str_pad((string)$toHour, 2, '0', STR_PAD_LEFT) . ":59:59";
+
+    $stmt = $db->prepare("
+        SELECT id, technician_id, task_id, latitude, longitude, accuracy_m, is_arrived, source, created_at
+        FROM technician_locations
+        WHERE technician_id = ?
+          AND created_at BETWEEN ? AND ?
+        ORDER BY created_at ASC, id ASC
+    ");
+    $stmt->execute([$techId, $fromTs, $toTs]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // downsample to one point per interval bucket (keep earliest point in bucket)
+    $bucketSec = $intervalMin * 60;
+    $seen = [];
+    $out = [];
+    foreach ($rows as $r) {
+        $t = strtotime((string)$r['created_at']);
+        if (!$t) continue;
+        $b = (int)floor($t / $bucketSec);
+        if (isset($seen[$b])) continue;
+        $seen[$b] = true;
+        $out[] = [
+            'id' => (int)$r['id'],
+            'technicianId' => (int)$r['technician_id'],
+            'taskId' => $r['task_id'] !== null ? (int)$r['task_id'] : null,
+            'latitude' => (float)$r['latitude'],
+            'longitude' => (float)$r['longitude'],
+            'accuracyM' => $r['accuracy_m'] !== null ? (float)$r['accuracy_m'] : null,
+            'isArrived' => (int)($r['is_arrived'] ?? 0) === 1,
+            'source' => $r['source'] ?? 'mobile',
+            'createdAt' => $r['created_at'] ? (string)$r['created_at'] : null,
+        ];
+    }
+
+    return [
+        'technicianId' => $techId,
+        'date' => $date,
+        'fromHour' => $fromHour,
+        'toHour' => $toHour,
+        'intervalMin' => $intervalMin,
+        'points' => $out,
+        'rawCount' => count($rows),
+    ];
+}
+
+/**
+ * Admin: manually set a technician location (e.g. overtime / phone check-in).
+ * input: { technicianId: number, latitude: number, longitude: number, accuracy?: number, taskId?: number, note?: string }
+ */
+function technicianLocation_adminSet($input, $ctx) {
+    global $db;
+    _requireAdminStaffSupervisor($ctx);
+    _ensureTechnicianLocationsSchema();
+
+    $techId = (int)($input['technicianId'] ?? 0);
+    $lat = $input['latitude'] ?? null;
+    $lng = $input['longitude'] ?? null;
+    if ($techId <= 0 || $lat === null || $lng === null) {
+        throw new Exception('INVALID_ARGUMENT');
+    }
+
+    // validate technician exists
+    $u = $db->prepare("SELECT id FROM users WHERE id = ? LIMIT 1");
+    $u->execute([$techId]);
+    if (!$u->fetchColumn()) {
+        throw new Exception('INVALID_ARGUMENT');
+    }
+
+    $latF = (float)$lat;
+    $lngF = (float)$lng;
+    $acc = $input['accuracy'] ?? null;
+    $accF = ($acc === null || $acc === '') ? null : (float)$acc;
+    $taskId = $input['taskId'] ?? null;
+    $taskIdVal = ($taskId === null || $taskId === '') ? null : (int)$taskId;
+
+    // Optional note: stored in source field (short) for now without schema changes.
+    $note = trim((string)($input['note'] ?? ''));
+    $src = 'admin_manual';
+    if ($note !== '') {
+        $note = preg_replace('/\s+/u', ' ', $note);
+        if (mb_strlen($note) > 20) $note = mb_substr($note, 0, 20);
+        $src = "admin:$note";
+    }
+
+    $stmt = $db->prepare("INSERT INTO technician_locations
+        (technician_id, task_id, latitude, longitude, accuracy_m, is_arrived, source)
+        VALUES (?, ?, ?, ?, ?, 0, ?)");
+    $stmt->execute([$techId, $taskIdVal, $latF, $lngF, $accF, $src]);
 
     return ['success' => true];
 }

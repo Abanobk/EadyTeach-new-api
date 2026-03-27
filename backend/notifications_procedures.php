@@ -119,13 +119,13 @@ function _getFcmAccessToken() {
 /**
  * @param string $platform من جدول fcm_tokens: android | ios | web
  *
- * أندرويد: نرسل data-only بأولوية HIGH (بدون block "notification").
- * هذا يضمن أن Dart (onMessage/background handler) يعرض إشعار local عبر `flutter_local_notifications`
- * بحيث نتحكم في الصوت/الاهتزاز خصوصاً عندما التطبيق يكون في الـ foreground.
- * (استخدام block "notification" أحياناً يؤدي لعرض بصمت في الـ foreground بحسب سلوك أندرويد/قناة الإشعارات.)
- * iOS / Web: notification + data كما سبق.
+ * ملاحظة مهمة:
+ * - الاعتماد على data-only في أندرويد يجعل ظهور الإشعار في الشريط يعتمد على background handler داخل التطبيق
+ *   والذي قد لا يعمل دائماً (Doze/توفير البطارية/قتل الخلفية).
+ * - لذلك نرسل على أندرويد: notification + data مع channel_id وصوت default وأولوية HIGH.
+ *   وفي الـ foreground سيعرض التطبيق إشعار local أيضاً (لو مُفعّل) — وهذا مقبول لأن النظام غالباً لا يعرض notification في الـ foreground.
  *
- * ملاحظة: حقول android.notification في FCM HTTP v1 تستخدم camelCase (channelId، defaultVibrateTimings).
+ * ملاحظة: حقول android.notification في FCM HTTP v1 تستخدم camelCase (channelId).
  */
 function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
     static $accessToken = null;
@@ -158,46 +158,39 @@ function _sendFcmMessage($token, $title, $body, $data = [], $platform = 'web') {
         $dataStr[(string)$k] = (string)$v;
     }
 
-    // android options للأجهزة (data-only).
-    // نترك التحكم الفعلي في الصوت/الاهتزاز للتطبيق عبر flutter_local_notifications.
-    $androidNotifExtras = [
+    $android = [
         'priority' => 'HIGH',
+        'notification' => [
+            // لازم تتطابق مع القناة التي ينشئها التطبيق
+            'channelId' => 'easy_tech_v2',
+            'sound' => 'default',
+        ],
     ];
 
-    if ($platformNorm === 'android') {
-        $message = [
-            'message' => [
-                'token' => $token,
-                'data' => $dataStr,
-                'android' => $androidNotifExtras,
+    $message = [
+        'message' => [
+            'token' => $token,
+            'notification' => [
+                'title' => $title,
+                'body' => $body,
             ],
-        ];
-    } else {
-        $message = [
-            'message' => [
-                'token' => $token,
+            'data' => $dataStr,
+            'android' => $android,
+            'apns' => [
+                'payload' => [
+                    'aps' => [
+                        'sound' => 'default',
+                        'badge' => 1,
+                    ],
+                ],
+            ],
+            'webpush' => [
                 'notification' => [
-                    'title' => $title,
-                    'body' => $body,
-                ],
-                'data' => $dataStr,
-                'android' => $androidNotifExtras,
-                'apns' => [
-                    'payload' => [
-                        'aps' => [
-                            'sound' => 'default',
-                            'badge' => 1,
-                        ],
-                    ],
-                ],
-                'webpush' => [
-                    'notification' => [
-                        'icon' => '/app/icons/Icon-192.png',
-                    ],
+                    'icon' => '/app/icons/Icon-192.png',
                 ],
             ],
-        ];
-    }
+        ],
+    ];
 
     $url = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
     $ch = curl_init($url);

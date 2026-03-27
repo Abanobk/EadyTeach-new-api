@@ -20,6 +20,7 @@ import 'admin_discounts_screen.dart';
 import 'admin_reports_screen.dart';
 import 'admin_quotations_screen.dart';
 import 'admin_accounting_screen.dart';
+import 'admin_technician_tracking_screen.dart';
 
 /// السايدبار مندمج مع الثيم — ألوان من الثيم مع لمسة برتقالية للعنصر النشط
 
@@ -244,6 +245,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           _sidebarItem(context, Icons.notifications_outlined, 'الإشعارات', () => _navigate(context, const AdminNotificationsScreen()), false, color: Colors.orange),
                         if (auth.hasPermission('secretary.view'))
                           _sidebarItem(context, Icons.calendar_month_outlined, 'السكرتارية', () => _navigate(context, const AdminSecretaryScreen()), false, color: Colors.pink),
+                        if (auth.hasPermission('tasks.view'))
+                          _sidebarItem(context, Icons.location_on_outlined, 'تحركات الفنيين', () => _navigate(context, const AdminTechnicianTrackingScreen()), false, color: Colors.lightBlue),
                         if (auth.hasPermission('reports.view'))
                           _sidebarItem(context, Icons.bar_chart_outlined, 'التقارير', () => _navigate(context, const AdminReportsScreen()), false, color: Colors.green),
                         if (auth.hasPermission('surveys.view'))
@@ -597,6 +600,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                         title: 'السكرتارية',
                         color: Colors.pink,
                         onTap: () => _navigate(context, const AdminSecretaryScreen()),
+                      ),
+                    if (p.hasPermission('tasks.view'))
+                      _DashboardCard(
+                        icon: Icons.location_on_outlined,
+                        title: 'تحركات الفنيين',
+                        color: Colors.lightBlue,
+                        onTap: () => _navigate(context, const AdminTechnicianTrackingScreen()),
                       ),
                     if (p.hasPermission('surveys.view'))
                       _DashboardCard(

@@ -1,14 +1,20 @@
 <?php
 /**
- * تذكير المهام المتأخرة — تشغيل من cron كل 15–30 دقيقة
+ * 1) مهام متأخرة + 2) بلا موعد: تذكيران يوميان — 9 صباحاً و 6 مساءً (EASYTECH_TZ أو Africa/Cairo).
+ * 3) تأخر وصول الفني للعميل بعد موعد المهمة: إشعار للفني والإدارة كل ساعة (حتى يُسجَّل وصول أو تُنجَز المهمة).
+ * 4) السكرتارية: تذكير قبل الموعد (نافذة 24 ساعة)، تذكير قبل ساعة، وإشعار إن لم يُسجَّل التنفيذ بعد انتهاء الموعد.
  *
- * أمثلة:
+ * جدولة cron: كل ساعة (مثلاً 0 * * * *) — يشمل المهام والسكرتارية.
+ * متغير اختياري: EASYTECH_TZ=Africa/Cairo
+ *
  *   php /path/to/backend/task_overdue_cron.php
- *   php /path/to/backend/task_overdue_cron.php 120   ← فاصل 120 دقيقة بين تذكيرين لنفس المهمة
  *
  * على TrueNAS/دوكر: طابق host/user/pass مع router.php إن اختلفت.
  */
 declare(strict_types=1);
+
+$tz = getenv('EASYTECH_TZ') ?: 'Africa/Cairo';
+date_default_timezone_set($tz);
 
 $base = __DIR__;
 
@@ -38,8 +44,9 @@ $GLOBALS['db'] = $db;
 require_once $base . '/notifications_procedures.php';
 require_once $base . '/tasks_procedures.php';
 
-$interval = isset($argv[1]) ? (int) $argv[1] : 90;
-$result = tasks_runOverdueReminders($interval);
+$overdue = tasks_runOverdueReminders();
+$unscheduled = tasks_runUnscheduledReminders();
+$lateArrival = tasks_runLateArrivalReminders();
+$appointments = appointments_runReminders();
 
-echo json_encode($result, JSON_UNESCAPED_UNICODE) . "\n";
-// مثال: {"sent":2,"tasks":2} — sent = عدد المهام التي أُرسل لها تذكير في هذه الجولة
+echo json_encode(['overdue' => $overdue, 'unscheduled' => $unscheduled, 'lateArrival' => $lateArrival, 'appointments' => $appointments], JSON_UNESCAPED_UNICODE) . "\n";

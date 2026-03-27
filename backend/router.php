@@ -1191,6 +1191,15 @@ try {
         case 'technicianLocation.update':
             $result = technicianLocation_update($input, $ctx);
             break;
+        case 'technicianLocation.latest':
+            $result = technicianLocation_latest($input ?? [], $ctx);
+            break;
+        case 'technicianLocation.track':
+            $result = technicianLocation_track($input ?? [], $ctx);
+            break;
+        case 'technicianLocation.adminSet':
+            $result = technicianLocation_adminSet($input ?? [], $ctx);
+            break;
 
         // ── Quotations ────────────────────────────────────────
         case 'quotations.list':
@@ -1350,6 +1359,10 @@ try {
 
         case 'appointments.delete':
             $result = appointments_delete($input, $ctx);
+            break;
+
+        case 'appointments.complete':
+            $result = appointments_complete($input, $ctx);
             break;
 
         case 'appointments.staffList':

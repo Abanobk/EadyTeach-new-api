@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# بناء ورفع الويب من جهازك → السيرفر (يستخدم أحدث نسخة من build/web بعد flutter build ناجح)
-# الاستخدام: من جذر المشروع شغّل: ./scripts/deploy-web.sh
+# بناء ورفع الويب من جهازك → السيرفر (build/web بعد flutter build ناجح)
 #
-# لو بتصل السيرفر عبر Cloudflare tunnel: ثبّت cloudflared ثم شغّل السكربت:
-#   Mac: brew install cloudflared
-#   ثم: cloudflared access login
+# الطريقة الموحّدة الناجحة (الافتراضية): Cloudflare Access TCP
+#   brew install cloudflared && cloudflared access login
+#   ./scripts/deploy-web.sh
 #
-# لو عندك SSH مباشر: USE_DIRECT_SSH=1 ./scripts/deploy-web.sh
+# USE_DIRECT_SSH=1 فقط إذا كان SSH المباشر على 22 يعمل — وإلا استخدم الافتراضي.
+#
+# التفاصيل: docs/DEPLOY-WEB.md
 
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -28,6 +29,10 @@ if [ ! -f build/web/index.html ]; then
   exit 1
 fi
 echo "▶ Build OK. Deploying latest build/web to $DEPLOY_PATH ..."
+
+if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
+  export COPYFILE_DISABLE=1
+fi
 
 if [ -n "${USE_DIRECT_SSH:-}" ] && [ "$USE_DIRECT_SSH" != "0" ]; then
   USE_TUNNEL=""

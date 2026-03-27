@@ -101,6 +101,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
           playSound: true,
           enableVibration: true,
           enableLights: true,
+          fullScreenIntent: true,
           icon: '@mipmap/ic_launcher',
         ),
         iOS: DarwinNotificationDetails(

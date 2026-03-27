@@ -52,6 +52,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   StreamSubscription<Position>? _locationSub;
   bool _gpsActive = false;
   bool _arrivedDetected = false;
+  bool _sendingManualLocation = false;
 
   // Task Notes
   List<Map<String, dynamic>> _notes = [];
@@ -158,6 +159,37 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         } catch (_) {}
       });
     } catch (_) {}
+  }
+
+  Future<void> _sendManualLocationNow({int? taskId}) async {
+    if (_sendingManualLocation) return;
+    setState(() => _sendingManualLocation = true);
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showSnack('خدمة الموقع غير مفعّلة', Colors.red);
+        return;
+      }
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+        _showSnack('تم رفض إذن الموقع', Colors.red);
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      await ApiService.mutate('technicianLocation.update', input: {
+        if (taskId != null) 'taskId': taskId,
+        'latitude': pos.latitude,
+        'longitude': pos.longitude,
+        'accuracy': pos.accuracy,
+        'source': 'manual',
+      });
+      _showSnack('تم تسجيل موقعك الآن ✅', Colors.green);
+    } catch (e) {
+      _showSnack('فشل تسجيل الموقع: $e', Colors.red);
+    } finally {
+      if (mounted) setState(() => _sendingManualLocation = false);
+    }
   }
 
   // ── Data Loading ─────────────────────────────────────────────────────────
@@ -986,6 +1018,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     final task = _fullTask ?? widget.task;
     final status = task['status']?.toString() ?? 'pending';
     final taskId = task['id']?.toString() ?? '';
+    final taskIdInt = (() {
+      final raw = (task['id']);
+      if (raw is int) return raw;
+      return int.tryParse(raw?.toString() ?? '');
+    })();
     final title = task['title']?.toString() ?? 'مهمة';
     final customer = _customer;
     final technician = _technician;
@@ -1127,6 +1164,19 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     const SizedBox(height: 16),
                     const Text('الموقع الجغرافي', style: TextStyle(color: AppColors.muted, fontSize: 11)),
                     const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _webBtn(
+                            _sendingManualLocation ? '⏳ جاري التسجيل...' : '📍 تسجيل موقعي الآن (أوفر تايم)',
+                            const Color(0xFF1565C0),
+                            _sendingManualLocation ? null : () => _sendManualLocationNow(taskId: taskIdInt),
+                            fullWidth: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
                     if (locationUrl != null) ...[
                       _webBtn(
                         '🗺️ فتح رابط الموقع',

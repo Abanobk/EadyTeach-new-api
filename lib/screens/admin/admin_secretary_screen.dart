@@ -110,6 +110,19 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
     return 'blue';
   }
 
+  Future<void> _completeAppointment(int id) async {
+    try {
+      await ApiService.mutate('appointments.complete', input: {'id': id});
+      if (mounted) await _loadAppointments();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذّر التسجيل: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _deleteAppointment(int id) async {
     try {
       await ApiService.mutate('appointments.delete', input: {'id': id});
@@ -502,6 +515,7 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                                   final color = _colorMap[apt['color']] ?? Colors.blue;
                                   final icon = _typeIcons[apt['type']] ?? Icons.event;
                                   final assigneeName = (apt['assigneeName'] ?? '') as String;
+                                  final completed = apt['completedAt'] != null && apt['completedAt'].toString().isNotEmpty;
 
                                   return Dismissible(
                                     key: Key('apt_${apt['id']}'),
@@ -527,13 +541,15 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                                       ) ?? false;
                                     },
                                     onDismissed: (_) => _deleteAppointment(apt['id'] as int),
-                                    child: Container(
+                                    child: Opacity(
+                                      opacity: completed ? 0.55 : 1,
+                                      child: Container(
                                       margin: const EdgeInsets.only(bottom: 10),
                                       padding: const EdgeInsets.all(14),
                                       decoration: BoxDecoration(
                                         color: AppThemeDecorations.cardColor(context),
                                         borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(color: AppColors.border),
+                                        border: Border.all(color: completed ? Colors.green.withOpacity(0.4) : AppColors.border),
                                       ),
                                       child: Row(
                                         children: [
@@ -543,7 +559,17 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Text(apt['title'] ?? '', style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14)),
+                                                Row(
+                                                  children: [
+                                                    Expanded(child: Text(apt['title'] ?? '', style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14))),
+                                                    if (completed)
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                        decoration: BoxDecoration(color: Colors.green.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                                                        child: const Text('تم التنفيذ', style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.w600)),
+                                                      ),
+                                                  ],
+                                                ),
                                                 if (assigneeName.isNotEmpty)
                                                   Padding(
                                                     padding: const EdgeInsets.only(top: 2),
@@ -563,6 +589,12 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                                               ],
                                             ),
                                           ),
+                                          if (!completed)
+                                            IconButton(
+                                              tooltip: 'تسجيل التنفيذ',
+                                              icon: const Icon(Icons.check_circle_outline, color: AppColors.primary, size: 26),
+                                              onPressed: () => _completeAppointment(apt['id'] as int),
+                                            ),
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                             decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
@@ -570,6 +602,7 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                                           ),
                                         ],
                                       ),
+                                    ),
                                     ),
                                   );
                                 },

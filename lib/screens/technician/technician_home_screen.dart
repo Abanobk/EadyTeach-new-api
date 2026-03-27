@@ -111,14 +111,14 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: AppThemeDecorations.cardColor(ctx),
-          title: const Text('تفعيل السماح الدائم', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w900)),
-          content: const Text(
+          title: Text('تفعيل السماح الدائم', style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w900)),
+          content: Text(
             'لو مش لاقي اختيار "السماح الدائم":\n'
             '1) افتح: الإعدادات → التطبيقات → Easy Tech\n'
             '2) الأذونات → الموقع\n'
             '3) اختر: "السماح دائمًا"\n\n'
             'بعض الهواتف بتظهر "السماح دائمًا" بعد ما تختار "أثناء الاستخدام" مرة أولاً.',
-            style: TextStyle(color: AppColors.muted, height: 1.35),
+            style: const TextStyle(color: AppColors.muted, height: 1.35),
           ),
           actions: [
             TextButton(

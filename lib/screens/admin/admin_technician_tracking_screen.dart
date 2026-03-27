@@ -18,6 +18,7 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
   List<Map<String, dynamic>> _latest = [];
   int? _selectedTechId;
   String? _selectedTechName;
+  Map<int, Map<String, dynamic>> _techStatusById = {};
 
   DateTime _day = DateTime.now();
   Map<String, dynamic>? _track;
@@ -28,6 +29,26 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
   void initState() {
     super.initState();
     _loadLatest();
+    _loadTechniciansStatus();
+  }
+
+  Future<void> _loadTechniciansStatus() async {
+    try {
+      final res = await ApiService.query('technicianLocation.technicians');
+      final raw = res['data'];
+      final rows = (raw is Map && raw['rows'] is List) ? (raw['rows'] as List) : const [];
+      final techs = rows.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList();
+      final next = <int, Map<String, dynamic>>{};
+      for (final t in techs) {
+        final idRaw = t['id'];
+        final id = idRaw is int ? idRaw : int.tryParse(idRaw?.toString() ?? '');
+        if (id == null || id <= 0) continue;
+        final st = (t['status'] is Map) ? Map<String, dynamic>.from(t['status']) : <String, dynamic>{};
+        next[id] = st;
+      }
+      if (!mounted) return;
+      setState(() => _techStatusById = next);
+    } catch (_) {}
   }
 
   Future<void> _loadLatest() async {
@@ -61,6 +82,16 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
       final raw = res['data'];
       final rows = (raw is Map && raw['rows'] is List) ? (raw['rows'] as List) : const [];
       techs = rows.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList();
+      // Update cached status map too (so top bar icon updates)
+      final next = <int, Map<String, dynamic>>{};
+      for (final t in techs) {
+        final idRaw = t['id'];
+        final id = idRaw is int ? idRaw : int.tryParse(idRaw?.toString() ?? '');
+        if (id == null || id <= 0) continue;
+        final st = (t['status'] is Map) ? Map<String, dynamic>.from(t['status']) : <String, dynamic>{};
+        next[id] = st;
+      }
+      if (mounted) setState(() => _techStatusById = next);
     } catch (_) {}
     if (techs.isEmpty) {
       if (mounted) {
@@ -478,6 +509,12 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
   }
 
   Widget _topBar() {
+    final st = (_selectedTechId != null) ? (_techStatusById[_selectedTechId!] ?? <String, dynamic>{}) : <String, dynamic>{};
+    final perm = (st['locationPermission'] ?? '').toString();
+    final svc = st['locationServiceEnabled'] == true;
+    final updatedAt = (st['updatedAt'] ?? '').toString();
+    final okAlways = svc && perm == 'always';
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
@@ -499,6 +536,34 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
               maxLines: 1,
             ),
           ),
+          if (_selectedTechId != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: (okAlways ? Colors.green : Colors.orange).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: (okAlways ? Colors.green : Colors.orange).withOpacity(0.35)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(okAlways ? Icons.gps_fixed : Icons.gps_off, size: 18, color: okAlways ? Colors.green : Colors.orange),
+                  const SizedBox(width: 6),
+                  Text(
+                    okAlways ? 'Always' : (perm.isEmpty ? 'غير معروف' : perm),
+                    style: TextStyle(color: okAlways ? Colors.green : Colors.orange, fontWeight: FontWeight.w900, fontSize: 12),
+                  ),
+                  if (updatedAt.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      updatedAt,
+                      style: TextStyle(color: (okAlways ? Colors.green : Colors.orange).withOpacity(0.8), fontSize: 10),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
           OutlinedButton.icon(
             onPressed: _openTechPicker,
             icon: const Icon(Icons.person_search, size: 18, color: AppColors.primary),

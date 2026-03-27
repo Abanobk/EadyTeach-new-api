@@ -113,26 +113,19 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
     if (_openingSettings) return;
     setState(() => _openingSettings = true);
     try {
-      final enabled = await Geolocator.isLocationServiceEnabled();
-      if (!enabled) {
-        await Geolocator.openLocationSettings();
+      // Show the exact steps before jumping to settings (names match many Android skins).
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('افتح: الأذونات → الإشعارات والموقع الجغرافي → السماح طوال الوقت'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 5),
+          ),
+        );
       }
 
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-
-      // Android لا يسمح عادةً بطلب "طوال الوقت" مباشرة من أول مرة،
-      // لكن إعادة الطلب بعد WhileInUse قد تفتح المسار المناسب/تعطي تلميح.
-      if (perm == LocationPermission.whileInUse) {
-        perm = await Geolocator.requestPermission();
-      }
-
-      // لو مازال ليس Always — افتح إعدادات التطبيق (صفحة الأذونات هناك).
-      if (perm != LocationPermission.always) {
-        await Geolocator.openAppSettings();
-      }
+      // Open app settings (Android doesn't allow enabling "always" programmatically).
+      await Geolocator.openAppSettings();
 
       // بعد الرجوع، أعد الفحص لتحديث البانر وإرسال الحالة للسيرفر.
       await Future.delayed(const Duration(milliseconds: 800));
@@ -159,9 +152,10 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
           content: Text(
             'لتفعيل استخدام الموقع:\n'
             '1) افتح: الإعدادات → التطبيقات → Easy Tech\n'
-            '2) الأذونات → الموقع\n'
-            '3) اختر: "السماح طوال الوقت"\n\n'
-            'ملاحظة: بعض الهواتف بتظهر "السماح دائمًا" بعد اختيار "أثناء الاستخدام" مرة أولاً.',
+            '2) الأذونات\n'
+            '3) الإشعارات والموقع الجغرافي\n'
+            '4) السماح طوال الوقت\n\n'
+            'ملاحظة: بعض الهواتف بتظهر "السماح طوال الوقت" بعد اختيار "أثناء استخدام التطبيق" مرة أولاً.',
             style: TextStyle(color: AppColors.muted, height: 1.35),
           ),
           actions: [

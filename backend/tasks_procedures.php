@@ -14,7 +14,7 @@ function _ensureTaskCompletedAtColumn() {
 }
 
 /**
- * عمود آخر إشعار تأخير — يُستخدم لمنع تكرار الإشعارات في نفس الدقيقة.
+ * عمود آخر إشعار تأخير — يُحدَّث مع التذكيرات (توافق مع إصدارات قديمة).
  */
 function _ensureTaskOverdueNotifyColumn() {
     global $db;
@@ -30,30 +30,72 @@ function _ensureTaskOverdueNotifyColumn() {
     $done = true;
 }
 
-/**
- * مهام تجاوزت الموعد (لم تُنجز / لم تُلغَ) مع فني معيّن — تذكير الفني والمشرفين بفاصل زمني.
- * يُستدعى من task_overdue_cron.php عبر cron كل 15–30 دقيقة.
- *
- * @param int $intervalMinutes أقل فاصل بين تذكيرين لنفس المهمة (افتراضي 90 دقيقة)
- * @return array{sent:int,tasks:int}
- */
-function tasks_runOverdueReminders($intervalMinutes = 90) {
+/** تذكيران يوميان: 9 صباحاً و 6 مساءً (بتوقيت EASYTECH_TZ أو Africa/Cairo). */
+function _ensureTaskTwiceDailyReminderColumns() {
     global $db;
-    $intervalMinutes = max(15, min(1440, (int) $intervalMinutes));
-
-    _ensureTaskOverdueNotifyColumn();
-    if (!function_exists('_notifyUser')) {
-        require_once __DIR__ . '/notifications_procedures.php';
+    static $done = false;
+    if ($done) {
+        return;
     }
-    _ensureNotificationsSchema();
+    foreach ([
+        'overdue_reminder_am_date' => 'DATE NULL',
+        'overdue_reminder_pm_date' => 'DATE NULL',
+        'unscheduled_reminder_am_date' => 'DATE NULL',
+        'unscheduled_reminder_pm_date' => 'DATE NULL',
+    ] as $col => $def) {
+        try {
+            $db->exec("ALTER TABLE tasks ADD COLUMN {$col} {$def} DEFAULT NULL");
+        } catch (\Exception $e) {
+            // موجود
+        }
+    }
+    $done = true;
+}
 
-    // موعد نهائي: estimated_arrival أولاً؛ وإلا scheduled_at (يوم كامل إن كان الوقت 00:00:00، وإلا مقارنة فورية)
-    $sql = "
-        SELECT id, title, technician_id, scheduled_at, estimated_arrival_at
-        FROM tasks
-        WHERE status NOT IN ('completed', 'cancelled')
-          AND technician_id IS NOT NULL
-          AND (
+/** وقت تسجيل وصول الفني للعميل + آخر إشعار تأخر وصول (كل ساعة). */
+function _ensureTaskLateArrivalColumns() {
+    global $db;
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    try {
+        $db->exec('ALTER TABLE tasks ADD COLUMN technician_arrived_at DATETIME NULL DEFAULT NULL');
+    } catch (\Exception $e) {
+    }
+    try {
+        $db->exec('ALTER TABLE tasks ADD COLUMN late_arrival_last_notified_at DATETIME NULL DEFAULT NULL');
+    } catch (\Exception $e) {
+    }
+    $done = true;
+}
+
+function _tasksReminderTimezone(): string {
+    $tz = getenv('EASYTECH_TZ');
+    if ($tz !== false && $tz !== '') {
+        return $tz;
+    }
+    $def = @date_default_timezone_get();
+    if ($def !== false && $def !== '' && $def !== 'UTC') {
+        return $def;
+    }
+    return 'Africa/Cairo';
+}
+
+/** ساعة 0–23 بتوقيت التذكيرات (للفترتين 9 و 18). */
+function _tasksCurrentLocalHour(): int {
+    try {
+        $z = new DateTimeZone(_tasksReminderTimezone());
+        $now = new DateTime('now', $z);
+        return (int) $now->format('G');
+    } catch (\Exception $e) {
+        return (int) date('G');
+    }
+}
+
+/** تجاوز موعد المهمة (للمقارنة مع NOW() في MySQL). */
+function _tasksSqlAppointmentPassed(): string {
+    return "(
             (estimated_arrival_at IS NOT NULL AND estimated_arrival_at < NOW())
             OR (
               estimated_arrival_at IS NULL
@@ -63,11 +105,45 @@ function tasks_runOverdueReminders($intervalMinutes = 90) {
                 OR (TIME(scheduled_at) = '00:00:00' AND DATE(scheduled_at) < CURDATE())
               )
             )
-          )
-          AND (
-            overdue_last_notified_at IS NULL
-            OR overdue_last_notified_at < DATE_SUB(NOW(), INTERVAL " . (int) $intervalMinutes . " MINUTE)
-          )
+          )";
+}
+
+/**
+ * مهام تجاوزت الموعد — تذكير الفني والإدارة مرتين يومياً: 9 صباحاً و 6 مساءً فقط.
+ *
+ * @param int $intervalMinutes مهمل
+ * @return array{sent:int,tasks:int,skipped?:string,slot?:string}
+ */
+function tasks_runOverdueReminders($intervalMinutes = 90) {
+    global $db;
+
+    $hour = _tasksCurrentLocalHour();
+    if ($hour !== 9 && $hour !== 18) {
+        return ['sent' => 0, 'tasks' => 0, 'skipped' => 'not_reminder_slot'];
+    }
+    $slotAm = $hour === 9;
+    $slot = $slotAm ? 'am' : 'pm';
+
+    _ensureTaskOverdueNotifyColumn();
+    _ensureTaskTwiceDailyReminderColumns();
+    if (!function_exists('_notifyUser')) {
+        require_once __DIR__ . '/notifications_procedures.php';
+    }
+    _ensureNotificationsSchema();
+
+    $appt = _tasksSqlAppointmentPassed();
+    $slotSql = $slotAm
+        ? '(overdue_reminder_am_date IS NULL OR overdue_reminder_am_date < CURDATE())'
+        : '(overdue_reminder_pm_date IS NULL OR overdue_reminder_pm_date < CURDATE())';
+    $setCol = $slotAm ? 'overdue_reminder_am_date' : 'overdue_reminder_pm_date';
+
+    $sql = "
+        SELECT id, title, technician_id, scheduled_at, estimated_arrival_at
+        FROM tasks
+        WHERE status NOT IN ('completed', 'cancelled')
+          AND technician_id IS NOT NULL
+          AND {$appt}
+          AND {$slotSql}
     ";
 
     $rows = $db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
@@ -94,10 +170,154 @@ function tasks_runOverdueReminders($intervalMinutes = 90) {
                 'task',
                 ['reason' => 'task_overdue']
             );
-            $db->prepare('UPDATE tasks SET overdue_last_notified_at = NOW() WHERE id = ?')->execute([$tid]);
+            $db->prepare("UPDATE tasks SET {$setCol} = CURDATE(), overdue_last_notified_at = NOW() WHERE id = ?")->execute([$tid]);
             $sent++;
         } catch (\Exception $e) {
             error_log('tasks_runOverdueReminders: ' . $e->getMessage());
+        }
+    }
+
+    return ['sent' => $sent, 'tasks' => count($rows), 'slot' => $slot];
+}
+
+function _ensureTaskUnscheduledNotifyColumn() {
+    global $db;
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    try {
+        $db->exec('ALTER TABLE tasks ADD COLUMN unscheduled_last_notified_at DATETIME NULL DEFAULT NULL');
+    } catch (\Exception $e) {
+        // موجود
+    }
+    $done = true;
+}
+
+/**
+ * مهام بلا موعد — تذكير الإدارة مرتين يومياً (9 و 18) بعد 24 ساعة من الإنشاء.
+ *
+ * @return array{sent:int,tasks:int,skipped?:string,slot?:string}
+ */
+function tasks_runUnscheduledReminders() {
+    global $db;
+
+    $hour = _tasksCurrentLocalHour();
+    if ($hour !== 9 && $hour !== 18) {
+        return ['sent' => 0, 'tasks' => 0, 'skipped' => 'not_reminder_slot'];
+    }
+    $slotAm = $hour === 9;
+    $slot = $slotAm ? 'am' : 'pm';
+
+    _ensureTaskUnscheduledNotifyColumn();
+    _ensureTaskTwiceDailyReminderColumns();
+    if (!function_exists('_notifyAdminsAndSupervisors')) {
+        require_once __DIR__ . '/notifications_procedures.php';
+    }
+    _ensureNotificationsSchema();
+
+    $slotSql = $slotAm
+        ? '(unscheduled_reminder_am_date IS NULL OR unscheduled_reminder_am_date < CURDATE())'
+        : '(unscheduled_reminder_pm_date IS NULL OR unscheduled_reminder_pm_date < CURDATE())';
+    $setCol = $slotAm ? 'unscheduled_reminder_am_date' : 'unscheduled_reminder_pm_date';
+
+    $sql = "
+        SELECT id, title, technician_id
+        FROM tasks
+        WHERE status NOT IN ('completed', 'cancelled')
+          AND scheduled_at IS NULL
+          AND estimated_arrival_at IS NULL
+          AND created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)
+          AND {$slotSql}
+    ";
+
+    $rows = $db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    $sent = 0;
+    foreach ($rows as $r) {
+        $tid = (int) $r['id'];
+        $title = $r['title'] ?? 'مهمة';
+        $techId = !empty($r['technician_id']) ? (int) $r['technician_id'] : null;
+        try {
+            $extra = $techId
+                ? ' يرجى تحديد موعد للمهمة في التطبيق.'
+                : ' المهمة بلا فني معيّن — يرجى تعيين فني وتحديد موعد.';
+            _notifyAdminsAndSupervisors(
+                'مهمة بدون موعد',
+                "المهمة \"{$title}\" (#{$tid}) ليس لها تاريخ/وقت محدد بعد.{$extra}",
+                'task',
+                $tid,
+                'task',
+                ['reason' => 'task_unscheduled']
+            );
+            $db->prepare("UPDATE tasks SET {$setCol} = CURDATE(), unscheduled_last_notified_at = NOW() WHERE id = ?")->execute([$tid]);
+            $sent++;
+        } catch (\Exception $e) {
+            error_log('tasks_runUnscheduledReminders: ' . $e->getMessage());
+        }
+    }
+
+    return ['sent' => $sent, 'tasks' => count($rows), 'slot' => $slot];
+}
+
+/**
+ * موعد الوصول مضى والفني لم يُسجّل وصولاً — إشعار للفني والإدارة كل ساعة (فاصل ~55 دقيقة بين الإشعارات لنفس المهمة).
+ *
+ * @return array{sent:int,tasks:int}
+ */
+function tasks_runLateArrivalReminders() {
+    global $db;
+
+    _ensureTaskLateArrivalColumns();
+    if (!function_exists('_notifyUser')) {
+        require_once __DIR__ . '/notifications_procedures.php';
+    }
+    _ensureNotificationsSchema();
+
+    $appt = _tasksSqlAppointmentPassed();
+
+    $sql = "
+        SELECT t.id, t.title, t.technician_id, t.scheduled_at, t.estimated_arrival_at, tech.name AS technician_name
+        FROM tasks t
+        LEFT JOIN users tech ON tech.id = t.technician_id
+        WHERE t.status NOT IN ('completed', 'cancelled')
+          AND t.technician_id IS NOT NULL
+          AND t.technician_arrived_at IS NULL
+          AND {$appt}
+          AND (
+            t.late_arrival_last_notified_at IS NULL
+            OR t.late_arrival_last_notified_at < DATE_SUB(NOW(), INTERVAL 55 MINUTE)
+          )
+    ";
+
+    $rows = $db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    $sent = 0;
+    foreach ($rows as $r) {
+        $tid = (int) $r['id'];
+        $title = $r['title'] ?? 'مهمة';
+        $techId = (int) $r['technician_id'];
+        $techName = trim((string) ($r['technician_name'] ?? '')) ?: 'الفني';
+        try {
+            _notifyUser(
+                $techId,
+                'تأخر في الوصول للعميل',
+                "أنت متأخر في الوصول إلى العميل — المهمة \"{$title}\" (#{$tid}). يرجى التوجه أو تحديث حالة الوصول.",
+                'task',
+                $tid,
+                'task',
+                ['reason' => 'task_late_arrival']
+            );
+            _notifyAdminsAndSupervisors(
+                'تأخر وصول فني',
+                "{$techName} متأخر عن موعد الوصول للعميل في المهمة \"{$title}\" (#{$tid}).",
+                'task',
+                $tid,
+                'task',
+                ['reason' => 'task_late_arrival']
+            );
+            $db->prepare('UPDATE tasks SET late_arrival_last_notified_at = NOW() WHERE id = ?')->execute([$tid]);
+            $sent++;
+        } catch (\Exception $e) {
+            error_log('tasks_runLateArrivalReminders: ' . $e->getMessage());
         }
     }
 
@@ -379,7 +599,14 @@ function tasks_update($input, $ctx) {
             if ($st === 'completed' || $st === 'cancelled') {
                 try {
                     _ensureTaskOverdueNotifyColumn();
-                    $db->prepare('UPDATE tasks SET overdue_last_notified_at = NULL WHERE id = ?')->execute([$id]);
+                    _ensureTaskTwiceDailyReminderColumns();
+                    _ensureTaskUnscheduledNotifyColumn();
+                    _ensureTaskLateArrivalColumns();
+                    $db->prepare('UPDATE tasks SET overdue_last_notified_at = NULL, unscheduled_last_notified_at = NULL,
+                        overdue_reminder_am_date = NULL, overdue_reminder_pm_date = NULL,
+                        unscheduled_reminder_am_date = NULL, unscheduled_reminder_pm_date = NULL,
+                        technician_arrived_at = NULL, late_arrival_last_notified_at = NULL
+                        WHERE id = ?')->execute([$id]);
                 } catch (\Exception $e) { /* ignore */ }
                 if ($st === 'completed') {
                     try {
@@ -391,10 +618,9 @@ function tasks_update($input, $ctx) {
         }
     }
 
-    // إشعار الفني عند تغيير تاريخ/وقت المهمة (ترحيل)
+    // إشعار الفني المعيّن والإدارة عند ترحيل الموعد (تغيير scheduled / estimated)
     try {
-        if ($prevTask && !empty($prevTask['technician_id'])) {
-            $techId = (int)$prevTask['technician_id'];
+        if ($prevTask) {
             $taskTitle = $prevTask['title'] ?? 'مهمة';
             $schedChanged = false;
             $estChanged = false;
@@ -415,17 +641,46 @@ function tasks_update($input, $ctx) {
                 }
             }
             if ($schedChanged || $estChanged) {
-                _notifyUser(
-                    $techId,
-                    'تم ترحيل موعد المهمة',
-                    "تم تحديد موعد جديد لمهمة: {$taskTitle}. راجع التفاصيل في التطبيق.",
+                if (!function_exists('_notifyUser')) {
+                    require_once __DIR__ . '/notifications_procedures.php';
+                }
+                // الفني الحالي بعد التحديث (إن وُجد في الطلب وإلا السابق)
+                $currentTechId = array_key_exists('technicianId', $input)
+                    ? (int)($input['technicianId'] ?: 0)
+                    : (int)($prevTask['technician_id'] ?? 0);
+
+                $bodyTech = "تم ترحيل موعد المهمة \"{$taskTitle}\" (#{$id}). راجع التفاصيل في التطبيق.";
+                $bodyAdmin = "تم ترحيل موعد المهمة \"{$taskTitle}\" (#{$id}).";
+
+                if ($currentTechId > 0) {
+                    _notifyUser(
+                        $currentTechId,
+                        'تم ترحيل موعد المهمة',
+                        $bodyTech,
+                        'task',
+                        $id,
+                        'task',
+                        ['reason' => 'task_rescheduled']
+                    );
+                }
+                _notifyAdminsAndSupervisors(
+                    'تم ترحيل موعد مهمة',
+                    $bodyAdmin,
                     'task',
                     $id,
-                    'task'
+                    'task',
+                    ['reason' => 'task_rescheduled']
                 );
                 try {
                     _ensureTaskOverdueNotifyColumn();
-                    $db->prepare('UPDATE tasks SET overdue_last_notified_at = NULL WHERE id = ?')->execute([$id]);
+                    _ensureTaskTwiceDailyReminderColumns();
+                    _ensureTaskUnscheduledNotifyColumn();
+                    _ensureTaskLateArrivalColumns();
+                    $db->prepare('UPDATE tasks SET overdue_last_notified_at = NULL, unscheduled_last_notified_at = NULL,
+                        overdue_reminder_am_date = NULL, overdue_reminder_pm_date = NULL,
+                        unscheduled_reminder_am_date = NULL, unscheduled_reminder_pm_date = NULL,
+                        technician_arrived_at = NULL, late_arrival_last_notified_at = NULL
+                        WHERE id = ?')->execute([$id]);
                 } catch (\Exception $e) { /* ignore */ }
             }
         }
@@ -449,11 +704,29 @@ function tasks_update($input, $ctx) {
             _notifyUser((int)$input['technicianId'], 'مهمة جديدة', "تم تعيينك لمهمة: {$taskTitle}", 'task', $id, 'task');
         }
 
-        // Notify admins on status change
+        // إشعار الإدارة + الفني المعيّن عند تغيير الحالة (إلغاء / إكمال / …) ما لم يكن المُنفّذ هو نفسه الفني
         if ($newStatus && $newStatus !== $prevStatus) {
+            if (!function_exists('_notifyUser')) {
+                require_once __DIR__ . '/notifications_procedures.php';
+            }
             $statusLabels = ['in_progress' => 'جاري العمل', 'completed' => 'مكتملة', 'cancelled' => 'ملغاة', 'pending' => 'معلقة'];
             $label = $statusLabels[$newStatus] ?? $newStatus;
-            _notifyAdminsAndSupervisors("تحديث مهمة", "المهمة \"{$taskTitle}\" أصبحت: {$label}", 'task', $id, 'task');
+            $body = "المهمة \"{$taskTitle}\" أصبحت: {$label}";
+            _notifyAdminsAndSupervisors('تحديث مهمة', $body, 'task', $id, 'task', ['reason' => 'task_status_change']);
+
+            $techId = (int) ($input['technicianId'] ?? $prevTask['technician_id'] ?? 0);
+            $actorId = (int) ($ctx['userId'] ?? 0);
+            if ($techId > 0 && $techId !== $actorId) {
+                _notifyUser(
+                    $techId,
+                    'تحديث مهمة',
+                    $body,
+                    'task',
+                    $id,
+                    'task',
+                    ['reason' => 'task_status_change']
+                );
+            }
         }
     } catch (\Exception $e) { /* ignore */ }
 
@@ -895,8 +1168,12 @@ function technicianLocation_update($input, $ctx) {
     $taskId = $input['taskId'] ?? null;
     $arrived = $input['arrived'] ?? false;
 
-    // Notify admins when technician arrives at location
+    // تسجيل وقت الوصول + إشعار الإدارة
     if ($arrived && $taskId) {
+        try {
+            _ensureTaskLateArrivalColumns();
+            $db->prepare('UPDATE tasks SET technician_arrived_at = NOW(), late_arrival_last_notified_at = NULL WHERE id = ?')->execute([(int) $taskId]);
+        } catch (\Exception $e) { /* ignore */ }
         try {
             $techName = '';
             if ($ctx['userId']) {
@@ -1048,44 +1325,55 @@ function quotations_create($input, $ctx) {
     $stmt->execute([$refNumber, $createdBy, $clientUserId, $dealerUserId > 0 ? $dealerUserId : null, $clientName, $clientEmail, $clientPhone, json_encode($items, JSON_UNESCAPED_UNICODE), $subtotal, $installPct, $installAmt, $discountPct, $discountAmt, $totalAmt, $notes]);
     $newId = (int)$db->lastInsertId();
 
-    // إشعار لجميع الإدارة عند إنشاء عرض سعر من لوحة الإدارة (وليس من حساب تاجر فقط)
+    // إشعار FCM + صف في جدول notifications لكل admin/supervisor/staff عند كل إنشاء عرض سعر
+    // (يُسجَّل في DB حتى لو لم يكن للمستخدم توكن FCM — راجع جدول notifications و fcm_tokens على السيرفر)
     try {
         if (!function_exists('_notifyAdminsAndSupervisors')) {
             require_once __DIR__ . '/notifications_procedures.php';
         }
         $creatorId = isset($ctx['userId']) ? (int)$ctx['userId'] : 0;
+        $creatorLabel = '';
         if ($creatorId > 0) {
-            $roleStmt = $db->prepare('SELECT TRIM(LOWER(role)) FROM users WHERE id = ?');
-            $roleStmt->execute([$creatorId]);
-            $creatorRole = strtolower(trim((string)($roleStmt->fetchColumn() ?: '')));
-            if (in_array($creatorRole, ['admin', 'supervisor', 'staff'], true)) {
-                $clientLabel = trim((string)($clientName ?? ''));
-                if ($clientLabel === '') {
-                    $clientLabel = trim((string)($clientEmail ?? ''));
-                }
-                if ($clientLabel === '') {
-                    $clientLabel = 'عميل';
-                }
-                $dealerSuffix = '';
-                if ($dealerUserId > 0) {
-                    $ds = $db->prepare('SELECT name FROM users WHERE id = ?');
-                    $ds->execute([$dealerUserId]);
-                    $dn = trim((string)($ds->fetchColumn() ?: ''));
-                    if ($dn !== '') {
-                        $dealerSuffix = " — الموزع: {$dn}";
-                    }
-                }
-                $totalStr = number_format((float)$totalAmt, 2, '.', '');
-                _notifyAdminsAndSupervisors(
-                    'عرض سعر جديد',
-                    "تم إنشاء عرض السعر {$refNumber} للعميل: {$clientLabel}{$dealerSuffix}. الإجمالي: {$totalStr} ج.م",
-                    'quotation',
-                    $newId,
-                    'quotation',
-                    ['quotationId' => (string)$newId, 'action' => 'created']
-                );
+            $cn = $db->prepare('SELECT name, TRIM(LOWER(role)) FROM users WHERE id = ?');
+            $cn->execute([$creatorId]);
+            $crow = $cn->fetch(PDO::FETCH_ASSOC);
+            if ($crow) {
+                $creatorLabel = trim((string)($crow['name'] ?? ''));
             }
         }
+        $clientLabel = trim((string)($clientName ?? ''));
+        if ($clientLabel === '') {
+            $clientLabel = trim((string)($clientEmail ?? ''));
+        }
+        if ($clientLabel === '') {
+            $clientLabel = 'عميل';
+        }
+        $dealerSuffix = '';
+        if ($dealerUserId > 0) {
+            $ds = $db->prepare('SELECT name FROM users WHERE id = ?');
+            $ds->execute([$dealerUserId]);
+            $dn = trim((string)($ds->fetchColumn() ?: ''));
+            if ($dn !== '') {
+                $dealerSuffix = " — الموزع: {$dn}";
+            }
+        }
+        $totalStr = number_format((float)$totalAmt, 2, '.', '');
+        $byLine = $creatorLabel !== '' ? " (بواسطة: {$creatorLabel})" : ($creatorId <= 0 ? ' (بدون جلسة مستخدم)' : '');
+        $body = "تم إنشاء عرض السعر {$refNumber} للعميل: {$clientLabel}{$dealerSuffix}. الإجمالي: {$totalStr} ج.م{$byLine}";
+
+        $nAdmins = (int)$db->query(
+            "SELECT COUNT(*) FROM users WHERE TRIM(LOWER(role)) IN ('admin', 'supervisor', 'staff') AND COALESCE(is_active, 1) = 1"
+        )->fetchColumn();
+        error_log('[quotations.create] notify admins: quotation_id=' . $newId . ' creator_user_id=' . $creatorId . ' admin_recipients=' . $nAdmins);
+
+        _notifyAdminsAndSupervisors(
+            'عرض سعر جديد',
+            $body,
+            'quotation',
+            $newId,
+            'quotation',
+            ['quotationId' => (string)$newId, 'action' => 'created']
+        );
     } catch (\Throwable $e) {
         error_log('[FCM] quotations.create notify admins: ' . $e->getMessage());
     }
@@ -1194,6 +1482,41 @@ function quotations_update($input, $ctx) {
         $dealerUserId,
         $id
       ]);
+
+    // إشعار الإدارة/المشرفين/الموظفين عند حفظ (تعديل) عرض السعر
+    try {
+        if (!function_exists('_notifyAdminsAndSupervisors')) {
+            require_once __DIR__ . '/notifications_procedures.php';
+        }
+        $editorName = '';
+        $editorStmt = $db->prepare('SELECT name FROM users WHERE id = ?');
+        $editorStmt->execute([$userId]);
+        $editorName = trim((string)($editorStmt->fetchColumn() ?: ''));
+
+        $refNumber = trim((string)($q['ref_number'] ?? ''));
+        $clientLabel = trim((string)($q['client_name'] ?? ''));
+        if ($clientLabel === '') {
+            $clientLabel = trim((string)($q['client_email'] ?? ''));
+        }
+        if ($clientLabel === '') {
+            $clientLabel = 'عميل';
+        }
+        $who = $editorName !== '' ? $editorName : ('مستخدم #' . $userId);
+        $refPart = $refNumber !== '' ? " {$refNumber}" : '';
+        $totalStr = number_format((float)$totalAmt, 2, '.', '');
+        $body = "تم تحديث عرض السعر{$refPart} للعميل: {$clientLabel} بواسطة {$who}. الإجمالي الجديد: {$totalStr} ج.م";
+
+        _notifyAdminsAndSupervisors(
+            'تحديث عرض سعر',
+            $body,
+            'quotation',
+            $id,
+            'quotation',
+            ['quotationId' => (string)$id, 'action' => 'updated']
+        );
+    } catch (\Throwable $e) {
+        error_log('[FCM] quotations.update notify admins: ' . $e->getMessage());
+    }
 
     return ['success' => true];
 }
@@ -2359,9 +2682,69 @@ function _ensureAppointmentsTable() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 }
 
+function _ensureAppointmentReminderColumns() {
+    global $db;
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    foreach ([
+        'completed_at' => 'DATETIME NULL DEFAULT NULL',
+        'reminder_pref_sent_at' => 'DATETIME NULL DEFAULT NULL',
+        'reminder_1h_sent_at' => 'DATETIME NULL DEFAULT NULL',
+        'reminder_missed_sent_at' => 'DATETIME NULL DEFAULT NULL',
+    ] as $col => $def) {
+        try {
+            $db->exec("ALTER TABLE appointments ADD COLUMN {$col} {$def}");
+        } catch (\Exception $e) {
+            // موجود
+        }
+    }
+    $done = true;
+}
+
+function _appointmentTypeLabelAr($type) {
+    $t = (string) $type;
+    $map = [
+        'booking' => 'حجز',
+        'call' => 'مكالمة',
+        'visit' => 'زيارة منزلية',
+        'maintenance' => 'صيانة',
+        'followup' => 'متابعة طلب',
+        'meeting' => 'اجتماع',
+    ];
+    return $map[$t] ?? $t;
+}
+
+/**
+ * إشعار المنشئ والمعيّن (الطرفين) دون تكرار لنفس المستخدم.
+ */
+function _notifyAppointmentParties($appointmentId, $title, $body, $createdBy, $assignedTo, $extraData = []) {
+    if (!function_exists('_notifyUser')) {
+        require_once __DIR__ . '/notifications_procedures.php';
+    }
+    $ids = [];
+    if (!empty($createdBy)) {
+        $ids[] = (int) $createdBy;
+    }
+    if (!empty($assignedTo)) {
+        $ids[] = (int) $assignedTo;
+    }
+    $ids = array_values(array_unique($ids));
+    foreach ($ids as $uid) {
+        if ($uid > 0) {
+            _notifyUser($uid, $title, $body, 'appointment', $appointmentId, 'appointment', $extraData);
+        }
+    }
+    if (empty($ids) && function_exists('_notifyAdminsAndSupervisors')) {
+        _notifyAdminsAndSupervisors($title, $body, 'appointment', $appointmentId, 'appointment', $extraData);
+    }
+}
+
 function appointments_list($input, $ctx) {
     global $db;
     _ensureAppointmentsTable();
+    _ensureAppointmentReminderColumns();
 
     $userId = $ctx['userId'] ?? null;
     $month  = (int)($input['month'] ?? date('n'));
@@ -2397,6 +2780,7 @@ function appointments_list($input, $ctx) {
             'assigneeName'  => $r['assignee_name'] ?? '',
             'color'         => $r['color'] ?? 'blue',
             'createdAt'     => $r['created_at'],
+            'completedAt'   => $r['completed_at'] ?? null,
         ];
     }, $rows);
 }
@@ -2404,6 +2788,7 @@ function appointments_list($input, $ctx) {
 function appointments_create($input, $ctx) {
     global $db;
     _ensureAppointmentsTable();
+    _ensureAppointmentReminderColumns();
 
     $title   = $input['title'] ?? '';
     $type    = $input['type'] ?? 'booking';
@@ -2422,28 +2807,48 @@ function appointments_create($input, $ctx) {
 
     $newId = (int)$db->lastInsertId();
 
-    // إشعارات FCM + سجل notifications (نفس سلوك المهام)
+    // إشعار الطرفين (المنشئ + المعيّن) + الإدارة
     try {
         $dateLabel = strlen($dateStr) > 32 ? substr($dateStr, 0, 32) : $dateStr;
-        if ($assignedTo) {
-            _notifyUser(
-                $assignedTo,
-                'موعد جديد (سكرتارية)',
-                "تم تعيينك لموعد: {$title} — {$dateLabel}",
-                'appointment',
-                $newId,
-                'appointment'
-            );
+        $typeLabel = _appointmentTypeLabelAr($type);
+        if (!function_exists('_notifyUser')) {
+            require_once __DIR__ . '/notifications_procedures.php';
         }
+        _ensureNotificationsSchema();
+
+        $bodyParties = "موعد سكرتارية ({$typeLabel}): «{$title}» — {$dateLabel}. راجع التقويم.";
+        _notifyAppointmentParties(
+            $newId,
+            'موعد جديد (سكرتارية)',
+            $bodyParties,
+            $createdBy ? (int) $createdBy : null,
+            $assignedTo,
+            ['reason' => 'appointment_created']
+        );
+
         $adminBody = $assignedTo
-            ? "موعد «{$title}» — {$dateLabel} (معيّن لموظف)."
-            : "موعد «{$title}» — {$dateLabel}.";
-        _notifyAdminsAndSupervisors('موعد جديد في السكرتارية', $adminBody, 'appointment', $newId, 'appointment');
+            ? "موعد «{$title}» ({$typeLabel}) — {$dateLabel} — منشئ + معيّن."
+            : "موعد «{$title}» ({$typeLabel}) — {$dateLabel}.";
+        _notifyAdminsAndSupervisors('موعد جديد في السكرتارية', $adminBody, 'appointment', $newId, 'appointment', ['reason' => 'appointment_created']);
     } catch (\Throwable $e) {
         error_log('[FCM] appointments.create notify: ' . $e->getMessage());
     }
 
     return ['success' => true, 'id' => $newId];
+}
+
+function appointments_complete($input, $ctx) {
+    global $db;
+    _ensureAppointmentsTable();
+    _ensureAppointmentReminderColumns();
+
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) {
+        throw new Exception('معرف الموعد غير صالح');
+    }
+    $stmt = $db->prepare('UPDATE appointments SET completed_at = NOW() WHERE id = ? AND completed_at IS NULL');
+    $stmt->execute([$id]);
+    return ['success' => true];
 }
 
 function appointments_delete($input, $ctx) {
@@ -2470,4 +2875,116 @@ function appointments_staffList($ctx) {
             'role'  => $r['role'],
         ];
     }, $rows);
+}
+
+/**
+ * تذكيرات السكرتارية — يُستدعى من cron كل 15–60 دقيقة.
+ * - قبل الموعد (خلال آخر 24 ساعة وقبل أقل من ساعة من الموعد): تذكير للطرفين.
+ * - قبل ساعة من الموعد: تذكير بالموعد/المكالمة.
+ * - بعد الموعد + 15 دقيقة بدون تسجيل إنجاز: إشعار بعدم التنفيذ.
+ *
+ * @return array{pref:int,hour:int,missed:int}
+ */
+function appointments_runReminders() {
+    global $db;
+    _ensureAppointmentsTable();
+    _ensureAppointmentReminderColumns();
+    if (!function_exists('_notifyUser')) {
+        require_once __DIR__ . '/notifications_procedures.php';
+    }
+    _ensureNotificationsSchema();
+
+    $out = ['pref' => 0, 'hour' => 0, 'missed' => 0];
+
+    // 1) تذكير «قبل الموعد» (دخلنا نافذة آخر 24 ساعة وما زال أكثر من ساعة للموعد)
+    $prefRows = $db->query("
+        SELECT id, title, type, appointment_date, created_by, assigned_to
+        FROM appointments
+        WHERE completed_at IS NULL
+          AND appointment_date > DATE_ADD(NOW(), INTERVAL 60 MINUTE)
+          AND NOW() >= DATE_SUB(appointment_date, INTERVAL 24 HOUR)
+          AND reminder_pref_sent_at IS NULL
+    ")->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($prefRows as $r) {
+        $aid = (int) $r['id'];
+        $title = $r['title'] ?? 'موعد';
+        $tl = _appointmentTypeLabelAr($r['type'] ?? 'booking');
+        $dt = $r['appointment_date'] ?? '';
+        try {
+            _notifyAppointmentParties(
+                $aid,
+                'تذكير: موعد سكرتارية قريب',
+                "تذكير: لديك «{$title}» ({$tl}) — الموعد {$dt}.",
+                !empty($r['created_by']) ? (int) $r['created_by'] : null,
+                !empty($r['assigned_to']) ? (int) $r['assigned_to'] : null,
+                ['reason' => 'appointment_reminder_pref']
+            );
+            $db->prepare('UPDATE appointments SET reminder_pref_sent_at = NOW() WHERE id = ?')->execute([$aid]);
+            $out['pref']++;
+        } catch (\Exception $e) {
+            error_log('appointments_runReminders pref: ' . $e->getMessage());
+        }
+    }
+
+    // 2) تذكير قبل ساعة من الموعد
+    $hRows = $db->query("
+        SELECT id, title, type, appointment_date, created_by, assigned_to
+        FROM appointments
+        WHERE completed_at IS NULL
+          AND appointment_date > NOW()
+          AND NOW() >= DATE_SUB(appointment_date, INTERVAL 1 HOUR)
+          AND reminder_1h_sent_at IS NULL
+    ")->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($hRows as $r) {
+        $aid = (int) $r['id'];
+        $title = $r['title'] ?? 'موعد';
+        $tl = _appointmentTypeLabelAr($r['type'] ?? 'booking');
+        try {
+            _notifyAppointmentParties(
+                $aid,
+                'خلال ساعة: موعد سكرتارية',
+                "خلال ساعة: «{$title}» ({$tl}) — تذكير بالموعد أو المكالمة المطلوبة.",
+                !empty($r['created_by']) ? (int) $r['created_by'] : null,
+                !empty($r['assigned_to']) ? (int) $r['assigned_to'] : null,
+                ['reason' => 'appointment_reminder_1h']
+            );
+            $db->prepare('UPDATE appointments SET reminder_1h_sent_at = NOW() WHERE id = ?')->execute([$aid]);
+            $out['hour']++;
+        } catch (\Exception $e) {
+            error_log('appointments_runReminders 1h: ' . $e->getMessage());
+        }
+    }
+
+    // 3) انتهى الموعد ولم يُسجَّل إنجاز
+    $missRows = $db->query("
+        SELECT id, title, type, appointment_date, created_by, assigned_to
+        FROM appointments
+        WHERE completed_at IS NULL
+          AND NOW() >= DATE_ADD(appointment_date, INTERVAL 15 MINUTE)
+          AND reminder_missed_sent_at IS NULL
+    ")->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($missRows as $r) {
+        $aid = (int) $r['id'];
+        $title = $r['title'] ?? 'موعد';
+        $tl = _appointmentTypeLabelAr($r['type'] ?? 'booking');
+        try {
+            _notifyAppointmentParties(
+                $aid,
+                'لم يُسجَّل تنفيذ الموعد',
+                "لم يُسجَّل أنك نفّذت «{$title}» ({$tl}). يرجى التحديث أو إكمال الموعد من السكرتارية.",
+                !empty($r['created_by']) ? (int) $r['created_by'] : null,
+                !empty($r['assigned_to']) ? (int) $r['assigned_to'] : null,
+                ['reason' => 'appointment_missed']
+            );
+            $db->prepare('UPDATE appointments SET reminder_missed_sent_at = NOW() WHERE id = ?')->execute([$aid]);
+            $out['missed']++;
+        } catch (\Exception $e) {
+            error_log('appointments_runReminders missed: ' . $e->getMessage());
+        }
+    }
+
+    return $out;
 }

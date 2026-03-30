@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:table_calendar/table_calendar.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
@@ -16,6 +17,10 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
   List<dynamic> _technicians = [];
   bool _loading = true;
   String _filter = 'current'; // current, today, overdue, no_date, completed
+
+  /// تقويم: الشهر المعروض واليوم المحدد لفلترة القائمة
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
 
   @override
   void initState() {
@@ -45,6 +50,34 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
   String _todayStr() {
     final now = DateTime.now();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  String _dateKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// تاريخ موعد المهمة yyyy-MM-dd أو null
+  String? _taskScheduledDateKey(dynamic t) {
+    final s = (t['scheduledAt']?.toString() ?? '').trim();
+    if (s.isEmpty) return null;
+    try {
+      if (s.length >= 10) return s.substring(0, 10);
+      final dt = DateTime.parse(s);
+      return _dateKey(DateTime(dt.year, dt.month, dt.day));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// عدد المهام (غير الملغاة) في يوم تقويمي
+  int _countForDay(DateTime day) {
+    final key = _dateKey(day);
+    var n = 0;
+    for (final t in _tasks) {
+      if (t is! Map) continue;
+      if (t['status'] == 'cancelled') continue;
+      if (_taskScheduledDateKey(t) == key) n++;
+    }
+    return n;
   }
 
   List<dynamic> get _filteredTasks {
@@ -90,6 +123,63 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
       default:
         return _tasks;
     }
+  }
+
+  /// قائمة المهام: فلتر الشريط + (اختياري) يوم محدد من التقويم
+  List<dynamic> get _tasksForList {
+    final base = _filteredTasks;
+    if (_selectedDay == null) return base;
+    final key = _dateKey(_selectedDay!);
+    return base.where((t) => _taskScheduledDateKey(t) == key).toList();
+  }
+
+  Widget? _calendarDayCell(BuildContext context, DateTime day, {required bool selected}) {
+    final n = _countForDay(day);
+    if (n == 0 && !selected) return null;
+    final scheme = Theme.of(context).colorScheme;
+    if (n == 0 && selected) {
+      return null;
+    }
+    return Container(
+      margin: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: selected ? AppColors.primary.withOpacity(0.38) : AppColors.primary.withOpacity(0.14),
+        border: Border.all(
+          color: selected ? AppColors.primary : AppColors.primary.withOpacity(0.4),
+          width: selected ? 2 : 1,
+        ),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Text(
+            '${day.day}',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+              color: scheme.onSurface,
+            ),
+          ),
+          if (n > 0)
+            Positioned(
+              bottom: 1,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$n',
+                  style: const TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   String _formatTime12h(String isoStr) {
@@ -190,7 +280,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredTasks = _filteredTasks;
+    final filteredTasks = _tasksForList;
 
     return Scaffold(
       backgroundColor: AppThemeDecorations.pageBackground(context),
@@ -213,6 +303,78 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
       ),
       body: Column(
         children: [
+          Directionality(
+            textDirection: TextDirection.rtl,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+              child: TableCalendar(
+                firstDay: DateTime.utc(2020, 1, 1),
+                lastDay: DateTime.utc(2035, 12, 31),
+                focusedDay: _focusedDay,
+                selectedDayPredicate: (d) => _selectedDay != null && isSameDay(_selectedDay, d),
+                onDaySelected: (selectedDay, focusedDay) {
+                  setState(() {
+                    _selectedDay = selectedDay;
+                    _focusedDay = focusedDay;
+                  });
+                },
+                onPageChanged: (focusedDay) {
+                  setState(() => _focusedDay = focusedDay);
+                },
+                calendarFormat: CalendarFormat.month,
+                availableCalendarFormats: const {CalendarFormat.month: 'شهر'},
+                startingDayOfWeek: StartingDayOfWeek.saturday,
+                eventLoader: (_) => const [],
+                calendarBuilders: CalendarBuilders(
+                  defaultBuilder: (context, day, focusedDay) => _calendarDayCell(context, day, selected: false),
+                  selectedBuilder: (context, day, focusedDay) {
+                    final n = _countForDay(day);
+                    if (n > 0) return _calendarDayCell(context, day, selected: true);
+                    return null;
+                  },
+                ),
+                calendarStyle: CalendarStyle(
+                  outsideDaysVisible: false,
+                  markersMaxCount: 0,
+                  cellMargin: const EdgeInsets.all(2),
+                  weekendTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                ),
+                headerStyle: HeaderStyle(
+                  formatButtonVisible: false,
+                  titleCentered: true,
+                  titleTextStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                  leftChevronIcon: Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.onSurface),
+                  rightChevronIcon: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurface),
+                ),
+                daysOfWeekStyle: DaysOfWeekStyle(
+                  weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+                  weekendStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ),
+          if (_selectedDay != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'عرض مهام: ${_dateKey(_selectedDay!)}  (${filteredTasks.length} مهمة)',
+                      style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 13),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => _selectedDay = null),
+                    child: const Text('كل الأيام', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
           SizedBox(
             height: 56,
             child: Directionality(

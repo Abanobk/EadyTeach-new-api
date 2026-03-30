@@ -1382,8 +1382,8 @@ function technicianLocation_track($input, $ctx) {
     $date = trim((string)($input['date'] ?? ''));
     if ($techId <= 0 || $date === '') throw new Exception('INVALID_ARGUMENT');
 
-    $fromHour = (int)($input['fromHour'] ?? 9);
-    $toHour = (int)($input['toHour'] ?? 19);
+    $fromHour = (int)($input['fromHour'] ?? 0);
+    $toHour = (int)($input['toHour'] ?? 23);
     if ($fromHour < 0) $fromHour = 0;
     if ($toHour > 23) $toHour = 23;
     if ($toHour < $fromHour) $toHour = $fromHour;

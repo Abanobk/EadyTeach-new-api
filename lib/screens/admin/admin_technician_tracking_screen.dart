@@ -223,8 +223,8 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
       final res = await ApiService.query('technicianLocation.track', input: {
         'technicianId': techId,
         'date': _dayStr(_day),
-        'fromHour': 9,
-        'toHour': 19,
+        'fromHour': 0,
+        'toHour': 23,
         'intervalMin': 30,
       });
       if (!mounted) return;
@@ -886,6 +886,18 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
     );
   }
 
+  /// آخر موقع وصل من `technicianLocation.latest` (آخر 24 ساعة) — يُعرض إذا مسار اليوم فارغ.
+  Map<String, dynamic>? _lastKnownForSelectedTech() {
+    final id = _selectedTechId;
+    if (id == null) return null;
+    for (final r in _latest) {
+      final rid = r['technicianId'];
+      final parsed = rid is int ? rid : int.tryParse(rid?.toString() ?? '');
+      if (parsed == id) return Map<String, dynamic>.from(r);
+    }
+    return null;
+  }
+
   Widget _trackPanel() {
     if (_selectedTechId == null) {
       return Center(child: Text('اختر فني لعرض المسار', style: TextStyle(color: AppColors.muted.withOpacity(0.9))));
@@ -899,6 +911,7 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
     final pointsRaw = (t?['points'] is List) ? (t!['points'] as List) : const [];
     final points = pointsRaw.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList();
     final rawCount = t?['rawCount'];
+    final fallback = _lastKnownForSelectedTech();
 
     return Padding(
       padding: const EdgeInsets.all(12),
@@ -919,7 +932,7 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'مسار اليوم (كل 30 دقيقة) — نقاط: ${points.length} (خام: ${rawCount ?? '—'})',
+                      'مسار اليوم 0–23 (كل 30 دقيقة) — نقاط: ${points.length} (خام: ${rawCount ?? '—'})',
                       style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w800),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -935,7 +948,82 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
             const Divider(height: 1, color: AppColors.border),
             Expanded(
               child: points.isEmpty
-                  ? Center(child: Text('لا توجد نقاط في هذا اليوم', style: TextStyle(color: AppColors.muted.withOpacity(0.9))))
+                  ? ListView(
+                      padding: const EdgeInsets.all(12),
+                      children: [
+                        if (fallback != null) ...[
+                          Text(
+                            'لا توجد نقاط ضمن مسار هذا اليوم، لكن يوجد آخر موقع وصل للسيرفر خلال 24 ساعة:',
+                            style: TextStyle(color: AppColors.muted.withOpacity(0.95), fontSize: 13, height: 1.35),
+                          ),
+                          const SizedBox(height: 10),
+                          Builder(
+                            builder: (ctx) {
+                              final createdAt = (fallback['createdAt'] ?? '').toString();
+                              final lat = fallback['latitude'];
+                              final lng = fallback['longitude'];
+                              final url = 'https://www.google.com/maps?q=$lat,$lng';
+                              return Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppThemeDecorations.pageBackground(context),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppColors.border),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 34,
+                                      height: 34,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Icon(Icons.my_location, color: AppColors.primary, size: 18),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            createdAt.isNotEmpty ? createdAt : 'آخر ظهور',
+                                            style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w700),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text('Lat/Lng: $lat, $lng', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () async {
+                                        final uri = Uri.parse(url);
+                                        if (await canLaunchUrl(uri)) {
+                                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                        }
+                                      },
+                                      child: const Text('فتح', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            'تأكد أن الفني يفتح التطبيق أو يضغط «اطلب موقع الآن». بعد التحديث يُرسل التطبيق موقعاً تلقائياً كل 30 دقيقة أثناء العمل.',
+                            style: TextStyle(color: AppColors.muted.withOpacity(0.85), fontSize: 12, height: 1.35),
+                          ),
+                        ] else
+                          Center(
+                            child: Text(
+                              'لا توجد نقاط في هذا اليوم ولا آخر موقع مسجّل خلال 24 ساعة.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: AppColors.muted.withOpacity(0.9)),
+                            ),
+                          ),
+                      ],
+                    )
                   : ListView.builder(
                       padding: const EdgeInsets.all(12),
                       itemCount: points.length,

@@ -43,12 +43,11 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
       if (mounted) _checkAndPromptLocationPermission();
     });
 
-    // Auto refresh status every 30 minutes (while app is running).
-    _statusTimer = Timer.periodic(const Duration(minutes: 30), (_) {
-      if (mounted) {
-        // ignore: unawaited_futures
-        _checkAndPromptLocationPermission(silent: true);
-      }
+    // Auto refresh status + موقع للسيرفر كل 30 دقيقة (التطبيق مفتوح) — بدون هذا لا يُسجَّل مسار يومي.
+    _statusTimer = Timer.periodic(const Duration(minutes: 30), (_) async {
+      if (!mounted) return;
+      await _checkAndPromptLocationPermission(silent: true);
+      await _uploadLocationHeartbeat(silent: true);
     });
   }
 
@@ -67,6 +66,31 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
     _lastPermRefreshAt = now;
     if (!mounted) return;
     await _checkAndPromptLocationPermission(silent: true);
+    await _uploadLocationHeartbeat(silent: true);
+  }
+
+  /// يرسل آخر إحداثيات للسيرفر حتى يظهر «مسار اليوم» للإدارة (لا يعتمد على فتح مهمة فقط).
+  Future<void> _uploadLocationHeartbeat({bool silent = true}) async {
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) return;
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium);
+      await ApiService.mutate('technicianLocation.update', input: {
+        'latitude': pos.latitude,
+        'longitude': pos.longitude,
+        'accuracy': pos.accuracy,
+        'source': 'heartbeat',
+      });
+    } catch (_) {
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذّر إرسال الموقع للسيرفر'), backgroundColor: AppColors.error),
+        );
+      }
+    }
   }
 
   Future<void> _checkAndPromptLocationPermission({bool silent = false}) async {
@@ -120,6 +144,12 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
           'devicePlatform': platform,
         });
       } catch (_) {}
+
+      // أول نقطة مسار بعد التحقق من الإذن (والجدول الزمني يكمّل لاحقاً).
+      if (perm != LocationPermission.denied && perm != LocationPermission.deniedForever) {
+        // ignore: unawaited_futures
+        _uploadLocationHeartbeat(silent: true);
+      }
 
       // (اختياري) إشعار بسيط مرة واحدة بدون تفاصيل تقنية.
       if (!silent && !ok && mounted && !_shownLocationSnackOnce) {

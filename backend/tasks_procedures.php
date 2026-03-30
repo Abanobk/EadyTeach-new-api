@@ -1179,8 +1179,15 @@ function _ensureTechnicianLocationsSchema(): void {
         INDEX idx_task_time (task_id, created_at),
         INDEX idx_req_time (request_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-    // Migrate older deployments
+    // Migrate older deployments (some installs may have an older schema).
+    try { $db->exec("ALTER TABLE technician_locations ADD COLUMN IF NOT EXISTS task_id INT NULL"); } catch (\Exception $e) {}
     try { $db->exec("ALTER TABLE technician_locations ADD COLUMN IF NOT EXISTS request_id INT NULL"); } catch (\Exception $e) {}
+    try { $db->exec("ALTER TABLE technician_locations ADD COLUMN IF NOT EXISTS accuracy_m DECIMAL(10,2) NULL"); } catch (\Exception $e) {}
+    try { $db->exec("ALTER TABLE technician_locations ADD COLUMN IF NOT EXISTS is_arrived TINYINT(1) DEFAULT 0"); } catch (\Exception $e) {}
+    try { $db->exec("ALTER TABLE technician_locations ADD COLUMN IF NOT EXISTS source VARCHAR(32) DEFAULT 'mobile'"); } catch (\Exception $e) {}
+    try { $db->exec("ALTER TABLE technician_locations ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"); } catch (\Exception $e) {}
+    try { $db->exec("ALTER TABLE technician_locations ADD INDEX idx_tech_time (technician_id, created_at)"); } catch (\Exception $e) {}
+    try { $db->exec("ALTER TABLE technician_locations ADD INDEX idx_task_time (task_id, created_at)"); } catch (\Exception $e) {}
     try { $db->exec("ALTER TABLE technician_locations ADD INDEX idx_req_time (request_id, created_at)"); } catch (\Exception $e) {}
     $done = true;
 }

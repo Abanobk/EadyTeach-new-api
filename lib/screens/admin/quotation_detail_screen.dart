@@ -1750,9 +1750,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                             ),
                           ],
                           if (isDealer ||
-                              ((_quotation?['purchaseItems'] as List?)
-                                      ?.isNotEmpty ??
-                                  false))
+                              canAccessAdmin ||
+                              ((_quotation?['purchaseItems'] as List?)?.isNotEmpty ?? false))
                             ...[
                             const SizedBox(height: 10),
                             SizedBox(

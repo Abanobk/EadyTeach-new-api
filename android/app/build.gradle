@@ -66,7 +66,16 @@ android {
                 storePassword = ksStorePassword
                 storeFile = releaseKeystoreFile
             } else {
-                // No valid key.properties + keystore yet: debug signing (not for Play). Save a non-empty android/key.properties to use upload keystore.
+                // CI must never fall back to ~/.android/debug.keystore (often missing on Linux runners).
+                def onCi = System.getenv("GITHUB_ACTIONS") == "true" || System.getenv("CI") == "true"
+                if (onCi) {
+                    throw new GradleException(
+                        "Release signing not configured for CI. Ensure the workflow creates android/key.properties and android/app/upload-keystore.jks " +
+                        "and GitHub secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD, ANDROID_KEY_ALIAS are set. " +
+                        "Also confirm the git tag points to a commit that includes the Prepare Android signing files workflow step."
+                    )
+                }
+                // Local dev only: debug signing (not for Play).
                 storeFile = file("${System.getProperty('user.home')}/.android/debug.keystore")
                 storePassword = "android"
                 keyAlias = "androiddebugkey"

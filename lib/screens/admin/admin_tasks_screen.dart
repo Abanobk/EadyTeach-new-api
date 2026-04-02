@@ -198,8 +198,11 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                 height: 36,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: scheme.primary.withOpacity(0.22),
-                  border: Border.all(color: scheme.primary, width: 1.8),
+                  color: n > 0 ? scheme.primary.withOpacity(0.22) : scheme.primary.withOpacity(0.08),
+                  border: Border.all(
+                    color: scheme.primary,
+                    width: n > 0 ? 1.8 : 1.2,
+                  ),
                 ),
               ),
             if (isToday && !selected)
@@ -304,30 +307,54 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
     final isSelected = _filter == value;
     final color = activeColor ?? AppColors.primary;
     final scheme = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: () => setState(() => _filter = value),
-      child: Container(
-        margin: const EdgeInsets.only(left: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.15) : AppThemeDecorations.cardColor(context),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? color : AppColors.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 15, color: isSelected ? color : scheme.onSurfaceVariant),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? color : scheme.onSurface,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                fontSize: 13,
+    final card = AppThemeDecorations.cardColor(context);
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() {
+            _filter = value;
+            _selectedDay = null; // أي تغيير للفلتر يعرض كل المهام في هذه الفئة (بدون تقييد بيوم التقويم)
+          }),
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: isSelected ? color.withOpacity(0.22) : card,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected ? color.withOpacity(0.95) : AppColors.border.withOpacity(0.7),
+                width: isSelected ? 1.5 : 1,
               ),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: color.withOpacity(0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
             ),
-          ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: isSelected ? color : scheme.onSurfaceVariant),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isSelected ? scheme.onSurface : scheme.onSurface.withOpacity(0.88),
+                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                    fontSize: 12.5,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -373,7 +400,11 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                           _calendarExpanded ? Icons.expand_less : Icons.calendar_month,
                           color: AppColors.primary,
                         ),
-                        onPressed: () => setState(() => _calendarExpanded = !_calendarExpanded),
+                        onPressed: () => setState(() {
+                          _calendarExpanded = !_calendarExpanded;
+                          // طيّ التقويم يدوياً = إلغاء فلتر اليوم وعرض كل المهام حسب الشريط فقط
+                          if (!_calendarExpanded) _selectedDay = null;
+                        }),
                       ),
                       Expanded(
                         child: Text(
@@ -404,6 +435,7 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                                 setState(() {
                                   _selectedDay = selectedDay;
                                   _focusedDay = focusedDay;
+                                  _calendarExpanded = false; // بعد اختيار اليوم يُطوى التقويم لعرض القائمة كاملة
                                 });
                               },
                               onPageChanged: (focusedDay) {
@@ -502,24 +534,41 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
                 ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
                 : filteredTasks.isEmpty
                     ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.assignment_outlined,
-                              size: 64,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'لا توجد مهام',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.onSurface,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 32),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.assignment_outlined,
+                                size: 56,
+                                color: Theme.of(context).colorScheme.primary.withOpacity(0.85),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 16),
+                              Text(
+                                _selectedDay != null
+                                    ? 'لا توجد مهام في ${_dateKey(_selectedDay!)} ضمن الفلتر الحالي'
+                                    : 'لا توجد مهام',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (_selectedDay != null) ...[
+                                const SizedBox(height: 10),
+                                Text(
+                                  'جرّب «كل الأيام» أو غيّر نوع المهام من الشريط أعلاه',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: AppThemeDecorations.mutedColor(context),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                       )
                     : ListView.builder(

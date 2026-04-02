@@ -21,6 +21,26 @@ jobs:
         with:
           channel: 'stable'
 
+      - name: Prepare Android signing files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Decode upload keystore (base64) into android/app/upload-keystore.jks
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+
+          # Generate android/key.properties expected by android/app/build.gradle
+          cat > android/key.properties <<'EOF'
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=upload-keystore.jks
+          EOF
+
+          # Sanity check (avoid printing secrets)
+          test -s android/app/upload-keystore.jks
+          test -s android/key.properties
+
       - name: Install Dependencies
         run: flutter pub get
 

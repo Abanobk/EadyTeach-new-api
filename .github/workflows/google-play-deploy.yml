@@ -39,13 +39,24 @@ jobs:
 
           raw = os.environ.get("ANDROID_KEYSTORE_BASE64", "")
           s = "".join(raw.split())
+          print(f"ANDROID_KEYSTORE_BASE64 length (after whitespace strip): {len(s)}")
           if not s:
               raise SystemExit("ANDROID_KEYSTORE_BASE64 is empty")
           pad = (-len(s)) % 4
           s += "=" * pad
           data = base64.b64decode(s, validate=False)
+          print(f"Decoded keystore size (bytes): {len(data)}")
           if len(data) < 100:
-              raise SystemExit("Decoded keystore looks too small; check ANDROID_KEYSTORE_BASE64")
+              raise SystemExit(
+                  "Decoded keystore too small (got "
+                  + str(len(data))
+                  + " bytes). Base64 length was "
+                  + str(len("".join(raw.split())))
+                  + ". Expected thousands of bytes for a real .jks — the GitHub secret is likely truncated, "
+                  "wrong paste, or not the keystore file. Fix: run on Mac "
+                  "`base64 -i android/app/upload-keystore.jks > /tmp/ks.b64` then "
+                  "`gh secret set ANDROID_KEYSTORE_BASE64 < /tmp/ks.b64` (avoids browser paste limits)."
+              )
           pathlib.Path("android/app/upload-keystore.jks").write_bytes(data)
           PY
 

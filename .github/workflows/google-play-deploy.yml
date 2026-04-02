@@ -60,12 +60,27 @@ jobs:
           pathlib.Path("android/app/upload-keystore.jks").write_bytes(data)
           PY
 
-          # android/app/build.gradle reads android/key.properties (no leading spaces)
-          : > android/key.properties
-          printf '%s\n' "storePassword=${ANDROID_KEYSTORE_PASSWORD}" >> android/key.properties
-          printf '%s\n' "keyPassword=${ANDROID_KEY_PASSWORD}" >> android/key.properties
-          printf '%s\n' "keyAlias=${ANDROID_KEY_ALIAS}" >> android/key.properties
-          printf '%s\n' "storeFile=upload-keystore.jks" >> android/key.properties
+          # android/app/build.gradle reads android/key.properties — strip spaces (alias/password paste often has trailing space)
+          python3 - <<'PY'
+          import pathlib
+          import os
+
+          def strip_env(name: str) -> str:
+              return (os.environ.get(name) or "").strip()
+
+          pathlib.Path("android/key.properties").write_text(
+              "\n".join(
+                  [
+                      f"storePassword={strip_env('ANDROID_KEYSTORE_PASSWORD')}",
+                      f"keyPassword={strip_env('ANDROID_KEY_PASSWORD')}",
+                      f"keyAlias={strip_env('ANDROID_KEY_ALIAS')}",
+                      "storeFile=upload-keystore.jks",
+                      "",
+                  ]
+              ),
+              encoding="utf-8",
+          )
+          PY
 
           test -s android/app/upload-keystore.jks
           test -s android/key.properties
@@ -93,6 +108,71 @@ jobs:
           PY
           ls -la android/key.properties android/app/upload-keystore.jks
 
+      - name: Verify keystore alias exists (keytool)
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+
+          store_pass = (os.environ.get("ANDROID_KEYSTORE_PASSWORD") or "").strip()
+          want = (os.environ.get("ANDROID_KEY_ALIAS") or "").strip()
+          ks = "android/app/upload-keystore.jks"
+
+          if not store_pass or not want:
+              print("ANDROID_KEYSTORE_PASSWORD or ANDROID_KEY_ALIAS is empty after strip.", file=sys.stderr)
+              sys.exit(1)
+
+          r = subprocess.run(
+              [
+                  "keytool",
+                  "-list",
+                  "-v",
+                  "-keystore",
+                  ks,
+                  "-storepass",
+                  store_pass,
+              ],
+              capture_output=True,
+              text=True,
+          )
+          if r.returncode != 0:
+              print("keytool failed (wrong store password or corrupt keystore?). stderr:", file=sys.stderr)
+              print(r.stderr, file=sys.stderr)
+              sys.exit(1)
+
+          aliases = []
+          for line in r.stdout.splitlines():
+              m = re.match(r"^\s*Alias name:\s*(.+)\s*$", line)
+              if m:
+                  aliases.append(m.group(1).strip())
+
+          if not aliases:
+              print("Could not parse any 'Alias name:' from keytool -list -v output.", file=sys.stderr)
+              print(r.stdout[:4000], file=sys.stderr)
+              sys.exit(1)
+
+          if want not in aliases:
+              print(
+                  "ANDROID_KEY_ALIAS does not match this keystore.\n"
+                  f"  Secret alias (after strip): {want!r}\n"
+                  f"  Aliases in decoded {ks}: {aliases!r}\n"
+                  "Fix: set GitHub secret ANDROID_KEY_ALIAS to exactly one of those names, "
+                  "or re-upload ANDROID_KEYSTORE_BASE64 from the same upload-keystore.jks you use locally "
+                  "(run: keytool -list -v -keystore android/app/upload-keystore.jks).",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          print(f"Keystore alias OK: {want!r} is present ({len(aliases)} entr(y/ies)).")
+          PY
+
       - name: Install Dependencies
         run: flutter pub get
 
@@ -102,7 +182,8 @@ jobs:
       - name: Upload to Play Store
         uses: r0adkll/upload-google-play@v1
         with:
-          serviceAccountJsonKeyData: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+          # Raw JSON (not a path). Valid inputs: serviceAccountJson | serviceAccountJsonPlainText
+          serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT_JSON }}
           packageName: com.easytech.easy_tech_flutter
           releaseFiles: build/app/outputs/bundle/release/app-release.aab
           track: internal # بيبدأ برفعه على الـ Internal testing عشان تجربه الأول

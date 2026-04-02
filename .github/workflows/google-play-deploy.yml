@@ -23,21 +23,39 @@ jobs:
 
       - name: Prepare Android signing files
         shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           set -euo pipefail
 
-          # Decode upload keystore (base64) into android/app/upload-keystore.jks
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+          # Decode keystore: strip all whitespace (macOS base64 often wraps lines) then base64-decode.
+          python3 - <<'PY'
+          import base64
+          import os
+          import pathlib
 
-          # Generate android/key.properties expected by android/app/build.gradle
-          cat > android/key.properties <<'EOF'
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          storeFile=upload-keystore.jks
-          EOF
+          raw = os.environ.get("ANDROID_KEYSTORE_BASE64", "")
+          s = "".join(raw.split())
+          if not s:
+              raise SystemExit("ANDROID_KEYSTORE_BASE64 is empty")
+          pad = (-len(s)) % 4
+          s += "=" * pad
+          data = base64.b64decode(s, validate=False)
+          if len(data) < 100:
+              raise SystemExit("Decoded keystore looks too small; check ANDROID_KEYSTORE_BASE64")
+          pathlib.Path("android/app/upload-keystore.jks").write_bytes(data)
+          PY
 
-          # Sanity check (avoid printing secrets)
+          # android/app/build.gradle reads android/key.properties (no leading spaces)
+          : > android/key.properties
+          printf '%s\n' "storePassword=${ANDROID_KEYSTORE_PASSWORD}" >> android/key.properties
+          printf '%s\n' "keyPassword=${ANDROID_KEY_PASSWORD}" >> android/key.properties
+          printf '%s\n' "keyAlias=${ANDROID_KEY_ALIAS}" >> android/key.properties
+          printf '%s\n' "storeFile=upload-keystore.jks" >> android/key.properties
+
           test -s android/app/upload-keystore.jks
           test -s android/key.properties
 

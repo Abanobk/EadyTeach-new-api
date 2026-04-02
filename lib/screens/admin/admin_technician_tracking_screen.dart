@@ -420,12 +420,18 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
     setState(() => _requestingNow = true);
     try {
       final res = await ApiService.mutate('technicianLocation.requestNow', input: {'technicianId': techId});
-      final reqId = (res['data'] is Map) ? (res['data']['requestId']) : null;
+      final payload = (res['data'] is Map) ? (res['data'] as Map) : const {};
+      final reqId = payload['requestId'];
+      final pushQueued = payload['pushQueued'] == true;
       if (mounted) {
+        final mainMsg = reqId != null ? 'تم إنشاء الطلب (ID: $reqId)…' : 'تم إنشاء طلب لوكيشن للفني الآن…';
+        final warnMsg = !pushQueued
+            ? '\nتنبيه: لا يوجد `FCM token` للفني، فالأمر قد لا يصل له في الخلفية (المسار يحتاج فتح التطبيق أو إرسال heartbeat).'
+            : '';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(reqId != null ? 'تم إرسال الطلب (ID: $reqId)…' : 'تم إرسال طلب لوكيشن للفني الآن…'),
-            backgroundColor: Colors.green,
+            content: Text('$mainMsg$warnMsg'),
+            backgroundColor: !pushQueued ? Colors.orange : Colors.green,
           ),
         );
       }

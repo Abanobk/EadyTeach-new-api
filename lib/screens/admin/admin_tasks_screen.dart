@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../services/api_service.dart';
@@ -21,6 +23,9 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
   /// تقويم: الشهر المعروض واليوم المحدد لفلترة القائمة
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
+
+  /// التقويم مطوي افتراضياً؛ الضغط على الأيقونة يوسّعه
+  bool _calendarExpanded = false;
 
   @override
   void initState() {
@@ -55,12 +60,12 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
   String _dateKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  /// تاريخ موعد المهمة yyyy-MM-dd أو null
+  /// تاريخ موعد المهمة yyyy-MM-dd (حسب التقويم المحلي) أو null
+  /// لا نستخدم substring على ISO لأن جزء التاريخ قد يكون UTC ويختلف عن اليوم المحلي.
   String? _taskScheduledDateKey(dynamic t) {
     final s = (t['scheduledAt']?.toString() ?? '').trim();
     if (s.isEmpty) return null;
     try {
-      if (s.length >= 10) return s.substring(0, 10);
       final dt = DateTime.parse(s);
       return _dateKey(DateTime(dt.year, dt.month, dt.day));
     } catch (_) {
@@ -68,13 +73,14 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
     }
   }
 
-  /// عدد المهام (غير الملغاة) في يوم تقويمي
+  /// عدد المهام في اليوم للتقويم: نفس منطق «المهام الحالية» (لا مكتملة / لا ملغاة)
+  /// حتى لا يظهر رقم على الخلية والقائمة 0 لمهمة مكتملة.
   int _countForDay(DateTime day) {
     final key = _dateKey(day);
     var n = 0;
     for (final t in _tasks) {
       if (t is! Map) continue;
-      if (t['status'] == 'cancelled') continue;
+      if (t['status'] == 'cancelled' || t['status'] == 'completed') continue;
       if (_taskScheduledDateKey(t) == key) n++;
     }
     return n;
@@ -133,51 +139,100 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
     return base.where((t) => _taskScheduledDateKey(t) == key).toList();
   }
 
-  Widget? _calendarDayCell(BuildContext context, DateTime day, {required bool selected}) {
+  /// خلايا التقويم: دوائر متحدة المركز بعدد المهام (بدون تغطية رقم اليوم)
+  Widget? _calendarDayCell(
+    BuildContext context,
+    DateTime day, {
+    required bool selected,
+    required bool isToday,
+  }) {
     final n = _countForDay(day);
-    if (n == 0 && !selected) return null;
+    if (n == 0 && !selected && !isToday) return null;
     final scheme = Theme.of(context).colorScheme;
-    if (n == 0 && selected) {
-      return null;
-    }
-    return Container(
-      margin: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: selected ? AppColors.primary.withOpacity(0.38) : AppColors.primary.withOpacity(0.14),
-        border: Border.all(
-          color: selected ? AppColors.primary : AppColors.primary.withOpacity(0.4),
-          width: selected ? 2 : 1,
-        ),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        clipBehavior: Clip.none,
-        children: [
-          Text(
-            '${day.day}',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-              color: scheme.onSurface,
-            ),
+    final primary = AppColors.primary;
+    final rings = math.min(n, 4);
+    final showPlus = n > 4;
+
+    Widget dayNumber({Color? color, FontWeight? w}) => Text(
+          '${day.day}',
+          style: TextStyle(
+            fontWeight: w ?? FontWeight.w700,
+            fontSize: 13,
+            color: color ?? scheme.onSurface,
           ),
-          if (n > 0)
-            Positioned(
-              bottom: 1,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        );
+
+    return Container(
+      margin: const EdgeInsets.all(2),
+      child: SizedBox(
+        width: 38,
+        height: 38,
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            // حلقات خارجية → داخلية (كل مهمة حلقة)
+            if (rings > 0)
+              ...List<Widget>.generate(rings, (i) {
+                final idx = rings - 1 - i; // الأبعد أولاً
+                final side = 34.0 - idx * 4.5;
+                return Center(
+                  child: SizedBox(
+                    width: side,
+                    height: side,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: primary.withOpacity(0.55 + idx * 0.08),
+                          width: 1.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            if (selected)
+              Container(
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '$n',
-                  style: const TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.w900),
+                  shape: BoxShape.circle,
+                  color: scheme.primary.withOpacity(0.22),
+                  border: Border.all(color: scheme.primary, width: 1.8),
                 ),
               ),
+            if (isToday && !selected)
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: primary.withOpacity(0.9), width: 1.2),
+                ),
+              ),
+            dayNumber(
+              color: selected ? scheme.onSurface : null,
+              w: selected ? FontWeight.w800 : FontWeight.w700,
             ),
-        ],
+            if (showPlus)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 0),
+                  decoration: BoxDecoration(
+                    color: primary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '+${n - 4}',
+                    style: const TextStyle(color: Colors.black, fontSize: 8, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -306,54 +361,104 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
           Directionality(
             textDirection: TextDirection.rtl,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-              child: TableCalendar(
-                firstDay: DateTime.utc(2020, 1, 1),
-                lastDay: DateTime.utc(2035, 12, 31),
-                focusedDay: _focusedDay,
-                selectedDayPredicate: (d) => _selectedDay != null && isSameDay(_selectedDay, d),
-                onDaySelected: (selectedDay, focusedDay) {
-                  setState(() {
-                    _selectedDay = selectedDay;
-                    _focusedDay = focusedDay;
-                  });
-                },
-                onPageChanged: (focusedDay) {
-                  setState(() => _focusedDay = focusedDay);
-                },
-                calendarFormat: CalendarFormat.month,
-                availableCalendarFormats: const {CalendarFormat.month: 'شهر'},
-                startingDayOfWeek: StartingDayOfWeek.saturday,
-                eventLoader: (_) => const [],
-                calendarBuilders: CalendarBuilders(
-                  defaultBuilder: (context, day, focusedDay) => _calendarDayCell(context, day, selected: false),
-                  selectedBuilder: (context, day, focusedDay) {
-                    final n = _countForDay(day);
-                    if (n > 0) return _calendarDayCell(context, day, selected: true);
-                    return null;
-                  },
-                ),
-                calendarStyle: CalendarStyle(
-                  outsideDaysVisible: false,
-                  markersMaxCount: 0,
-                  cellMargin: const EdgeInsets.all(2),
-                  weekendTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-                ),
-                headerStyle: HeaderStyle(
-                  formatButtonVisible: false,
-                  titleCentered: true,
-                  titleTextStyle: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      IconButton(
+                        tooltip: _calendarExpanded ? 'طي التقويم' : 'عرض التقويم',
+                        icon: Icon(
+                          _calendarExpanded ? Icons.expand_less : Icons.calendar_month,
+                          color: AppColors.primary,
+                        ),
+                        onPressed: () => setState(() => _calendarExpanded = !_calendarExpanded),
+                      ),
+                      Expanded(
+                        child: Text(
+                          '${_focusedDay.year}/${_focusedDay.month.toString().padLeft(2, '0')}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 48),
+                    ],
                   ),
-                  leftChevronIcon: Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.onSurface),
-                  rightChevronIcon: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurface),
-                ),
-                daysOfWeekStyle: DaysOfWeekStyle(
-                  weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
-                  weekendStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
-                ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeInOut,
+                    child: _calendarExpanded
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: TableCalendar(
+                              firstDay: DateTime.utc(2020, 1, 1),
+                              lastDay: DateTime.utc(2035, 12, 31),
+                              focusedDay: _focusedDay,
+                              selectedDayPredicate: (d) => _selectedDay != null && isSameDay(_selectedDay, d),
+                              onDaySelected: (selectedDay, focusedDay) {
+                                setState(() {
+                                  _selectedDay = selectedDay;
+                                  _focusedDay = focusedDay;
+                                });
+                              },
+                              onPageChanged: (focusedDay) {
+                                setState(() {
+                                  _focusedDay = focusedDay;
+                                  // لا يبقى يوم مختار من شهر آخر (يُفرّغ القائمة ولا يُظهر أياماً «شبح»)
+                                  if (_selectedDay != null) {
+                                    final s = _selectedDay!;
+                                    if (s.year != focusedDay.year || s.month != focusedDay.month) {
+                                      _selectedDay = null;
+                                    }
+                                  }
+                                });
+                              },
+                              calendarFormat: CalendarFormat.month,
+                              availableCalendarFormats: const {CalendarFormat.month: 'شهر'},
+                              startingDayOfWeek: StartingDayOfWeek.saturday,
+                              eventLoader: (_) => const [],
+                              calendarBuilders: CalendarBuilders(
+                                defaultBuilder: (context, day, focusedDay) =>
+                                    _calendarDayCell(context, day, selected: false, isToday: false),
+                                todayBuilder: (context, day, focusedDay) =>
+                                    _calendarDayCell(context, day, selected: false, isToday: true),
+                                selectedBuilder: (context, day, focusedDay) {
+                                  final now = DateTime.now();
+                                  final isToday = isSameDay(day, DateTime(now.year, now.month, now.day));
+                                  return _calendarDayCell(context, day, selected: true, isToday: isToday);
+                                },
+                              ),
+                              calendarStyle: CalendarStyle(
+                                outsideDaysVisible: false,
+                                markersMaxCount: 0,
+                                cellMargin: const EdgeInsets.all(2),
+                                weekendTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                              ),
+                              headerStyle: HeaderStyle(
+                                formatButtonVisible: false,
+                                titleCentered: true,
+                                titleTextStyle: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                ),
+                                leftChevronIcon: Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.onSurface),
+                                rightChevronIcon: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurface),
+                              ),
+                              daysOfWeekStyle: DaysOfWeekStyle(
+                                weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+                                weekendStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ],
               ),
             ),
           ),

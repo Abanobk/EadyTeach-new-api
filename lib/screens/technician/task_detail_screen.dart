@@ -2139,6 +2139,28 @@ class _DeferTaskScheduleSheetState extends State<_DeferTaskScheduleSheet> {
     }
   }
 
+  Future<void> _saveWithoutSchedule() async {
+    setState(() => _saving = true);
+    try {
+      await ApiService.mutate('tasks.update', input: {
+        'id': widget.taskId,
+        'scheduledAt': null,
+        'estimatedArrivalAt': null,
+      });
+      if (!mounted) return;
+      Navigator.pop(context);
+      await widget.onSuccess();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل التعيين بدون موعد: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -2211,20 +2233,34 @@ class _DeferTaskScheduleSheetState extends State<_DeferTaskScheduleSheet> {
                 },
               ),
               const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _saving ? null : _save,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: _saving
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                      )
-                    : const Text('تأكيد الترحيل', style: TextStyle(fontWeight: FontWeight.w900)),
+              Column(
+                children: [
+                  ElevatedButton(
+                    onPressed: _saving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                          )
+                        : const Text('تأكيد الترحيل', style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                    onPressed: _saving ? null : _saveWithoutSchedule,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(color: AppColors.primary.withOpacity(0.9)),
+                      foregroundColor: AppColors.primary,
+                    ),
+                    child: const Text('تعيين بدون موعد', style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                ],
               ),
             ],
           ),

@@ -2173,7 +2173,8 @@ class _DeferTaskScheduleSheetState extends State<_DeferTaskScheduleSheet> {
             top: 16,
             bottom: MediaQuery.of(context).viewInsets.bottom + 20,
           ),
-          child: Column(
+          child: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -2194,7 +2195,7 @@ class _DeferTaskScheduleSheetState extends State<_DeferTaskScheduleSheet> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'حدد تاريخاً جديداً ووقت الوصول المتوقع للفني.',
+                'حدد تاريخاً جديداً ووقت الوصول المتوقع للفني، أو عيّن المهمة بدون موعد من الزر أسفل الشاشة.',
                 style: TextStyle(color: AppColors.muted, fontSize: 13),
               ),
               const SizedBox(height: 16),
@@ -2263,6 +2264,7 @@ class _DeferTaskScheduleSheetState extends State<_DeferTaskScheduleSheet> {
                 ],
               ),
             ],
+            ),
           ),
         ),
       ),

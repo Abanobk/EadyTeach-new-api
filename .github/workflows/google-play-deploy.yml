@@ -59,6 +59,29 @@ jobs:
           test -s android/app/upload-keystore.jks
           test -s android/key.properties
 
+      - name: Verify signing secrets (no values printed)
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          txt = pathlib.Path("android/key.properties").read_text(encoding="utf-8")
+          for raw in txt.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+              continue
+            if "=" not in line:
+              continue
+            k, v = line.split("=", 1)
+            k, v = k.strip(), v.strip()
+            if not v:
+              raise SystemExit(
+                f"Empty value for '{k}' in android/key.properties. "
+                "In GitHub: Settings → Secrets → Actions → ensure ANDROID_KEYSTORE_PASSWORD, "
+                "ANDROID_KEY_PASSWORD, and ANDROID_KEY_ALIAS are set (names must match exactly)."
+              )
+          print("key.properties OK (all keys non-empty).")
+          PY
+          ls -la android/key.properties android/app/upload-keystore.jks
+
       - name: Install Dependencies
         run: flutter pub get
 

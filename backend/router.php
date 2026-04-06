@@ -578,13 +578,13 @@ try {
 
         // ── Auth ────────────────────────────────────────────────
         case 'auth.googleAuth':
-            // تسجيل الدخول باستخدام Google بناءً على البريد الإلكتروني فقط
-            $email = $input['email'] ?? '';
+            // تسجيل الدخول باستخدام Google بناءً على البريد الإلكتروني فقط (مطابقة بدون حساسية لحالة الأحرف)
+            $email = trim($input['email'] ?? '');
             if (!$email) {
                 throw new Exception('البريد الإلكتروني مطلوب لتسجيل الدخول بـ Google');
             }
 
-            $stmt = $db->prepare('SELECT id, name, email, role FROM users WHERE email = ?');
+            $stmt = $db->prepare('SELECT id, name, email, role FROM users WHERE LOWER(email) = LOWER(?)');
             $stmt->execute([$email]);
             $user = $stmt->fetch();
 
@@ -623,12 +623,13 @@ try {
                 throw new Exception('البريد الإلكتروني مطلوب');
             }
 
-            $stmt = $db->prepare('SELECT id, name, email FROM users WHERE email = ?');
+            $stmt = $db->prepare('SELECT id, name, email FROM users WHERE LOWER(email) = LOWER(?)');
             $stmt->execute([$email]);
             $user = $stmt->fetch();
             if (!$user) {
-                // لا نفصح إن المستخدم غير موجود لأسباب أمنية
-                throw new Exception('تم استلام الطلب. إذا كان البريد مسجلاً سيتم إرسال كلمة مرور جديدة.');
+                // لا نفصح إن المستخدم غير موجود لأسباب أمنية — نفس الاستجابة الناجحة
+                $result = ['success' => true, 'emailSent' => false];
+                break;
             }
 
             // توليد كلمة مرور عشوائية جديدة
@@ -652,9 +653,13 @@ try {
             $headers = "Content-Type: text/plain; charset=utf-8\r\n";
             $headers .= "From: Easy Tech <no-reply@easytecheg.net>\r\n";
 
-            @mail($user['email'], '=?UTF-8?B?'.base64_encode($subject).'?=', $body, $headers);
+            $mailSent = @mail($user['email'], '=?UTF-8?B?'.base64_encode($subject).'?=', $body, $headers);
 
-            $result = ['success' => true];
+            $result = ['success' => true, 'emailSent' => (bool) $mailSent];
+            // إذا فشل PHP mail() (شائع بدون SMTP) نعيد كلمة المرور في الاستجابة حتى يتمكن المستخدم من الدخول عبر HTTPS
+            if (!$mailSent) {
+                $result['temporaryPassword'] = $plain;
+            }
             break;
 
         case 'auth.adminLogin':

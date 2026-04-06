@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/auth_provider.dart';
@@ -120,10 +121,55 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       try {
-        await ApiService.mutate('auth.forgotPassword', input: {'email': email});
+        final result = await ApiService.mutate('auth.forgotPassword', input: {'email': email});
         if (!mounted) return;
+        final data = result['data'];
+        final tempPassword = data is Map ? data['temporaryPassword']?.toString() : null;
+        if (tempPassword != null && tempPassword.isNotEmpty) {
+          await showDialog<void>(
+            context: context,
+            builder: (ctx) => Directionality(
+              textDirection: TextDirection.rtl,
+              child: AlertDialog(
+                backgroundColor: AppThemeDecorations.cardColor(context),
+                title: const Text('كلمة المرور الجديدة', style: TextStyle(color: AppColors.text)),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'تعذّر إرسال البريد من السيرفر. استخدم كلمة المرور التالية للدخول ثم غيّرها من الإعدادات.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    SelectableText(
+                      tempPassword,
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: tempPassword));
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('تم النسخ')));
+                      }
+                    },
+                    child: const Text('نسخ'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('حسناً', style: TextStyle(color: _kPrimaryBlue)),
+                  ),
+                ],
+              ),
+            ),
+          );
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('تم إرسال كلمة مرور جديدة إلى بريدك (إن كان مسجلاً).'),
+          content: Text('إذا كان البريد مسجلاً ستصلك كلمة مرور جديدة (تحقق من الرسائل غير المرغوب فيها).'),
           backgroundColor: Colors.green,
         ));
       } catch (e) {
@@ -248,7 +294,14 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'فشل تسجيل الدخول بـ Google. حاول مرة أخرى.');
+      var msg = e.toString();
+      if (msg.startsWith('Exception: ')) {
+        msg = msg.substring('Exception: '.length);
+      }
+      if (msg.startsWith('UNAUTHORIZED: ')) {
+        msg = msg.substring('UNAUTHORIZED: '.length);
+      }
+      setState(() => _error = msg.length > 220 ? '${msg.substring(0, 220)}…' : msg);
     } finally {
       if (mounted) setState(() => _googleLoading = false);
     }

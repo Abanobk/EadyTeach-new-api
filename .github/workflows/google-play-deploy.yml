@@ -176,8 +176,10 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
+      # رقم البناء (versionCode) يُؤخذ من pubspec.yaml بعد الإشارة + — لازم يزيد عن أي نسخة مرفوعة على Play.
+      # لا تستخدم github.run_number هنا: قد يتكرر مع إعادة تشغيل الـ workflow أو يصطدم مع أرقام قديمة.
       - name: Build Release Bundle
-        run: flutter build appbundle --release --build-number=${{ github.run_number }}
+        run: flutter build appbundle --release
 
       - name: Upload to Play Store
         uses: r0adkll/upload-google-play@v1

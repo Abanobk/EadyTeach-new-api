@@ -1,0 +1,5 @@
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"
+#include "Generated.xcconfig"
+
+// Match Release (Flutter iOS 26+ release white screen workaround)
+STRIP_STYLE = non-global;

@@ -1,7 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
+
+const _kSecretaryAptColors = <String, Color>{
+  'blue': Colors.blue,
+  'green': Colors.green,
+  'orange': Colors.orange,
+  'purple': Colors.purple,
+  'teal': Colors.teal,
+  'red': Colors.red,
+};
 
 class AdminSecretaryScreen extends StatefulWidget {
   const AdminSecretaryScreen({super.key});
@@ -15,6 +26,8 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
   List<Map<String, dynamic>> _appointments = [];
   List<Map<String, dynamic>> _staffList = [];
   bool _loading = true;
+  /// عرض مواعيد اليوم المعيّنة للمستخدم الحالي فقط (تذكيري / تذكير لشخص معيّن).
+  bool _filterMineOnly = false;
 
   final List<Map<String, dynamic>> _quickActions = [
     {'icon': Icons.event_available_outlined, 'label': 'حجز موعد', 'color': Colors.blue, 'type': 'booking'},
@@ -24,15 +37,6 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
     {'icon': Icons.receipt_long_outlined, 'label': 'متابعة طلب', 'color': Colors.teal, 'type': 'followup'},
     {'icon': Icons.meeting_room_outlined, 'label': 'اجتماع', 'color': Colors.red, 'type': 'meeting'},
   ];
-
-  static const _colorMap = <String, Color>{
-    'blue': Colors.blue,
-    'green': Colors.green,
-    'orange': Colors.orange,
-    'purple': Colors.purple,
-    'teal': Colors.teal,
-    'red': Colors.red,
-  };
 
   static const _typeIcons = <String, IconData>{
     'booking': Icons.event_available_outlined,
@@ -100,6 +104,31 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
     });
   }
 
+  String _typeLabel(String? type) {
+    const map = {
+      'booking': 'حجز موعد',
+      'call': 'مكالمة',
+      'visit': 'زيارة منزلية',
+      'maintenance': 'صيانة',
+      'followup': 'متابعة طلب',
+      'meeting': 'اجتماع',
+    };
+    return map[type ?? ''] ?? (type ?? 'موعد');
+  }
+
+  List<Map<String, dynamic>> _filteredTodayAppointments(BuildContext context) {
+    final base = _todayAppointments;
+    if (!_filterMineOnly) return base;
+    final uid = context.watch<AuthProvider>().user?.id;
+    if (uid == null) return base;
+    return base.where((a) {
+      final at = a['assignedTo'];
+      if (at == null) return false;
+      final ai = at is int ? at : (at as num).toInt();
+      return ai == uid;
+    }).toList();
+  }
+
   String _colorNameFromFlutter(Color c) {
     if (c == Colors.blue) return 'blue';
     if (c == Colors.green) return 'green';
@@ -110,17 +139,17 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
     return 'blue';
   }
 
-  Future<void> _completeAppointment(int id) async {
-    try {
-      await ApiService.mutate('appointments.complete', input: {'id': id});
-      if (mounted) await _loadAppointments();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تعذّر التسجيل: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
+  void _showAppointmentDetail(Map<String, dynamic> apt) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _SecretaryAppointmentDetailSheet(
+        apt: apt,
+        typeLabel: _typeLabel(apt['type'] as String?),
+        onParentRefresh: _loadAppointments,
+      ),
+    );
   }
 
   Future<void> _deleteAppointment(int id) async {
@@ -477,19 +506,41 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                         child: Row(
                           children: [
                             const Icon(Icons.today_outlined, color: AppColors.primary, size: 18),
                             const SizedBox(width: 8),
                             Text('مواعيد ${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}', style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 15)),
                             const Spacer(),
-                            Text('${_todayAppointments.length} موعد', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                            Text('${_filteredTodayAppointments(context).length} موعد', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: Row(
+                          children: [
+                            FilterChip(
+                              label: const Text('الكل', style: TextStyle(fontSize: 12)),
+                              selected: !_filterMineOnly,
+                              onSelected: (_) => setState(() => _filterMineOnly = false),
+                              selectedColor: AppColors.primary.withOpacity(0.25),
+                              checkmarkColor: AppColors.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            FilterChip(
+                              label: const Text('المعيّنة لي', style: TextStyle(fontSize: 12)),
+                              selected: _filterMineOnly,
+                              onSelected: (_) => setState(() => _filterMineOnly = true),
+                              selectedColor: AppColors.primary.withOpacity(0.25),
+                              checkmarkColor: AppColors.primary,
+                            ),
                           ],
                         ),
                       ),
                       Expanded(
-                        child: _todayAppointments.isEmpty
+                        child: _filteredTodayAppointments(context).isEmpty
                             ? Center(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -508,11 +559,11 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                               )
                             : ListView.builder(
                                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                                itemCount: _todayAppointments.length,
+                                itemCount: _filteredTodayAppointments(context).length,
                                 itemBuilder: (ctx, i) {
-                                  final apt = _todayAppointments[i];
+                                  final apt = _filteredTodayAppointments(context)[i];
                                   final dt = DateTime.tryParse(apt['appointmentDate'] ?? '') ?? DateTime.now();
-                                  final color = _colorMap[apt['color']] ?? Colors.blue;
+                                  final color = _kSecretaryAptColors[apt['color']] ?? Colors.blue;
                                   final icon = _typeIcons[apt['type']] ?? Icons.event;
                                   final assigneeName = (apt['assigneeName'] ?? '') as String;
                                   final completed = apt['completedAt'] != null && apt['completedAt'].toString().isNotEmpty;
@@ -543,7 +594,12 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                                     onDismissed: (_) => _deleteAppointment(apt['id'] as int),
                                     child: Opacity(
                                       opacity: completed ? 0.55 : 1,
-                                      child: Container(
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(14),
+                                          onTap: () => _showAppointmentDetail(apt),
+                                          child: Container(
                                       margin: const EdgeInsets.only(bottom: 10),
                                       padding: const EdgeInsets.all(14),
                                       decoration: BoxDecoration(
@@ -570,6 +626,10 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                                                       ),
                                                   ],
                                                 ),
+                                                Padding(
+                                                  padding: const EdgeInsets.only(top: 2),
+                                                  child: Text(_typeLabel(apt['type'] as String?), style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+                                                ),
                                                 if (assigneeName.isNotEmpty)
                                                   Padding(
                                                     padding: const EdgeInsets.only(top: 2),
@@ -584,16 +644,30 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                                                 if ((apt['notes'] ?? '').toString().isNotEmpty)
                                                   Padding(
                                                     padding: const EdgeInsets.only(top: 2),
-                                                    child: Text(apt['notes'], style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                                                    child: Text(
+                                                      apt['notes'].toString(),
+                                                      style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                                                      maxLines: 3,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
                                                   ),
                                               ],
                                             ),
                                           ),
                                           if (!completed)
                                             IconButton(
-                                              tooltip: 'تسجيل التنفيذ',
-                                              icon: const Icon(Icons.check_circle_outline, color: AppColors.primary, size: 26),
-                                              onPressed: () => _completeAppointment(apt['id'] as int),
+                                              tooltip: 'التفاصيل والمتابعة',
+                                              icon: const Icon(Icons.chat_bubble_outline, color: AppColors.primary, size: 24),
+                                              onPressed: () => _showAppointmentDetail(apt),
+                                            ),
+                                          if ((apt['followupCount'] as int? ?? 0) > 0)
+                                            Padding(
+                                              padding: const EdgeInsets.only(left: 4),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(color: Colors.teal.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                                                child: Text('${apt['followupCount']}', style: const TextStyle(color: Colors.teal, fontSize: 11, fontWeight: FontWeight.bold)),
+                                              ),
                                             ),
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -603,6 +677,8 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
                                         ],
                                       ),
                                     ),
+                                        ),
+                                      ),
                                     ),
                                   );
                                 },
@@ -668,5 +744,350 @@ class _AdminSecretaryScreenState extends State<AdminSecretaryScreen> {
   String _monthName(int month) {
     const names = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
     return names[month - 1];
+  }
+}
+
+/// تفاصيل الموعد + سجل متابعة (من اتصل، ماذا قال) قبل إنهاء مهمة السكرتارية.
+class _SecretaryAppointmentDetailSheet extends StatefulWidget {
+  const _SecretaryAppointmentDetailSheet({
+    required this.apt,
+    required this.typeLabel,
+    required this.onParentRefresh,
+  });
+
+  final Map<String, dynamic> apt;
+  final String typeLabel;
+  final Future<void> Function() onParentRefresh;
+
+  @override
+  State<_SecretaryAppointmentDetailSheet> createState() => _SecretaryAppointmentDetailSheetState();
+}
+
+class _SecretaryAppointmentDetailSheetState extends State<_SecretaryAppointmentDetailSheet> {
+  final TextEditingController _followupCtrl = TextEditingController();
+  List<Map<String, dynamic>> _followups = [];
+  bool _loadingFollowups = true;
+  bool _saving = false;
+  bool _completing = false;
+
+  int get _followupCount => _followups.length;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFollowups();
+  }
+
+  @override
+  void dispose() {
+    _followupCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadFollowups() async {
+    setState(() => _loadingFollowups = true);
+    try {
+      final id = widget.apt['id'];
+      final res = await ApiService.query('appointments.followups', input: {'id': id});
+      if (!mounted) return;
+      if (res['success'] == true && res['data'] is List) {
+        setState(() {
+          _followups = List<Map<String, dynamic>>.from(res['data'] as List);
+          _loadingFollowups = false;
+        });
+      } else {
+        setState(() => _loadingFollowups = false);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _loadingFollowups = false);
+    }
+  }
+
+  Future<void> _addFollowup() async {
+    final text = _followupCtrl.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      await ApiService.mutate('appointments.addFollowup', input: {
+        'id': widget.apt['id'],
+        'body': text,
+      });
+      _followupCtrl.clear();
+      await _loadFollowups();
+      await widget.onParentRefresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _complete() async {
+    setState(() => _completing = true);
+    try {
+      await ApiService.mutate('appointments.complete', input: {'id': widget.apt['id']});
+      await widget.onParentRefresh();
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _completing = false);
+    }
+  }
+
+  String _fmtTime(String? s) {
+    final d = DateTime.tryParse(s ?? '');
+    if (d == null) return s ?? '';
+    return '${d.day}/${d.month} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final apt = widget.apt;
+    final dt = DateTime.tryParse(apt['appointmentDate'] ?? '') ?? DateTime.now();
+    final notes = (apt['notes'] ?? '').toString();
+    final creatorName = (apt['creatorName'] ?? '').toString();
+    final assigneeName = (apt['assigneeName'] ?? '').toString();
+    final completed = apt['completedAt'] != null && apt['completedAt'].toString().isNotEmpty;
+    final color = _kSecretaryAptColors[apt['color']] ?? Colors.blue;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.92),
+        decoration: BoxDecoration(
+          color: AppThemeDecorations.cardColor(context),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
+              child: Row(
+                children: [
+                  IconButton(icon: const Icon(Icons.close, color: AppColors.muted), onPressed: () => Navigator.pop(context)),
+                  const Expanded(
+                    child: Text(
+                      'تفاصيل الموعد والمتابعة',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                          child: Text(widget.typeLabel, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12)),
+                        ),
+                        const SizedBox(width: 8),
+                        if (completed)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(color: Colors.green.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                            child: const Text('تم التنفيذ', style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.w600)),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(apt['title']?.toString() ?? '', style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 17)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.access_time, size: 16, color: AppColors.muted),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${dt.day}/${dt.month}/${dt.year} — ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}',
+                          style: const TextStyle(color: AppColors.muted, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                    if (creatorName.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.edit_note_outlined, size: 16, color: AppColors.muted),
+                          const SizedBox(width: 6),
+                          Expanded(child: Text('من أنشأ: $creatorName', style: const TextStyle(color: AppColors.muted, fontSize: 13))),
+                        ],
+                      ),
+                    ],
+                    if (assigneeName.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.person_outline, size: 16, color: AppColors.primary),
+                          const SizedBox(width: 6),
+                          Expanded(child: Text('المعيّن: $assigneeName', style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600))),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    const Text('الوصف والملاحظات الأصلية', style: TextStyle(color: AppColors.muted, fontSize: 12, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppThemeDecorations.pageBackground(context),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Text(
+                        notes.isEmpty ? '— لا توجد ملاحظات إضافية —' : notes,
+                        style: TextStyle(color: notes.isEmpty ? AppColors.muted : AppColors.text, fontSize: 14, height: 1.35),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        const Icon(Icons.forum_outlined, color: AppColors.primary, size: 20),
+                        const SizedBox(width: 8),
+                        const Text('سجل المتابعة', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 15)),
+                        const Spacer(),
+                        if (_followupCount > 0)
+                          Text('$_followupCount', style: TextStyle(color: Colors.teal.shade700, fontWeight: FontWeight.bold, fontSize: 13)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'سجّل ماذا تم (مثال: اتصل فلان وقال كذا، أو تم التواصل مع…). لا يمكن إنهاء المهمة قبل تسجيل متابعة واحدة على الأقل.',
+                      style: TextStyle(color: AppColors.muted.withOpacity(0.9), fontSize: 11, height: 1.3),
+                    ),
+                    const SizedBox(height: 10),
+                    if (_loadingFollowups)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2)),
+                      )
+                    else if (_followups.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text('لا توجد متابعات بعد.', style: TextStyle(color: AppColors.muted.withOpacity(0.8), fontSize: 13)),
+                      )
+                    else
+                      ..._followups.map((f) {
+                        final author = (f['authorName'] ?? '').toString().trim();
+                        final body = (f['body'] ?? '').toString();
+                        final at = _fmtTime(f['createdAt']?.toString());
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppThemeDecorations.pageBackground(context),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.border.withOpacity(0.6)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      author.isEmpty ? 'موظف' : author,
+                                      style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                  Text(at, style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(body, style: const TextStyle(color: AppColors.text, fontSize: 13, height: 1.35)),
+                            ],
+                          ),
+                        );
+                      }),
+                    if (!completed) ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _followupCtrl,
+                        style: const TextStyle(color: AppColors.text),
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: InputDecoration(
+                          labelText: 'إضافة متابعة (ردّ الموظف)',
+                          hintText: 'مثال: اتصل المهندس X وحدّد موعد…',
+                          labelStyle: const TextStyle(color: AppColors.muted),
+                          filled: true,
+                          fillColor: AppThemeDecorations.pageBackground(context),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary)),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _saving ? null : _addFollowup,
+                          icon: _saving
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                              : const Icon(Icons.add_comment_outlined, size: 18),
+                          label: Text(_saving ? 'جاري الحفظ…' : 'حفظ المتابعة'),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: (_completing || _followupCount < 1) ? null : _complete,
+                          icon: _completing
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                              : const Icon(Icons.task_alt, size: 20),
+                          label: Text(_completing ? 'جاري الإنهاء…' : 'إنهاء مهمة السكرتارية'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.black,
+                            disabledBackgroundColor: AppColors.muted.withOpacity(0.35),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      if (_followupCount < 1)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            'سجّل متابعة واحدة على الأقل لتفعيل زر الإنهاء.',
+                            style: TextStyle(color: Colors.orange.shade800, fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

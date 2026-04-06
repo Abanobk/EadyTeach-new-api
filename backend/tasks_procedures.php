@@ -3428,6 +3428,18 @@ function _ensureAppointmentReminderColumns() {
     $done = true;
 }
 
+function _ensureAppointmentFollowupsTable() {
+    global $db;
+    $db->exec("CREATE TABLE IF NOT EXISTS appointment_followups (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        appointment_id INT NOT NULL,
+        user_id INT NOT NULL,
+        body TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_appointment_followups_appt (appointment_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
 function _appointmentTypeLabelAr($type) {
     $t = (string) $type;
     $map = [
@@ -3470,6 +3482,7 @@ function appointments_list($input, $ctx) {
     global $db;
     _ensureAppointmentsTable();
     _ensureAppointmentReminderColumns();
+    _ensureAppointmentFollowupsTable();
 
     $userId = $ctx['userId'] ?? null;
     $month  = (int)($input['month'] ?? date('n'));
@@ -3482,7 +3495,8 @@ function appointments_list($input, $ctx) {
 
     $sql = "SELECT a.*, 
                    creator.name AS creator_name,
-                   assignee.name AS assignee_name
+                   assignee.name AS assignee_name,
+                   (SELECT COUNT(*) FROM appointment_followups f WHERE f.appointment_id = a.id) AS followup_count
             FROM appointments a
             LEFT JOIN users creator  ON creator.id  = a.created_by
             LEFT JOIN users assignee ON assignee.id = a.assigned_to
@@ -3506,6 +3520,7 @@ function appointments_list($input, $ctx) {
             'color'         => $r['color'] ?? 'blue',
             'createdAt'     => $r['created_at'],
             'completedAt'   => $r['completed_at'] ?? null,
+            'followupCount' => (int)($r['followup_count'] ?? 0),
         ];
     }, $rows);
 }
@@ -3566,23 +3581,99 @@ function appointments_complete($input, $ctx) {
     global $db;
     _ensureAppointmentsTable();
     _ensureAppointmentReminderColumns();
+    _ensureAppointmentFollowupsTable();
 
     $id = (int)($input['id'] ?? 0);
     if ($id <= 0) {
         throw new Exception('معرف الموعد غير صالح');
+    }
+    $cntStmt = $db->prepare('SELECT COUNT(*) FROM appointment_followups WHERE appointment_id = ?');
+    $cntStmt->execute([$id]);
+    $cnt = (int) $cntStmt->fetchColumn();
+    if ($cnt < 1) {
+        throw new Exception('سجّل متابعة واحدة على الأقل (ماذا تم: من اتصل، ماذا قال) قبل إنهاء مهمة السكرتارية.');
     }
     $stmt = $db->prepare('UPDATE appointments SET completed_at = NOW() WHERE id = ? AND completed_at IS NULL');
     $stmt->execute([$id]);
     return ['success' => true];
 }
 
+/**
+ * قائمة سجل المتابعة لموعد (ردود الموظف: من اتصل، ماذا قال، إلخ).
+ */
+function appointments_followups($input, $ctx) {
+    global $db;
+    _ensureAppointmentFollowupsTable();
+
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) {
+        throw new Exception('معرف الموعد غير صالح');
+    }
+    $stmt = $db->prepare(
+        'SELECT f.id, f.body, f.created_at, f.user_id, u.name AS author_name
+         FROM appointment_followups f
+         LEFT JOIN users u ON u.id = f.user_id
+         WHERE f.appointment_id = ?
+         ORDER BY f.created_at ASC, f.id ASC'
+    );
+    $stmt->execute([$id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    return array_map(function ($r) {
+        return [
+            'id'        => (int) $r['id'],
+            'body'      => $r['body'] ?? '',
+            'createdAt' => $r['created_at'] ?? null,
+            'userId'    => (int) ($r['user_id'] ?? 0),
+            'authorName'=> $r['author_name'] ?? '',
+        ];
+    }, $rows);
+}
+
+function appointments_addFollowup($input, $ctx) {
+    global $db;
+    _ensureAppointmentFollowupsTable();
+    _ensureAppointmentsTable();
+
+    $id = (int)($input['id'] ?? 0);
+    $body = trim((string)($input['body'] ?? ''));
+    $uid = (int)($ctx['userId'] ?? 0);
+
+    if ($id <= 0) {
+        throw new Exception('معرف الموعد غير صالح');
+    }
+    if ($body === '') {
+        throw new Exception('اكتب تفاصيل المتابعة');
+    }
+    if ($uid <= 0) {
+        throw new Exception('يجب تسجيل الدخول');
+    }
+
+    $chk = $db->prepare('SELECT id, completed_at FROM appointments WHERE id = ?');
+    $chk->execute([$id]);
+    $ap = $chk->fetch(PDO::FETCH_ASSOC);
+    if (!$ap) {
+        throw new Exception('الموعد غير موجود');
+    }
+    if (!empty($ap['completed_at'])) {
+        throw new Exception('الموعد مُنجز مسبقاً ولا يمكن إضافة متابعات');
+    }
+
+    $ins = $db->prepare('INSERT INTO appointment_followups (appointment_id, user_id, body) VALUES (?, ?, ?)');
+    $ins->execute([$id, $uid, $body]);
+
+    return ['success' => true, 'followupId' => (int) $db->lastInsertId()];
+}
+
 function appointments_delete($input, $ctx) {
     global $db;
     _ensureAppointmentsTable();
+    _ensureAppointmentFollowupsTable();
 
     $id = (int)($input['id'] ?? 0);
     if ($id <= 0) throw new Exception('معرف الموعد غير صالح');
 
+    $db->prepare('DELETE FROM appointment_followups WHERE appointment_id = ?')->execute([$id]);
     $stmt = $db->prepare("DELETE FROM appointments WHERE id = ?");
     $stmt->execute([$id]);
 

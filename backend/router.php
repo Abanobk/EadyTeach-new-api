@@ -1393,6 +1393,14 @@ try {
             $result = appointments_staffList($ctx);
             break;
 
+        case 'appointments.followups':
+            $result = appointments_followups($input, $ctx);
+            break;
+
+        case 'appointments.addFollowup':
+            $result = appointments_addFollowup($input, $ctx);
+            break;
+
         // ── Accounting (الحسابات والعهد) ───────────────────────
         case 'acc.getTransactions':
             $result = acc_getTransactions($input ?? [], $ctx);

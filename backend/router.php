@@ -1372,6 +1372,10 @@ try {
             $result = crm_getStaffList($ctx);
             break;
 
+        case 'crm.recordCall':
+            $result = crm_recordCall($input, $ctx);
+            break;
+
         // ── Appointments (السكرتارية) ────────────────────────────
         case 'appointments.list':
             $result = appointments_list($input, $ctx);

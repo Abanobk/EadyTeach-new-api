@@ -1,4 +1,8 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../services/api_service.dart';
@@ -17,6 +21,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
   List<dynamic> _activities = [];
   bool _loading = true;
   bool _changed = false;
+  bool _uploadingCallRecording = false;
 
   static const _stages = [
     {'key': 'new', 'label': 'جديد', 'icon': Icons.fiber_new, 'color': Colors.blue},
@@ -32,15 +37,18 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
     'note': Icons.note_alt, 'call': Icons.phone, 'meeting': Icons.groups,
     'email': Icons.email, 'stage_change': Icons.swap_horiz, 'assignment': Icons.person_add,
     'created': Icons.add_circle, 'follow_up': Icons.schedule, 'other': Icons.more_horiz,
+    'call_recording': Icons.mic,
   };
   static const _actTypeColors = {
     'note': Colors.blue, 'call': Colors.green, 'meeting': Colors.purple,
     'email': Colors.cyan, 'stage_change': Colors.orange, 'assignment': Color(0xFFD4920A),
     'created': Colors.teal, 'follow_up': Colors.amber, 'other': Colors.grey,
+    'call_recording': Colors.deepPurple,
   };
   static const _actTypeLabels = {
     'note': 'ملاحظة', 'call': 'مكالمة', 'meeting': 'اجتماع',
-    'email': 'بريد', 'follow_up': 'متابعة', 'other': 'أخرى',
+    'email': 'بريد', 'follow_up': 'متابعة', 'other': 'أخرى', 'stage_change': 'مرحلة',
+    'assignment': 'توزيع', 'created': 'إنشاء', 'call_recording': 'تسجيل صوتي',
   };
   static const _priorityLabels = {'high': 'عالي', 'medium': 'متوسط', 'low': 'منخفض'};
   static const _priorityColors = {'high': Colors.red, 'medium': Colors.orange, 'low': Colors.green};
@@ -109,6 +117,8 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
                   const SizedBox(height: 16),
                   _buildAssigneeCard(),
                   const SizedBox(height: 16),
+                  _buildCallRecordingCard(),
+                  const SizedBox(height: 16),
                   _buildActivityHeader(),
                   const SizedBox(height: 8),
                   _buildTimeline(),
@@ -163,9 +173,11 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
           ])),
         ]),
         const Divider(color: AppColors.border, height: 24),
-        if ((_lead['phone'] ?? '').isNotEmpty) _infoRow(Icons.phone, _lead['phone']),
-        if ((_lead['email'] ?? '').isNotEmpty) _infoRow(Icons.email, _lead['email']),
-        if ((_lead['address'] ?? '').isNotEmpty) _infoRow(Icons.location_on, _lead['address']),
+        if ((_lead['phone'] ?? '').toString().isNotEmpty) _buildPhoneRow(),
+        if ((_lead['email'] ?? '').toString().isNotEmpty) _infoRow(Icons.email, _lead['email'].toString()),
+        if ((_lead['address'] ?? '').toString().isNotEmpty) _infoRow(Icons.location_on, _lead['address'].toString()),
+        if ((_lead['locationUrl'] ?? '').toString().trim().isNotEmpty) _buildLocationUrlRow(),
+        if (_lead['linkedClientId'] != null) _buildLinkedClientRow(),
         if ((_lead['expectedValue'] ?? 0) > 0) _infoRow(Icons.attach_money, '${(_lead['expectedValue'] as num).toStringAsFixed(0)} ج.م'),
         _infoRow(Icons.source, 'مصدر: ${_lead['source'] ?? 'يدوي'}'),
         if ((_lead['notes'] ?? '').isNotEmpty)
@@ -185,6 +197,244 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
         const SizedBox(width: 8),
         Expanded(child: Text(text, style: const TextStyle(color: AppColors.text, fontSize: 13))),
       ]),
+    );
+  }
+
+  Widget _buildPhoneRow() {
+    final phone = _lead['phone']?.toString() ?? '';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(Icons.phone, color: AppColors.muted, size: 16),
+          const SizedBox(width: 8),
+          Expanded(child: Text(phone, style: const TextStyle(color: AppColors.text, fontSize: 13))),
+          IconButton(
+            tooltip: 'اتصال وتسجيل تلقائي للمكالمة',
+            icon: const Icon(Icons.call, color: Colors.green, size: 24),
+            onPressed: _dialLead,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationUrlRow() {
+    final u = (_lead['locationUrl'] ?? '').toString().trim();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: () async {
+          var uri = Uri.tryParse(u);
+          if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
+            uri = Uri.parse('https://maps.google.com/?q=${Uri.encodeComponent(u)}');
+          }
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+        },
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.map_outlined, color: AppColors.primary, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                u,
+                style: const TextStyle(color: AppColors.primary, fontSize: 12, decoration: TextDecoration.underline),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLinkedClientRow() {
+    final id = _lead['linkedClientId'];
+    if (id == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.verified_user_outlined, color: Colors.teal, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'مسجّل كعميل في النظام (رقم #$id) — يمكن اختياره في المهام وقائمة العملاء',
+              style: const TextStyle(color: AppColors.muted, fontSize: 12, height: 1.35),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _dialLead() async {
+    final raw = _lead['phone']?.toString().trim() ?? '';
+    if (raw.isEmpty) return;
+    try {
+      await ApiService.mutate('crm.recordCall', input: {'leadId': widget.leadId});
+      _changed = true;
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+    final cleaned = raw.replaceAll(RegExp(r'[\s\-]'), '');
+    final uri = Uri(scheme: 'tel', path: cleaned);
+    var launched = false;
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+        launched = true;
+      }
+    } catch (_) {}
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            launched
+                ? 'تم تسجيل المكالمة بالوقت الحالي. أضف تفاصيلها من «إضافة نشاط».'
+                : 'تم تسجيل المكالمة في النظام. إذا لم يُفتح الاتصال، اتصل يدوياً ثم أضف الملاحظات من «إضافة نشاط».',
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _buildCallRecordingCard() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppThemeDecorations.cardColor(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: Colors.deepPurple.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.audio_file, color: Colors.deepPurple, size: 22),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('تسجيل مكالمة', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14)),
+              SizedBox(height: 4),
+              Text(
+                'ارفع ملف التسجيل من موبايل السيلز (mp3, m4a, …). يظهر في سجل النشاطات مع إمكانية التشغيل والمراجعة.',
+                style: TextStyle(color: AppColors.muted, fontSize: 11, height: 1.3),
+              ),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _uploadingCallRecording ? null : _pickAndUploadCallRecording,
+            icon: _uploadingCallRecording
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                : const Icon(Icons.upload_file, size: 18),
+            label: Text(_uploadingCallRecording ? 'جاري الرفع…' : 'اختيار ملف ورفعه'),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Future<void> _pickAndUploadCallRecording() async {
+    try {
+      final res = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['m4a', 'mp3', 'aac', 'wav', 'amr', 'ogg', 'mpeg', 'mpga', '3gp'],
+        withData: kIsWeb,
+      );
+      if (res == null || res.files.isEmpty) return;
+      final f = res.files.single;
+      setState(() => _uploadingCallRecording = true);
+      String url;
+      if (kIsWeb) {
+        final bytes = f.bytes;
+        if (bytes == null) throw Exception('تعذّر قراءة الملف');
+        url = await ApiService.uploadFile('', bytes: bytes, filename: f.name);
+      } else {
+        final path = f.path;
+        if (path == null || path.isEmpty) {
+          final bytes = f.bytes;
+          if (bytes == null) throw Exception('تعذّر قراءة الملف');
+          url = await ApiService.uploadFile('', bytes: bytes, filename: f.name);
+        } else {
+          url = await ApiService.uploadFile(path, filename: f.name);
+        }
+      }
+
+      if (!mounted) return;
+      final noteCtrl = TextEditingController();
+      final note = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppThemeDecorations.cardColor(context),
+          title: const Text('تعليق المراقبة (اختياري)', style: TextStyle(color: AppColors.text, fontSize: 15)),
+          content: TextField(
+            controller: noteCtrl,
+            maxLines: 3,
+            style: const TextStyle(color: AppColors.text, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'ملاحظات على التسجيل…',
+              hintStyle: const TextStyle(color: AppColors.muted),
+              filled: true,
+              fillColor: AppThemeDecorations.pageBackground(context),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, ''), child: const Text('تخطّي')),
+            TextButton(onPressed: () => Navigator.pop(ctx, noteCtrl.text), child: const Text('حفظ')),
+          ],
+        ),
+      ) ?? '';
+
+      await ApiService.mutate('crm.addActivity', input: {
+        'leadId': widget.leadId,
+        'type': 'call_recording',
+        'title': 'تسجيل مكالمة',
+        'content': note.trim(),
+        'mediaUrl': url,
+      });
+      _changed = true;
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم رفع التسجيل وربطه بهذا الليد')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingCallRecording = false);
+    }
+  }
+
+  void _playRecording(String rawUrl) {
+    final url = kIsWeb ? ApiService.proxyImageUrl(rawUrl) : rawUrl;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppThemeDecorations.cardColor(context),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => _LeadAudioPlayerSheet(url: url),
     );
   }
 
@@ -316,11 +566,22 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
                   child: const Icon(Icons.close, color: AppColors.muted, size: 16),
                 ),
             ]),
-            if ((a['content'] ?? '').isNotEmpty)
+            if ((a['content'] ?? '').toString().isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(a['content'], style: const TextStyle(color: AppColors.text, fontSize: 12)),
+                child: Text(a['content'].toString(), style: const TextStyle(color: AppColors.text, fontSize: 12)),
               ),
+            if ((a['mediaUrl'] ?? '').toString().trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: OutlinedButton.icon(
+                  onPressed: () => _playRecording(a['mediaUrl'].toString()),
+                  icon: const Icon(Icons.play_circle_outline, size: 20),
+                  label: const Text('تشغيل التسجيل'),
+                ),
+              ),
+            ],
             const SizedBox(height: 6),
             Row(children: [
               Icon(Icons.person, color: AppColors.muted, size: 12),
@@ -504,6 +765,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
     final phoneCtrl = TextEditingController(text: _lead['phone'] ?? '');
     final emailCtrl = TextEditingController(text: _lead['email'] ?? '');
     final addressCtrl = TextEditingController(text: _lead['address'] ?? '');
+    final locationUrlCtrl = TextEditingController(text: (_lead['locationUrl'] ?? '').toString());
     final notesCtrl = TextEditingController(text: _lead['notes'] ?? '');
     final valueCtrl = TextEditingController(text: ((_lead['expectedValue'] ?? 0) > 0) ? (_lead['expectedValue'] as num).toStringAsFixed(0) : '');
     String priority = _lead['priority'] ?? 'medium';
@@ -521,6 +783,8 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
           _field(emailCtrl, 'البريد', Icons.email),
           const SizedBox(height: 10),
           _field(addressCtrl, 'العنوان', Icons.location_on),
+          const SizedBox(height: 10),
+          _field(locationUrlCtrl, 'رابط الموقع / خرائط (اختياري)', Icons.map_outlined),
           const SizedBox(height: 10),
           _field(valueCtrl, 'القيمة المتوقعة (ج.م)', Icons.attach_money, isNumber: true),
           const SizedBox(height: 10),
@@ -557,6 +821,7 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
                   'phone': phoneCtrl.text.trim(),
                   'email': emailCtrl.text.trim(),
                   'address': addressCtrl.text.trim(),
+                  'locationUrl': locationUrlCtrl.text.trim(),
                   'notes': notesCtrl.text.trim(),
                   'priority': priority,
                   'expectedValue': double.tryParse(valueCtrl.text) ?? 0,
@@ -622,5 +887,89 @@ class _CrmLeadDetailScreenState extends State<CrmLeadDetailScreen> {
     } catch (_) {
       return d.toString();
     }
+  }
+}
+
+/// مشغّل صوت بسيط لتسجيلات المكالمات المرفوعة.
+class _LeadAudioPlayerSheet extends StatefulWidget {
+  const _LeadAudioPlayerSheet({required this.url});
+  final String url;
+
+  @override
+  State<_LeadAudioPlayerSheet> createState() => _LeadAudioPlayerSheetState();
+}
+
+class _LeadAudioPlayerSheetState extends State<_LeadAudioPlayerSheet> {
+  late final AudioPlayer _player = AudioPlayer();
+  bool _loading = true;
+  String? _err;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      await _player.setUrl(widget.url);
+      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _err = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('تشغيل التسجيل', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 16),
+            if (_loading) const CircularProgressIndicator(color: AppColors.primary),
+            if (_err != null) ...[
+              Text(_err!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () async {
+                  final u = Uri.tryParse(widget.url);
+                  if (u != null && await canLaunchUrl(u)) await launchUrl(u, mode: LaunchMode.externalApplication);
+                },
+                child: const Text('فتح الرابط خارج التطبيق'),
+              ),
+            ],
+            if (!_loading && _err == null)
+              StreamBuilder<PlayerState>(
+                stream: _player.playerStateStream,
+                builder: (context, snapshot) {
+                  final playing = snapshot.data?.playing ?? false;
+                  return IconButton(
+                    iconSize: 56,
+                    color: AppColors.primary,
+                    icon: Icon(playing ? Icons.pause_circle : Icons.play_circle),
+                    onPressed: () => playing ? _player.pause() : _player.play(),
+                  );
+                },
+              ),
+            const SizedBox(height: 8),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
+          ],
+        ),
+      ),
+    );
   }
 }

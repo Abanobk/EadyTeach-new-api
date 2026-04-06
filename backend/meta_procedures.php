@@ -416,6 +416,12 @@ function _ensureCrmSchema() {
     if (!in_array('address', $cols)) {
         $db->exec("ALTER TABLE crm_leads ADD COLUMN address TEXT DEFAULT NULL AFTER email");
     }
+    try {
+        $db->exec("ALTER TABLE crm_leads ADD COLUMN location_url TEXT DEFAULT NULL COMMENT 'رابط خرائط' AFTER address");
+    } catch (\Exception $e) { /* موجود */ }
+    try {
+        $db->exec("ALTER TABLE crm_leads ADD COLUMN linked_client_id INT DEFAULT NULL AFTER notes");
+    } catch (\Exception $e) { /* موجود */ }
 
     $db->exec("CREATE TABLE IF NOT EXISTS crm_activities (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -430,6 +436,10 @@ function _ensureCrmSchema() {
         INDEX idx_lead (lead_id),
         FOREIGN KEY (lead_id) REFERENCES crm_leads(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    try {
+        $db->exec('ALTER TABLE crm_activities ADD COLUMN media_url TEXT DEFAULT NULL AFTER content');
+    } catch (\Exception $e) { /* موجود */ }
 }
 
 function _formatLead($r) {
@@ -439,6 +449,8 @@ function _formatLead($r) {
         'phone'          => $r['phone'] ?? '',
         'email'          => $r['email'] ?? '',
         'address'        => $r['address'] ?? '',
+        'locationUrl'    => $r['location_url'] ?? '',
+        'linkedClientId' => !empty($r['linked_client_id']) ? (int)$r['linked_client_id'] : null,
         'source'         => $r['source'] ?? 'manual',
         'status'         => $r['status'] ?? 'new',
         'pipelineStage'  => $r['pipeline_stage'] ?? $r['status'] ?? 'new',
@@ -518,6 +530,7 @@ function crm_getLeadById($input, $ctx) {
             'type'      => $a['type'],
             'title'     => $a['title'] ?? '',
             'content'   => $a['content'] ?? '',
+            'mediaUrl'  => $a['media_url'] ?? '',
             'oldValue'  => $a['old_value'],
             'newValue'  => $a['new_value'],
             'userName'  => $a['user_name'] ?? 'النظام',
@@ -526,6 +539,89 @@ function crm_getLeadById($input, $ctx) {
     }, $acts->fetchAll());
 
     return $lead;
+}
+
+/**
+ * إنشاء أو ربط عميل (جدول users) من بيانات الليد لاستخدامه في المهام وغيرها.
+ */
+function _crm_syncClientFromLead($leadId, $ctx) {
+    global $db;
+    if (!function_exists('clients_create')) {
+        require_once __DIR__ . '/surveys_procedures.php';
+    }
+    $st = $db->prepare('SELECT * FROM crm_leads WHERE id = ?');
+    $st->execute([$leadId]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return;
+    }
+    $name = trim((string)($row['name'] ?? ''));
+    if ($name === '') {
+        return;
+    }
+    $phone = trim((string)($row['phone'] ?? ''));
+    $email = trim((string)($row['email'] ?? ''));
+    $address = (string)($row['address'] ?? '');
+    $locUrl = trim((string)($row['location_url'] ?? ''));
+
+    $existingId = null;
+    if ($phone !== '') {
+        $q = $db->prepare("SELECT id FROM users WHERE role = 'user' AND phone = ? LIMIT 1");
+        $q->execute([$phone]);
+        $found = $q->fetch(PDO::FETCH_ASSOC);
+        if ($found) {
+            $existingId = (int)$found['id'];
+        }
+    }
+
+    if ($existingId) {
+        $db->prepare('UPDATE crm_leads SET linked_client_id = ? WHERE id = ?')->execute([$existingId, $leadId]);
+        $db->prepare('UPDATE users SET name = ?, address = ? WHERE id = ? AND role = ?')
+            ->execute([$name, $address !== '' ? $address : null, $existingId, 'user']);
+        if ($locUrl !== '') {
+            $db->prepare('UPDATE users SET location = ? WHERE id = ?')->execute([$locUrl, $existingId]);
+        }
+        return;
+    }
+
+    $res = clients_create([
+        'name'     => $name,
+        'email'    => $email !== '' ? $email : null,
+        'phone'    => $phone !== '' ? $phone : null,
+        'address'  => $address !== '' ? $address : null,
+        'location' => $locUrl !== '' ? $locUrl : null,
+        'role'     => 'user',
+    ], $ctx);
+    $newId = (int)($res['id'] ?? 0);
+    if ($newId > 0) {
+        $db->prepare('UPDATE crm_leads SET linked_client_id = ? WHERE id = ?')->execute([$newId, $leadId]);
+    }
+}
+
+function _crm_pushLeadToLinkedClient($leadId) {
+    global $db;
+    $st = $db->prepare('SELECT * FROM crm_leads WHERE id = ?');
+    $st->execute([$leadId]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$row || empty($row['linked_client_id'])) {
+        return;
+    }
+    $cid = (int)$row['linked_client_id'];
+    $name = trim((string)($row['name'] ?? ''));
+    $phone = trim((string)($row['phone'] ?? ''));
+    $email = trim((string)($row['email'] ?? ''));
+    $address = (string)($row['address'] ?? '');
+    $locUrl = trim((string)($row['location_url'] ?? ''));
+    $db->prepare('UPDATE users SET name = ?, phone = ?, email = ?, address = ?, location = ? WHERE id = ? AND role = ?')
+        ->execute([
+            $name,
+            $phone !== '' ? $phone : null,
+            $email !== '' ? $email : null,
+            $address !== '' ? $address : null,
+            $locUrl !== '' ? $locUrl : null,
+            $cid,
+            'user',
+        ]);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -540,6 +636,7 @@ function crm_createLead($input, $ctx) {
     $phone    = $input['phone'] ?? '';
     $email    = $input['email'] ?? '';
     $address  = $input['address'] ?? '';
+    $locationUrl = trim((string)($input['locationUrl'] ?? ''));
     $notes    = $input['notes'] ?? '';
     $source   = $input['source'] ?? 'manual';
     $priority = $input['priority'] ?? 'medium';
@@ -548,8 +645,8 @@ function crm_createLead($input, $ctx) {
 
     if (empty($name)) throw new Exception('اسم العميل المحتمل مطلوب');
 
-    $db->prepare("INSERT INTO crm_leads (name, phone, email, address, source, notes, pipeline_stage, priority, expected_value, assigned_to, last_activity_at) VALUES (?, ?, ?, ?, ?, ?, 'new', ?, ?, ?, NOW())")
-       ->execute([$name, $phone, $email, $address, $source, $notes, $priority, $expectedValue, $assignedTo]);
+    $db->prepare("INSERT INTO crm_leads (name, phone, email, address, location_url, source, notes, pipeline_stage, priority, expected_value, assigned_to, last_activity_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'new', ?, ?, ?, NOW())")
+       ->execute([$name, $phone, $email, $address, $locationUrl !== '' ? $locationUrl : null, $source, $notes, $priority, $expectedValue, $assignedTo]);
 
     $leadId = (int)$db->lastInsertId();
 
@@ -562,6 +659,12 @@ function crm_createLead($input, $ctx) {
         $uRow = $uName->fetch();
         $db->prepare("INSERT INTO crm_activities (lead_id, user_id, type, title, content, new_value) VALUES (?, ?, 'assignment', 'تم التوزيع', ?, ?)")
            ->execute([$leadId, $ctx['userId'], 'تم توزيع الليد على ' . ($uRow['name'] ?? ''), (string)$assignedTo]);
+    }
+
+    try {
+        _crm_syncClientFromLead($leadId, $ctx);
+    } catch (\Throwable $e) {
+        error_log('[CRM] sync client from lead: ' . $e->getMessage());
     }
 
     return ['success' => true, 'id' => $leadId];
@@ -587,12 +690,23 @@ function crm_updateLead($input, $ctx) {
     $phone    = $input['phone'] ?? $old['phone'];
     $email    = $input['email'] ?? $old['email'];
     $address  = $input['address'] ?? ($old['address'] ?? '');
+    $locationUrl = array_key_exists('locationUrl', $input) ? trim((string)$input['locationUrl']) : trim((string)($old['location_url'] ?? ''));
     $notes    = $input['notes'] ?? $old['notes'];
     $priority = $input['priority'] ?? ($old['priority'] ?? 'medium');
     $expectedValue = isset($input['expectedValue']) ? (float)$input['expectedValue'] : (float)($old['expected_value'] ?? 0);
 
-    $db->prepare("UPDATE crm_leads SET name=?, phone=?, email=?, address=?, notes=?, priority=?, expected_value=?, last_activity_at=NOW() WHERE id=?")
-       ->execute([$name, $phone, $email, $address, $notes, $priority, $expectedValue, $id]);
+    $db->prepare("UPDATE crm_leads SET name=?, phone=?, email=?, address=?, location_url=?, notes=?, priority=?, expected_value=?, last_activity_at=NOW() WHERE id=?")
+       ->execute([$name, $phone, $email, $address, $locationUrl !== '' ? $locationUrl : null, $notes, $priority, $expectedValue, $id]);
+
+    try {
+        if (empty($old['linked_client_id'])) {
+            _crm_syncClientFromLead($id, $ctx);
+        } else {
+            _crm_pushLeadToLinkedClient($id);
+        }
+    } catch (\Throwable $e) {
+        error_log('[CRM] update lead client sync: ' . $e->getMessage());
+    }
 
     return ['success' => true];
 }
@@ -681,18 +795,65 @@ function crm_addActivity($input, $ctx) {
 
     $leadId  = (int)($input['leadId'] ?? 0);
     $type    = $input['type'] ?? 'note';
-    $title   = $input['title'] ?? '';
-    $content = $input['content'] ?? '';
+    $title   = trim((string)($input['title'] ?? ''));
+    $content = (string)($input['content'] ?? '');
+    $mediaUrl = trim((string)($input['mediaUrl'] ?? ''));
 
-    $validTypes = ['note','call','meeting','email','follow_up','other'];
-    if ($leadId <= 0 || !in_array($type, $validTypes)) throw new Exception('بيانات غير صالحة');
-    if (empty($content)) throw new Exception('محتوى النشاط مطلوب');
+    $validTypes = ['note','call','meeting','email','follow_up','other','call_recording'];
+    if ($leadId <= 0 || !in_array($type, $validTypes)) {
+        throw new Exception('بيانات غير صالحة');
+    }
 
-    $db->prepare("INSERT INTO crm_activities (lead_id, user_id, type, title, content) VALUES (?, ?, ?, ?, ?)")
-       ->execute([$leadId, $ctx['userId'], $type, $title, $content]);
+    if ($type === 'call_recording') {
+        if ($mediaUrl === '') {
+            throw new Exception('ملف التسجيل مطلوب');
+        }
+        if (trim($content) === '') {
+            $content = 'تسجيل صوتي مرفوع يدوياً.';
+        }
+        if ($title === '') {
+            $title = 'تسجيل مكالمة';
+        }
+    } else {
+        if (trim($content) === '') {
+            throw new Exception('محتوى النشاط مطلوب');
+        }
+    }
+
+    $db->prepare('INSERT INTO crm_activities (lead_id, user_id, type, title, content, media_url) VALUES (?, ?, ?, ?, ?, ?)')
+       ->execute([$leadId, $ctx['userId'], $type, $title, $content, $mediaUrl !== '' ? $mediaUrl : null]);
 
     $db->prepare("UPDATE crm_leads SET last_activity_at=NOW() WHERE id=?")
        ->execute([$leadId]);
+
+    return ['success' => true, 'id' => (int)$db->lastInsertId()];
+}
+
+/**
+ * تسجيل مكالمة من التطبيق (عند الضغط على أيقونة الاتصال) — الوقت يُسجَّل تلقائياً؛ يمكن إضافة تعليق لاحقاً عبر «إضافة نشاط».
+ */
+function crm_recordCall($input, $ctx) {
+    global $db;
+    _ensureCrmSchema();
+
+    $leadId = (int)($input['leadId'] ?? 0);
+    $note   = trim((string)($input['note'] ?? ''));
+    if ($leadId <= 0) {
+        throw new Exception('معرف الليد غير صالح');
+    }
+
+    $ts = date('Y-m-d H:i:s');
+    $content = "[تسجيل تلقائي] تم الضغط على اتصال في: {$ts}";
+    if ($note !== '') {
+        $content .= "\n\n[تعليق المندوب]\n" . $note;
+    } else {
+        $content .= "\n\nيمكنك إضافة تفاصيل المكالمة من «إضافة نشاط» أو تعديل هذا السجل لاحقاً.";
+    }
+
+    $db->prepare("INSERT INTO crm_activities (lead_id, user_id, type, title, content) VALUES (?, ?, 'call', ?, ?)")
+       ->execute([$leadId, $ctx['userId'], 'مكالمة هاتفية', $content]);
+
+    $db->prepare('UPDATE crm_leads SET last_activity_at=NOW() WHERE id=?')->execute([$leadId]);
 
     return ['success' => true, 'id' => (int)$db->lastInsertId()];
 }

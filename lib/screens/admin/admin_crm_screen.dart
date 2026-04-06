@@ -672,6 +672,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
+    final locationUrlCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
     String priority = 'medium';
     int? assignedTo;
@@ -687,6 +688,8 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
           _inputField(phoneCtrl, 'رقم الهاتف', Icons.phone),
           const SizedBox(height: 10),
           _inputField(emailCtrl, 'البريد الإلكتروني', Icons.email),
+          const SizedBox(height: 10),
+          _inputField(locationUrlCtrl, 'رابط موقع / خرائط (اختياري)', Icons.map_outlined),
           const SizedBox(height: 10),
           _inputField(notesCtrl, 'ملاحظات', Icons.note, maxLines: 2),
           const SizedBox(height: 12),
@@ -740,6 +743,7 @@ class _AdminCrmScreenState extends State<AdminCrmScreen> with SingleTickerProvid
                   'name': nameCtrl.text.trim(),
                   'phone': phoneCtrl.text.trim(),
                   'email': emailCtrl.text.trim(),
+                  'locationUrl': locationUrlCtrl.text.trim(),
                   'notes': notesCtrl.text.trim(),
                   'priority': priority,
                   if (assignedTo != null) 'assignedTo': assignedTo,

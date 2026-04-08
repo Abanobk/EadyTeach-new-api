@@ -1568,6 +1568,19 @@ try {
             $result = users_updateProfile($input, $ctx);
             break;
 
+        // ── Smart Home (Home Assistant) ─────────────────────────
+        case 'homeAssistant.getCredentials':
+            $result = homeAssistant_getCredentials($ctx);
+            break;
+
+        case 'admin.homeAssistant.provision':
+            $result = admin_homeAssistantProvision($input, $ctx);
+            break;
+
+        case 'admin.homeAssistant.getProvision':
+            $result = admin_homeAssistantGetProvision($input, $ctx);
+            break;
+
         // ── Unknown ────────────────────────────────────────────
         default:
             throw new Exception("Unknown Procedure: {$procedure}");

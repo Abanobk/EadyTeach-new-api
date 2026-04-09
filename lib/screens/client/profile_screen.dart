@@ -134,6 +134,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       appBar: AppBar(
         title: const Text('بياناتي'),
         backgroundColor: AppThemeDecorations.cardColor(context),
+        leading: IconButton(
+          tooltip: 'Smart Home',
+          icon: const Icon(Icons.home_work_rounded),
+          onPressed: () => Navigator.of(context).pushNamed('/smart-home'),
+        ),
         automaticallyImplyLeading: false,
       ),
       body: !_loaded

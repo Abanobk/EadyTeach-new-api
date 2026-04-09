@@ -6,6 +6,113 @@ import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/curtain_pricing.dart';
+import 'package:video_player/video_player.dart';
+
+class _ProductVideoTile extends StatefulWidget {
+  final String url;
+  const _ProductVideoTile({required this.url});
+
+  @override
+  State<_ProductVideoTile> createState() => _ProductVideoTileState();
+}
+
+class _ProductVideoTileState extends State<_ProductVideoTile> {
+  VideoPlayerController? _c;
+  bool _loading = true;
+  String? _err;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      final c = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+      _c = c;
+      await c.initialize();
+      await c.setLooping(true);
+      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _err = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _c?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final c = _c;
+    if (_loading) {
+      return const Center(
+        child: SizedBox(
+          width: 26,
+          height: 26,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    if (_err != null || c == null || !c.value.isInitialized) {
+      return Center(
+        child: Text(
+          'Video unavailable',
+          style: TextStyle(color: scheme.onSurfaceVariant),
+        ),
+      );
+    }
+    return Stack(
+      children: [
+        Center(
+          child: AspectRatio(
+            aspectRatio: c.value.aspectRatio == 0 ? (16 / 9) : c.value.aspectRatio,
+            child: VideoPlayer(c),
+          ),
+        ),
+        Positioned.fill(
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () async {
+                if (c.value.isPlaying) {
+                  await c.pause();
+                } else {
+                  await c.play();
+                }
+                if (mounted) setState(() {});
+              },
+              child: Center(
+                child: Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.35),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Icon(
+                    c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 34,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -265,6 +372,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return result;
   }
 
+  String? get _videoUrl {
+    final v = widget.product['videoUrl'] ?? widget.product['video_url'];
+    final s = v?.toString().trim();
+    if (s == null || s.isEmpty) return null;
+    return s;
+  }
+
   double get _originalSelectedPrice {
     final base = double.tryParse(widget.product['price']?.toString() ?? '0') ?? 0;
     final original = double.tryParse(widget.product['originalPrice']?.toString() ?? '0') ?? 0;
@@ -408,7 +522,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ─── صور المنتج ───
+              // ─── صور + فيديو المنتج (زي Amazon) ───
               LayoutBuilder(
                 builder: (ctx, constraints) {
                   final maxWidth =
@@ -422,20 +536,32 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           children: [
                             GestureDetector(
                               onTap: () {
+                                // Tap on image opens viewer; video is controlled in-place.
+                                if (_videoUrl != null) {
+                                  if (_selectedImageIndex == 0) return;
+                                }
                                 if (images.isEmpty) return;
-                                _openImageViewer(
-                                    images, _selectedImageIndex);
+                                final idx = _videoUrl != null ? (_selectedImageIndex - 1) : _selectedImageIndex;
+                                if (idx < 0 || idx >= images.length) return;
+                                _openImageViewer(images, idx);
                               },
                               child: SizedBox(
                                 width: double.infinity,
-                                child: images.isNotEmpty
-                                    ? Image.network(
-                                        images[_selectedImageIndex],
-                                        fit: BoxFit.contain,
-                                        errorBuilder: (_, __, ___) =>
-                                            _placeholder(),
-                                      )
-                                    : _placeholder(),
+                                child: () {
+                                  final hasVideo = _videoUrl != null;
+                                  final total = images.length + (hasVideo ? 1 : 0);
+                                  if (total == 0) return _placeholder();
+                                  if (hasVideo && _selectedImageIndex == 0) {
+                                    return _ProductVideoTile(url: _videoUrl!);
+                                  }
+                                  final imgIdx = hasVideo ? (_selectedImageIndex - 1) : _selectedImageIndex;
+                                  if (imgIdx < 0 || imgIdx >= images.length) return _placeholder();
+                                  return Image.network(
+                                    images[imgIdx],
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => _placeholder(),
+                                  );
+                                }(),
                               ),
                             ),
                             if (hasDiscount)
@@ -467,13 +593,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ),
 
               // ─── صور مصغرة ───
-              if (images.length > 1)
+              if ((images.length + (_videoUrl != null ? 1 : 0)) > 1)
                 SizedBox(
                   height: 70,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    itemCount: images.length,
+                    itemCount: images.length + (_videoUrl != null ? 1 : 0),
                     itemBuilder: (ctx, i) => GestureDetector(
                       onTap: () => setState(() => _selectedImageIndex = i),
                       child: Container(
@@ -489,8 +615,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(7),
-                          child: Image.network(images[i], fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Icon(Icons.image, color: AppColors.muted)),
+                          child: () {
+                            if (_videoUrl != null && i == 0) {
+                              return Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Container(color: Colors.black.withOpacity(0.2)),
+                                  const Icon(Icons.play_circle_fill_rounded, color: AppColors.primary, size: 26),
+                                ],
+                              );
+                            }
+                            final imgIdx = _videoUrl != null ? (i - 1) : i;
+                            if (imgIdx < 0 || imgIdx >= images.length) {
+                              return const Icon(Icons.image, color: AppColors.muted);
+                            }
+                            return Image.network(
+                              images[imgIdx],
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(Icons.image, color: AppColors.muted),
+                            );
+                          }(),
                         ),
                       ),
                     ),

@@ -301,6 +301,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           ),
           actions: [
             IconButton(
+              tooltip: 'Smart Home',
+              icon: const Icon(Icons.home_work_rounded, color: AppColors.primary),
+              onPressed: () => Navigator.of(context).pushNamed('/smart-home'),
+            ),
+            IconButton(
               icon: const Icon(Icons.logout, color: AppColors.muted),
               onPressed: () async {
                 await context.read<AuthProvider>().logout();

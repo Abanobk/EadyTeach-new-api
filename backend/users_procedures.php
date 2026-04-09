@@ -168,3 +168,52 @@ function admin_homeAssistantGetProvision(array $input, array $ctx): array {
     ];
 }
 
+function admin_homeAssistantListClients(array $input, array $ctx): array {
+    global $db;
+    $userId = (int)($ctx['userId'] ?? 0);
+    if (!$userId) throw new Exception('UNAUTHORIZED');
+
+    $role = _users_getRoleById($userId);
+    if (!in_array($role, ['admin', 'staff', 'supervisor'], true)) {
+        throw new Exception('FORBIDDEN');
+    }
+
+    _users_ensureHomeAssistantColumns();
+
+    $q = trim((string)($input['q'] ?? ''));
+    $limit = (int)($input['limit'] ?? 200);
+    if ($limit <= 0) $limit = 200;
+    if ($limit > 500) $limit = 500;
+
+    $params = [];
+    $where = "WHERE COALESCE(role, 'user') = 'user'";
+    if ($q !== '') {
+        $where .= " AND (LOWER(email) LIKE LOWER(?) OR LOWER(name) LIKE LOWER(?))";
+        $like = '%' . $q . '%';
+        $params[] = $like;
+        $params[] = $like;
+    }
+
+    $sql = "SELECT id, name, email, ha_url, ha_token FROM users $where ORDER BY id DESC LIMIT $limit";
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $out = [];
+    foreach ($rows as $r) {
+        $url = trim((string)($r['ha_url'] ?? ''));
+        $token = trim((string)($r['ha_token'] ?? ''));
+        $masked = $token === '' ? '' : ('…' . substr($token, max(0, strlen($token) - 6)));
+        $out[] = [
+            'id' => (int)($r['id'] ?? 0),
+            'name' => (string)($r['name'] ?? ''),
+            'email' => (string)($r['email'] ?? ''),
+            'enabled' => ($url !== '' && $token !== ''),
+            'haUrl' => $url,
+            'tokenMasked' => $masked,
+        ];
+    }
+
+    return ['items' => $out];
+}
+

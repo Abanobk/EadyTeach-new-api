@@ -7,7 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'controllers/theme_controller.dart';
 import 'providers/auth_provider.dart';
-import 'providers/cart_provider.dart';
+import 'providers/smart_home_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/role_select_screen.dart';
 import 'screens/client/client_home_screen.dart';
@@ -15,6 +15,7 @@ import 'screens/technician/technician_home_screen.dart';
 import 'screens/technician/task_detail_screen.dart';
 import 'screens/admin/admin_home_screen.dart';
 import 'screens/admin/quotation_detail_screen.dart';
+import 'screens/smart_home/smart_home_dashboard.dart';
 import 'theme/app_theme.dart';
 import 'dart:async';
 import 'services/notification_service.dart';
@@ -55,6 +56,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => ThemeController()),
+        ChangeNotifierProvider(create: (_) => SmartHomeProvider()),
       ],
       child: const EasyTechApp(),
     ),
@@ -112,6 +114,7 @@ class EasyTechApp extends StatelessWidget {
         '/role-select': (_) => const RoleSelectScreen(),
         '/client': (_) => const ClientHomeScreen(),
         '/technician': (_) => const TechnicianHomeScreen(),
+        '/smart-home': (_) => const SmartHomeDashboard(),
         '/task-detail': (ctx) {
           final id = ModalRoute.of(ctx)?.settings.arguments;
           final taskId = id is int ? id : (id != null ? int.tryParse(id.toString()) : null);

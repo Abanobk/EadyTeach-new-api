@@ -196,6 +196,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     );
     bool curtainTrackMode = product?['pricingMode']?.toString() == 'curtain_per_meter';
     String? mainImageUrl = product?['mainImageUrl'] as String?;
+    String? videoUrl = product?['videoUrl'] as String?;
     List<String> extraImages = [];
     if (product != null && product['images'] is List) {
       for (var img in product['images']) {
@@ -951,6 +952,63 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                 const SizedBox(height: 6),
                 TextField(controller: stockCtrl, keyboardType: TextInputType.number, style: const TextStyle(color: AppColors.text), decoration: _inputDecoration(hint: '0')),
                 const SizedBox(height: 12),
+                const Text('فيديو المنتج (اختياري)', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        (videoUrl == null || videoUrl!.isEmpty) ? 'لا يوجد فيديو' : videoUrl!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: AppColors.text, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: uploadingImage
+                          ? null
+                          : () async {
+                              final picker = ImagePicker();
+                              final picked = await picker.pickVideo(source: ImageSource.gallery);
+                              if (picked == null) return;
+                              setModalState(() => uploadingImage = true);
+                              try {
+                                final bytes = await picked.readAsBytes();
+                                final url = await ApiService.uploadFile(
+                                  picked.path,
+                                  bytes: bytes,
+                                  filename: picked.name,
+                                );
+                                setModalState(() {
+                                  videoUrl = url;
+                                  uploadingImage = false;
+                                });
+                              } catch (e) {
+                                setModalState(() => uploadingImage = false);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('فشل رفع الفيديو: $e'), backgroundColor: AppColors.error),
+                                  );
+                                }
+                              }
+                            },
+                      icon: uploadingImage
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.video_library_outlined, size: 18),
+                      label: Text(uploadingImage ? 'جاري الرفع...' : 'اختيار/تغيير فيديو', style: const TextStyle(fontSize: 12)),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'حذف الفيديو',
+                      onPressed: (videoUrl == null || videoUrl!.isEmpty)
+                          ? null
+                          : () => setModalState(() => videoUrl = null),
+                      icon: const Icon(Icons.delete_outline, color: AppColors.muted),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 Text('صور المنتج (${_allEditImages(mainImageUrl, extraImages).length})', style: const TextStyle(color: AppColors.muted, fontSize: 13)),
                 const SizedBox(height: 8),
                 SizedBox(
@@ -1124,6 +1182,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           if (descCtrl.text.isNotEmpty) 'description': descCtrl.text.trim(),
                           if (mainImageUrl != null && mainImageUrl!.isNotEmpty) 'mainImageUrl': mainImageUrl,
                           'images': allImgs,
+                          if (videoUrl != null && videoUrl!.isNotEmpty) 'videoUrl': videoUrl,
                           'stock': int.tryParse(stockCtrl.text) ?? 0,
                           'isFeatured': isFeatured,
                           if (selectedCategoryId != null) 'categoryId': selectedCategoryId,

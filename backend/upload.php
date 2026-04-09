@@ -76,7 +76,16 @@ if ($safeExt === '') {
     $safeExt = 'bin';
 }
 
-$fileName = date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $safeExt;
+// Basic allowlist for safety (images + common video types)
+$allowed = ['jpg','jpeg','png','gif','webp','mp4','mov','m4v','webm'];
+$lowerExt = strtolower($safeExt);
+if (!in_array($lowerExt, $allowed, true)) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Unsupported file type: ' . $lowerExt]);
+    exit;
+}
+
+$fileName = date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $lowerExt;
 $targetPath = rtrim($uploadDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $fileName;
 
 if (!move_uploaded_file($_FILES['file']['tmp_name'], $targetPath)) {

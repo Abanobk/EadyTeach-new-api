@@ -455,6 +455,7 @@ function formatProduct(array $row, ?array $ctx = null): array {
         'categoryId'    => $row['category_id'] ? (int) $row['category_id'] : null,
         'mainImageUrl'  => $mainImage,
         'images'        => $images,
+        'videoUrl'      => $row['video_url'] ?? null,
         'variants'      => $variants,
         'types'         => $types,
         'sku'           => $row['sku'] ?? null,
@@ -951,6 +952,8 @@ try {
             $catId    = isset($input['categoryId']) ? (int) $input['categoryId'] : null;
             $imgUrl   = $input['mainImageUrl'] ?? null;
             $images   = isset($input['images']) ? json_encode($input['images']) : null;
+            $videoUrl = isset($input['videoUrl']) ? trim((string)$input['videoUrl']) : null;
+            if ($videoUrl === '') $videoUrl = null;
             $variants = isset($input['variants']) ? json_encode($input['variants']) : null;
             $types    = isset($input['types']) ? json_encode($input['types']) : null;
             $sku      = $input['sku'] ?? null;
@@ -959,6 +962,7 @@ try {
             $partNumber = $partNumRaw === '' ? null : $partNumRaw;
 
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent DECIMAL(5,2) DEFAULT 0'); } catch (Exception $e) {}
+            try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS video_url TEXT NULL'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(12,2) DEFAULT 0'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_min_stock INT DEFAULT 0'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS allow_discount_when_stock_zero TINYINT DEFAULT 0'); } catch (Exception $e) {}
@@ -973,8 +977,8 @@ try {
                 $curtainMotorsJson = json_encode($input['curtainMotors'], JSON_UNESCAPED_UNICODE);
             }
 
-            $stmt = $db->prepare('INSERT INTO products (name, name_ar, description, description_ar, price, original_price, stock, is_featured, category_id, main_image_url, images, variants, types, sku, serial_number, part_number, discount_percent, discount_amount, discount_min_stock, allow_discount_when_stock_zero, pricing_mode, curtain_length_min_cm, curtain_length_max_cm, curtain_wave_surcharge, curtain_motors_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial, $partNumber, $discountPercent, $discountAmount, $discountMinStock, $allowDiscountWhenStockZero, $pricingMode, $curtainMinCm, $curtainMaxCm, $curtainWave, $curtainMotorsJson]);
+            $stmt = $db->prepare('INSERT INTO products (name, name_ar, description, description_ar, price, original_price, stock, is_featured, category_id, main_image_url, images, video_url, variants, types, sku, serial_number, part_number, discount_percent, discount_amount, discount_min_stock, allow_discount_when_stock_zero, pricing_mode, curtain_length_min_cm, curtain_length_max_cm, curtain_wave_surcharge, curtain_motors_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $videoUrl, $variants, $types, $sku, $serial, $partNumber, $discountPercent, $discountAmount, $discountMinStock, $allowDiscountWhenStockZero, $pricingMode, $curtainMinCm, $curtainMaxCm, $curtainWave, $curtainMotorsJson]);
             $result = ['id' => (int) $db->lastInsertId()];
             break;
 
@@ -997,6 +1001,8 @@ try {
             $catId    = isset($input['categoryId']) ? (int) $input['categoryId'] : null;
             $imgUrl   = $input['mainImageUrl'] ?? null;
             $images   = isset($input['images']) ? json_encode($input['images']) : null;
+            $videoUrl = isset($input['videoUrl']) ? trim((string)$input['videoUrl']) : null;
+            if ($videoUrl === '') $videoUrl = null;
             $variants = isset($input['variants']) ? json_encode($input['variants']) : null;
             $types    = isset($input['types']) ? json_encode($input['types']) : null;
             $sku      = $input['sku'] ?? null;
@@ -1005,6 +1011,7 @@ try {
             $partNumber = $partNumRaw === '' ? null : $partNumRaw;
 
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent DECIMAL(5,2) DEFAULT 0'); } catch (Exception $e) {}
+            try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS video_url TEXT NULL'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(12,2) DEFAULT 0'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_min_stock INT DEFAULT 0'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS allow_discount_when_stock_zero TINYINT DEFAULT 0'); } catch (Exception $e) {}
@@ -1019,8 +1026,8 @@ try {
                 $curtainMotorsJson = json_encode($input['curtainMotors'], JSON_UNESCAPED_UNICODE);
             }
 
-            $stmt = $db->prepare('UPDATE products SET name = ?, name_ar = ?, description = ?, description_ar = ?, price = ?, original_price = ?, stock = ?, is_featured = ?, category_id = ?, main_image_url = ?, images = ?, variants = ?, types = ?, sku = ?, serial_number = ?, part_number = ?, discount_percent = ?, discount_amount = ?, discount_min_stock = ?, allow_discount_when_stock_zero = ?, pricing_mode = ?, curtain_length_min_cm = ?, curtain_length_max_cm = ?, curtain_wave_surcharge = ?, curtain_motors_json = ? WHERE id = ?');
-            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $variants, $types, $sku, $serial, $partNumber, $discountPercent, $discountAmount, $discountMinStock, $allowDiscountWhenStockZero, $pricingMode, $curtainMinCm, $curtainMaxCm, $curtainWave, $curtainMotorsJson, $id]);
+            $stmt = $db->prepare('UPDATE products SET name = ?, name_ar = ?, description = ?, description_ar = ?, price = ?, original_price = ?, stock = ?, is_featured = ?, category_id = ?, main_image_url = ?, images = ?, video_url = ?, variants = ?, types = ?, sku = ?, serial_number = ?, part_number = ?, discount_percent = ?, discount_amount = ?, discount_min_stock = ?, allow_discount_when_stock_zero = ?, pricing_mode = ?, curtain_length_min_cm = ?, curtain_length_max_cm = ?, curtain_wave_surcharge = ?, curtain_motors_json = ? WHERE id = ?');
+            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $videoUrl, $variants, $types, $sku, $serial, $partNumber, $discountPercent, $discountAmount, $discountMinStock, $allowDiscountWhenStockZero, $pricingMode, $curtainMinCm, $curtainMaxCm, $curtainWave, $curtainMotorsJson, $id]);
             $result = ['success' => true];
             break;
 
@@ -1579,6 +1586,10 @@ try {
 
         case 'admin.homeAssistant.getProvision':
             $result = admin_homeAssistantGetProvision($input, $ctx);
+            break;
+
+        case 'admin.homeAssistant.listClients':
+            $result = admin_homeAssistantListClients($input, $ctx);
             break;
 
         // ── Unknown ────────────────────────────────────────────

@@ -17,6 +17,8 @@ import 'admin_categories_screen.dart';
 import 'admin_inbox_screen.dart';
 import 'admin_permissions_screen.dart';
 import 'admin_discounts_screen.dart';
+import 'home_assistant_provision_screen.dart';
+import 'home_assistant_clients_screen.dart';
 import 'admin_reports_screen.dart';
 import 'admin_quotations_screen.dart';
 import 'admin_accounting_screen.dart';
@@ -251,6 +253,24 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           _sidebarItem(context, Icons.bar_chart_outlined, 'التقارير', () => _navigate(context, const AdminReportsScreen()), false, color: Colors.green),
                         if (auth.hasPermission('surveys.view'))
                           _sidebarItem(context, Icons.home_work_outlined, 'Smart Survey', () => _navigate(context, const SurveyEntryScreen()), false, color: Colors.cyan),
+                        if (auth.canAccessAdmin)
+                          _sidebarItem(
+                            context,
+                            Icons.home_work_rounded,
+                            'Home Assistant (Provision)',
+                            () => _navigate(context, const HomeAssistantProvisionScreen()),
+                            false,
+                            color: Colors.blueGrey,
+                          ),
+                        if (auth.canAccessAdmin)
+                          _sidebarItem(
+                            context,
+                            Icons.manage_accounts_rounded,
+                            'Home Assistant Clients',
+                            () => _navigate(context, const HomeAssistantClientsScreen()),
+                            false,
+                            color: Colors.blueGrey,
+                          ),
                         if (auth.hasPermission('discounts.view'))
                           _sidebarItem(
                             context,

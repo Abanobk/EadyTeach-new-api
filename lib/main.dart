@@ -13,6 +13,7 @@ import 'providers/smart_home_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/role_select_screen.dart';
 import 'screens/client/client_home_screen.dart';
+import 'screens/client/public_product_screen.dart';
 import 'screens/technician/technician_home_screen.dart';
 import 'screens/technician/task_detail_screen.dart';
 import 'screens/admin/admin_home_screen.dart';
@@ -169,6 +170,18 @@ class _SplashScreenState extends State<SplashScreen> {
     try {
       final auth = context.read<AuthProvider>();
       final productIdFromUrl = int.tryParse(Uri.base.queryParameters['productId'] ?? '');
+
+      if (kIsWeb && productIdFromUrl != null && productIdFromUrl > 0) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => PublicProductScreen(productId: productIdFromUrl),
+            settings: RouteSettings(name: '/public-product?productId=$productIdFromUrl'),
+          ),
+        );
+        return;
+      }
+
       if (productIdFromUrl != null && productIdFromUrl > 0) {
         auth.setPendingProductId(productIdFromUrl);
       }

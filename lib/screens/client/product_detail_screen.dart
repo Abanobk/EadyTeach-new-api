@@ -116,7 +116,13 @@ class _ProductVideoTileState extends State<_ProductVideoTile> {
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
-  const ProductDetailScreen({super.key, required this.product});
+  final bool isPublicView;
+
+  const ProductDetailScreen({
+    super.key,
+    required this.product,
+    this.isPublicView = false,
+  });
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -471,6 +477,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final originalPrice = _originalSelectedPrice;
 
     final auth = context.watch<AuthProvider>();
+    final isGuestPublicView = widget.isPublicView && !auth.isLoggedIn;
     final dealerId = auth.user?.id;
     if (!_loadingTypePrices &&
         dealerId != null &&
@@ -973,6 +980,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: () async {
+                          if (isGuestPublicView) {
+                            final productId = int.tryParse(p['id']?.toString() ?? '');
+                            if (productId != null && productId > 0) {
+                              context.read<AuthProvider>().setPendingProductId(productId);
+                            }
+                            if (!mounted) return;
+                            Navigator.pushNamed(context, '/login');
+                            return;
+                          }
+
                           // تحديد الـ variant أو type المختار
                           String? selectedVariant;
                           if (_selectedVariantIndex != null && variants.isNotEmpty) {
@@ -1072,13 +1089,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           }
                         },
                         icon: Icon(
-                          isOutOfStock ? Icons.schedule_send_outlined : Icons.shopping_cart_outlined,
+                          isGuestPublicView
+                              ? Icons.login_rounded
+                              : (isOutOfStock ? Icons.schedule_send_outlined : Icons.shopping_cart_outlined),
                           color: Colors.black,
                         ),
                         label: Text(
-                          isOutOfStock
-                              ? 'طلب مسبق - ${(_isCurtainTrack ? _curtainLineUnitTotal() * _qty : _currentPrice * _qty).toStringAsFixed(2)} ج.م'
-                              : 'أضف للسلة - ${(_isCurtainTrack ? _curtainLineUnitTotal() * _qty : _currentPrice * _qty).toStringAsFixed(2)} ج.م',
+                          isGuestPublicView
+                              ? 'سجل الدخول لإتمام الطلب'
+                              : (isOutOfStock
+                                  ? 'طلب مسبق - ${(_isCurtainTrack ? _curtainLineUnitTotal() * _qty : _currentPrice * _qty).toStringAsFixed(2)} ج.م'
+                                  : 'أضف للسلة - ${(_isCurtainTrack ? _curtainLineUnitTotal() * _qty : _currentPrice * _qty).toStringAsFixed(2)} ج.م'),
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         style: ElevatedButton.styleFrom(

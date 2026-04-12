@@ -168,6 +168,10 @@ class _SplashScreenState extends State<SplashScreen> {
 
     try {
       final auth = context.read<AuthProvider>();
+      final productIdFromUrl = int.tryParse(Uri.base.queryParameters['productId'] ?? '');
+      if (productIdFromUrl != null && productIdFromUrl > 0) {
+        auth.setPendingProductId(productIdFromUrl);
+      }
       await auth.checkAuth().timeout(const Duration(seconds: 20));
 
       if (!mounted) return;

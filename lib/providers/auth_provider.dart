@@ -60,6 +60,7 @@ class AuthProvider extends ChangeNotifier {
   UserModel? _user;
   bool _isLoading = true;
   String? _error;
+  int? _pendingProductId;
 
   /// حسابات تُعامل دائماً كفني فقط (لا تدخل لوحة المسؤول حتى لو الـ backend أعطاها صلاحية أدمن)
   static const _technicianOnlyEmails = ['easytech50500@gmail.com'];
@@ -73,6 +74,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isLoggedIn => _user != null;
   String? get error => _error;
+  int? get pendingProductId => _pendingProductId;
 
   /// أسماء العرض للحسابات (الـ backend قد يرجّع "Admin" بدل الاسم الحقيقي)
   static const _displayNames = {
@@ -97,6 +99,17 @@ class AuthProvider extends ChangeNotifier {
   }
 
   bool hasPermission(String key) => _user?.hasPermission(key) ?? false;
+
+  void setPendingProductId(int? value, {bool notify = false}) {
+    _pendingProductId = (value != null && value > 0) ? value : null;
+    if (notify) notifyListeners();
+  }
+
+  int? consumePendingProductId() {
+    final value = _pendingProductId;
+    _pendingProductId = null;
+    return value;
+  }
 
   Future<void> _loadPermissions() async {
     if (_user == null) return;
@@ -137,6 +150,7 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {}
     await ApiService.clearCookie();
     _user = null;
+    _pendingProductId = null;
     notifyListeners();
   }
 

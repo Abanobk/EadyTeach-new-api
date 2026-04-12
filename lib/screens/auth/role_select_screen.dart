@@ -6,6 +6,15 @@ import '../../theme/app_theme.dart';
 class RoleSelectScreen extends StatelessWidget {
   const RoleSelectScreen({super.key});
 
+  void _openClient(BuildContext context, AuthProvider auth) {
+    final pendingProductId = auth.consumePendingProductId();
+    Navigator.pushReplacementNamed(
+      context,
+      '/client',
+      arguments: pendingProductId != null ? {'productId': pendingProductId} : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -48,7 +57,7 @@ class RoleSelectScreen extends StatelessWidget {
                       title: 'عميل',
                       subtitle: 'تصفح المنتجات، اطلب الخدمات، وتابع طلباتك',
                       color: c.primary,
-                      onTap: () => Navigator.pushReplacementNamed(context, '/client'),
+                      onTap: () => _openClient(context, auth),
                     ),
                   ),
                   const SizedBox(height: 12),

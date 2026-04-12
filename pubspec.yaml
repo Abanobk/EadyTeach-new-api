@@ -35,6 +35,8 @@ dependencies:
   path_provider: ^2.1.2
   pdf: ^3.11.3
   printing: ^5.14.2
+  arabic_reshaper: ^1.0.0
+  bidi: ^2.0.13
   google_fonts: ^6.2.1
   app_badge_plus: ^1.2.7
   table_calendar: ^3.1.2

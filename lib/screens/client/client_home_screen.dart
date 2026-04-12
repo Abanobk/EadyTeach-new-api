@@ -42,11 +42,26 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   bool _loading = true;
   String _search = '';
   bool _didSyncConfirmedPreorders = false;
+  int? _pendingOpenProductId;
+  bool _didAttemptPendingProductOpen = false;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_pendingOpenProductId != null) return;
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map) {
+      final pid = int.tryParse(args['productId']?.toString() ?? '');
+      if (pid != null && pid > 0) {
+        _pendingOpenProductId = pid;
+      }
+    }
   }
 
   Map<int, Map<String, dynamic>> _productsById() {
@@ -138,9 +153,45 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       });
       // After products are loaded, sync any confirmed preorder orders into cart (with images).
       await _syncConfirmedPreordersToCartIfNeeded();
+      await _openPendingProductIfNeeded();
     } catch (e) {
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _openPendingProductIfNeeded() async {
+    if (!mounted || _didAttemptPendingProductOpen) return;
+    final pid = _pendingOpenProductId;
+    if (pid == null || pid <= 0) return;
+    _didAttemptPendingProductOpen = true;
+
+    Map<String, dynamic>? product;
+    for (final raw in _products) {
+      if (raw is! Map) continue;
+      final id = int.tryParse(raw['id']?.toString() ?? raw['productId']?.toString() ?? '');
+      if (id == pid) {
+        product = Map<String, dynamic>.from(raw);
+        break;
+      }
+    }
+
+    if (product == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذر العثور على المنتج المطلوب')), 
+        );
+      }
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product!)),
+      );
+      _pendingOpenProductId = null;
+    });
   }
 
   String get _companyName =>

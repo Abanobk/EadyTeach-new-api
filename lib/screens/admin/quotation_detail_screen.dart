@@ -17,6 +17,8 @@ import 'create_quotation_screen.dart';
 import '../../utils/pdf_saver_stub.dart'
     if (dart.library.html) '../../utils/pdf_saver_web.dart' as pdf_saver;
 import '../../utils/quotation_line_pricing.dart';
+import 'package:arabic_reshaper/arabic_reshaper.dart';
+import 'package:bidi/bidi.dart' as bidi;
 
 class QuotationDetailScreen extends StatefulWidget {
   final int quotationId;
@@ -511,14 +513,58 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return false;
   }
 
-  /// أحرف مثل ← → قد لا تُرسم في خط Cairo داخل الـPDF فتظهر مربعات.
-  static String _pdfSafeText(String? raw) {
+  static final ArabicReshaper _arabicReshaper = ArabicReshaper.instance;
+
+  static String _toVisualRtl(String text) {
+    try {
+      return String.fromCharCodes(bidi.logicalToVisual(text));
+    } catch (_) {
+      return text.split('').reversed.join();
+    }
+  }
+
+  /// تنظيف النص وإعادة تشكيل العربية قبل الطباعة داخل PDF.
+  static String _pdfSafeText(String? raw, {bool preserveNewLines = false}) {
     if (raw == null) return '';
-    var s = raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+    var s = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     s = s.replaceAll('\u2190', ' - ').replaceAll('\u2192', ' - ');
     s = s.replaceAll(RegExp(r'[\u200B-\u200D\uFEFF]'), '');
+    if (preserveNewLines) {
+      final lines = s
+          .split('\n')
+          .map((line) => line.trim().replaceAll(RegExp(r'\s+'), ' '))
+          .where((line) => line.isNotEmpty)
+          .toList();
+      s = lines.join('\n');
+    } else {
+      s = s.trim().replaceAll(RegExp(r'\s+'), ' ');
+    }
+    if (s.isEmpty) return s;
+    if (ArabicReshaper.isArabic(s)) {
+      final visualLines = s
+          .split('\n')
+          .map((line) {
+            if (line.trim().isEmpty) return line;
+            final shaped = _arabicReshaper.reshape(line);
+            return _toVisualRtl(shaped);
+          })
+          .toList();
+      return visualLines.join('\n');
+    }
     return s;
   }
+
+  pw.Widget _pdfText(
+    String text, {
+    pw.TextStyle? style,
+    pw.TextAlign? textAlign,
+    int? maxLines,
+  }) => pw.Text(
+        _pdfSafeText(text, preserveNewLines: true),
+        style: style,
+        textAlign: textAlign ?? pw.TextAlign.right,
+        maxLines: maxLines,
+      );
 
   /// إجماليات عرض السعر للعميل: مبنية على سعر البيع للعميل في كل بند.
   /// إذا كان `subtotal` المخزّن يطابق مجموع البنود (ضمن هامش) نستخدم المخزن؛ وإلا نُعيد حساب التركيبات والخصم والنهائي (عروض قديمة خُزن فيها الإجمالي على أساس سعر التاجر).
@@ -719,15 +765,28 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   }
 
   Future<pw.ImageProvider?> _fetchPdfImage(String? rawUrl) async {
-    if (rawUrl == null || rawUrl.isEmpty) return null;
-    try {
-      final url = ApiService.proxyImageUrl(rawUrl);
-      final resp = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
-      if (resp.statusCode == 200 && resp.bodyBytes.isNotEmpty) {
-        return pw.MemoryImage(resp.bodyBytes);
-      }
-    } catch (_) {}
+    if (rawUrl == null || rawUrl.trim().isEmpty) return null;
+    final direct = rawUrl.trim();
+    final candidates = <String>{
+      if (direct.startsWith('http')) direct,
+      ApiService.proxyImageUrl(direct),
+    };
+    for (final url in candidates) {
+      try {
+        final resp = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
+        if (resp.statusCode == 200 && resp.bodyBytes.isNotEmpty) {
+          return pw.MemoryImage(resp.bodyBytes);
+        }
+      } catch (_) {}
+    }
     return null;
+  }
+
+  String? _quotationProductWebUrl(Map<String, dynamic> item) {
+    final productId = int.tryParse(item['productId']?.toString() ?? item['id']?.toString() ?? '');
+    if (productId == null || productId <= 0 || !kIsWeb) return null;
+    final root = Uri.base.replace(path: '/', queryParameters: {'productId': '$productId'}, fragment: '');
+    return root.toString();
   }
 
   Future<Uint8List> _buildPdfBytes() async {
@@ -762,8 +821,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
             pw.Text('Easy Tech', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
             pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-              pw.Text('عرض سعر', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-              pw.Text(q['refNumber'] ?? '', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+              _pdfText('عرض سعر', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+              _pdfText(q['refNumber']?.toString() ?? '', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700), textAlign: pw.TextAlign.center),
             ]),
           ]),
           pw.Divider(thickness: 2, color: PdfColors.blue800),
@@ -772,14 +831,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         build: (ctx) => [
           pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
             pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-              pw.Text('العميل: ${q['clientName'] ?? '-'}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-              if (q['clientPhone'] != null) pw.Text('الهاتف: ${q['clientPhone']}', style: const pw.TextStyle(fontSize: 11)),
-              if (q['clientEmail'] != null) pw.Text('البريد: ${q['clientEmail']}', style: const pw.TextStyle(fontSize: 11)),
+              _pdfText('العميل: ${q['clientName'] ?? '-'}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+              if (q['clientPhone'] != null) _pdfText('الهاتف: ${q['clientPhone']}', style: const pw.TextStyle(fontSize: 11)),
+              if (q['clientEmail'] != null) _pdfText('البريد: ${q['clientEmail']}', style: const pw.TextStyle(fontSize: 11)),
               if (q['dealerName'] != null && q['dealerName'].toString().isNotEmpty)
-                pw.Text('الموزع المعتمد: ${q['dealerName']}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue700)),
+                _pdfText('الموزع المعتمد: ${q['dealerName']}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue700)),
             ]),
             pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-              pw.Text('التاريخ: ${_formatDate(q['createdAt'])}', style: const pw.TextStyle(fontSize: 11)),
+              _pdfText('التاريخ: ${_formatDate(q['createdAt'])}', style: const pw.TextStyle(fontSize: 11)),
             ]),
           ]),
           pw.SizedBox(height: 20),
@@ -788,12 +847,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: const pw.BoxDecoration(color: PdfColors.blue800),
             child: pw.Row(children: [
-              pw.Expanded(flex: 1, child: pw.Text('#', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
-              pw.Expanded(flex: 2, child: pw.Text('الصورة', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
-              pw.Expanded(flex: 4, child: pw.Text('المنتج', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
-              pw.Expanded(flex: 1, child: pw.Text('الكمية', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
-              pw.Expanded(flex: 2, child: pw.Text('سعر الوحدة', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
-              pw.Expanded(flex: 2, child: pw.Text('الإجمالي', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
+              pw.Expanded(flex: 1, child: _pdfText('#', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
+              pw.Expanded(flex: 2, child: _pdfText('الصورة', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
+              pw.Expanded(flex: 4, child: _pdfText('المنتج', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
+              pw.Expanded(flex: 1, child: _pdfText('الكمية', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
+              pw.Expanded(flex: 2, child: _pdfText('سعر الوحدة', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
+              pw.Expanded(flex: 2, child: _pdfText('الإجمالي', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
             ]),
           ),
           // Table rows with images
@@ -808,7 +867,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             final tp = curtainM != null
                 ? quotationPdfClientLineAmount(itemMap)
                 : ((up - rawUp).abs() > 0.02 ? (up * qty) : (storedLine > 0 ? storedLine : (rawUp * qty)));
-            final descriptionText = _pdfSafeText(item['description']?.toString());
+            final descriptionText = _pdfSafeText(item['description']?.toString(), preserveNewLines: true);
+            final productUrl = _quotationProductWebUrl(itemMap);
             final hasImage = itemImages.containsKey(i);
             return pw.Container(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -817,25 +877,21 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                 color: i % 2 == 0 ? PdfColors.white : PdfColors.grey50,
               ),
               child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
-                pw.Expanded(flex: 1, child: pw.Text('${i + 1}', style: const pw.TextStyle(fontSize: 9), textAlign: pw.TextAlign.center)),
-                pw.Expanded(flex: 2, child: pw.Center(
-                  child: hasImage
-                      ? pw.ClipRRect(
-                          horizontalRadius: 4, verticalRadius: 4,
-                          child: pw.Image(itemImages[i]!, width: 50, height: 50, fit: pw.BoxFit.cover))
-                      : pw.Container(
-                          width: 50, height: 50,
-                          decoration: pw.BoxDecoration(color: PdfColors.grey200, borderRadius: pw.BorderRadius.circular(4)),
-                          child: pw.Center(child: pw.Text('--', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey500)))),
-                )),
+                pw.Expanded(flex: 1, child: _pdfText('${i + 1}', style: const pw.TextStyle(fontSize: 9), textAlign: pw.TextAlign.center)),
+                _pdfCellImage(
+                  hasImage ? itemImages[i] : null,
+                  2,
+                  link: productUrl,
+                  size: 58,
+                ),
                 pw.Expanded(flex: 4, child: pw.Padding(
                   padding: const pw.EdgeInsets.symmetric(horizontal: 4),
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
-                      pw.Text(item['productName'] ?? '', style: const pw.TextStyle(fontSize: 10)),
+                      _pdfText(item['productName']?.toString() ?? '', style: const pw.TextStyle(fontSize: 10)),
                       if (descriptionText.isNotEmpty)
-                        pw.Text(
+                        _pdfText(
                           descriptionText,
                           style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
                           maxLines: 3,
@@ -843,9 +899,9 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                     ],
                   ),
                 )),
-                pw.Expanded(flex: 1, child: pw.Text('$qty', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center)),
-                pw.Expanded(flex: 2, child: pw.Text('${up.toStringAsFixed(0)} ج.م', style: const pw.TextStyle(fontSize: 9), textAlign: pw.TextAlign.center)),
-                pw.Expanded(flex: 2, child: pw.Text('${tp.toStringAsFixed(0)} ج.م', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800), textAlign: pw.TextAlign.center)),
+                pw.Expanded(flex: 1, child: _pdfText('$qty', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center)),
+                pw.Expanded(flex: 2, child: _pdfText('${up.toStringAsFixed(0)} ج.م', style: const pw.TextStyle(fontSize: 9), textAlign: pw.TextAlign.center)),
+                pw.Expanded(flex: 2, child: _pdfText('${tp.toStringAsFixed(0)} ج.م', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800), textAlign: pw.TextAlign.center)),
               ]),
             );
           }),
@@ -856,36 +912,36 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey400), borderRadius: pw.BorderRadius.circular(4)),
             child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
               pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-                pw.Text('الإجمالي الجزئي', style: const pw.TextStyle(fontSize: 11)),
-                pw.Text('${subtotal.toStringAsFixed(0)} ج.م', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                _pdfText('الإجمالي الجزئي', style: const pw.TextStyle(fontSize: 11)),
+                _pdfText('${subtotal.toStringAsFixed(0)} ج.م', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
               ]),
               if (installAmt > 0) ...[
                 pw.SizedBox(height: 4),
                 pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-                  pw.Text('تركيبات (${installPct.toStringAsFixed(0)}%)', style: const pw.TextStyle(fontSize: 11)),
-                  pw.Text('${installAmt.toStringAsFixed(0)} ج.م', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  _pdfText('تركيبات (${installPct.toStringAsFixed(0)}%)', style: const pw.TextStyle(fontSize: 11)),
+                  _pdfText('${installAmt.toStringAsFixed(0)} ج.م', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
                 ]),
               ],
               if (discountAmt > 0) ...[
                 pw.SizedBox(height: 4),
                 pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-                  pw.Text(discountPct > 0 ? 'خصم (${discountPct.toStringAsFixed(0)}%)' : 'خصم', style: const pw.TextStyle(fontSize: 11, color: PdfColors.red)),
-                  pw.Text('- ${discountAmt.toStringAsFixed(0)} ج.م', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.red)),
+                  _pdfText(discountPct > 0 ? 'خصم (${discountPct.toStringAsFixed(0)}%)' : 'خصم', style: const pw.TextStyle(fontSize: 11, color: PdfColors.red)),
+                  _pdfText('- ${discountAmt.toStringAsFixed(0)} ج.م', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.red)),
                 ]),
               ],
               pw.Divider(),
               pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-                pw.Text('الإجمالي النهائي', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                pw.Text('${totalAmt.toStringAsFixed(0)} ج.م', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
+                _pdfText('الإجمالي النهائي', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                _pdfText('${totalAmt.toStringAsFixed(0)} ج.م', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800)),
               ]),
             ]),
           ),
           if (q['notes'] != null && q['notes'].toString().isNotEmpty) ...[
             pw.SizedBox(height: 16),
-            pw.Text('ملاحظات: ${q['notes']}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+            _pdfText('ملاحظات: ${q['notes']}', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
           ],
           pw.SizedBox(height: 30),
-          pw.Center(child: pw.Text('شكراً لثقتكم بنا - Easy Tech', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800))),
+          pw.Center(child: _pdfText('شكراً لثقتكم بنا - Easy Tech', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800), textAlign: pw.TextAlign.center)),
         ],
       ),
     );
@@ -1022,8 +1078,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.end,
                 children: [
-                  pw.Text('تقرير أسعار التاجر', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-                  pw.Text(q['refNumber']?.toString() ?? '', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
+                  _pdfText('تقرير أسعار التاجر', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                  _pdfText(q['refNumber']?.toString() ?? '', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700), textAlign: pw.TextAlign.center),
                 ],
               ),
             ],
@@ -1031,9 +1087,9 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           pw.SizedBox(height: 10),
           pw.Divider(thickness: 1.2, color: PdfColors.blue700),
           pw.SizedBox(height: 8),
-          pw.Text('الموزع المعتمد: ${_resolvedDealerNameForPdf(q)}', style: const pw.TextStyle(fontSize: 11)),
-          pw.Text('العميل: ${q['clientName'] ?? '-'}', style: const pw.TextStyle(fontSize: 11)),
-          pw.Text('التاريخ: ${_formatDate(q['createdAt'])}', style: const pw.TextStyle(fontSize: 11)),
+          _pdfText('الموزع المعتمد: ${_resolvedDealerNameForPdf(q)}', style: const pw.TextStyle(fontSize: 11)),
+          _pdfText('العميل: ${q['clientName'] ?? '-'}', style: const pw.TextStyle(fontSize: 11)),
+          _pdfText('التاريخ: ${_formatDate(q['createdAt'])}', style: const pw.TextStyle(fontSize: 11)),
           pw.SizedBox(height: 14),
           pw.Container(
             padding: const pw.EdgeInsets.all(10),
@@ -1055,7 +1111,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             ),
           ),
           pw.SizedBox(height: 14),
-          pw.Text('تفاصيل البنود', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          _pdfText('تفاصيل البنود', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           pw.Container(
             color: PdfColors.blue800,
@@ -1116,7 +1172,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   _pdfCell('${i + 1}', 1),
-                  _pdfCellImage(itemImages[i], 2),
+                  _pdfCellImage(
+                    itemImages[i],
+                    2,
+                    link: _quotationProductWebUrl(itemMap),
+                    size: 46,
+                  ),
                   _pdfProductCell(
                     item['productName']?.toString() ?? '-',
                     subLines.isEmpty ? null : subLines.join('\n'),
@@ -1140,7 +1201,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   pw.Widget _pdfHeaderCell(String text, int flex) => pw.Expanded(
         flex: flex,
-        child: pw.Text(
+        child: _pdfText(
           text,
           style: pw.TextStyle(color: PdfColors.white, fontSize: 9, fontWeight: pw.FontWeight.bold),
           textAlign: pw.TextAlign.center,
@@ -1149,7 +1210,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   pw.Widget _pdfCell(String text, int flex) => pw.Expanded(
         flex: flex,
-        child: pw.Text(
+        child: _pdfText(
           text,
           style: const pw.TextStyle(fontSize: 9),
           textAlign: pw.TextAlign.center,
@@ -1161,7 +1222,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.center,
           children: [
-            pw.Text(
+            _pdfText(
               title,
               style: const pw.TextStyle(fontSize: 9),
               textAlign: pw.TextAlign.center,
@@ -1169,7 +1230,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             if (subtitle != null && subtitle.isNotEmpty)
               pw.Padding(
                 padding: const pw.EdgeInsets.only(top: 3),
-                child: pw.Text(
+                child: _pdfText(
                   subtitle,
                   style: pw.TextStyle(fontSize: 7, color: PdfColors.grey800, lineSpacing: 1.2),
                   textAlign: pw.TextAlign.center,
@@ -1179,18 +1240,36 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         ),
       );
 
-  pw.Widget _pdfCellImage(pw.ImageProvider? img, int flex) => pw.Expanded(
+  pw.Widget _pdfCellImage(
+    pw.ImageProvider? img,
+    int flex, {
+    String? link,
+    double size = 40,
+  }) {
+    if (img == null) {
+      return pw.Expanded(
         flex: flex,
         child: pw.Center(
-          child: img != null
-              ? pw.ClipRRect(
-                  horizontalRadius: 4,
-                  verticalRadius: 4,
-                  child: pw.Image(img, width: 40, height: 40, fit: pw.BoxFit.cover),
-                )
-              : pw.Text('—', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
+          child: _pdfText('—', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500), textAlign: pw.TextAlign.center),
         ),
       );
+    }
+
+    final imageWidget = pw.ClipRRect(
+      horizontalRadius: 4,
+      verticalRadius: 4,
+      child: pw.Image(img, width: size, height: size, fit: pw.BoxFit.cover),
+    );
+
+    return pw.Expanded(
+      flex: flex,
+      child: pw.Center(
+        child: (link != null && link.trim().isNotEmpty)
+            ? pw.UrlLink(destination: link.trim(), child: imageWidget)
+            : imageWidget,
+      ),
+    );
+  }
 
   pw.Widget _pdfMoneyRow(String label, double amount, {bool emphasize = false, bool asPercent = false}) {
     final color = emphasize ? PdfColors.blue800 : PdfColors.black;
@@ -1199,8 +1278,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text(label, style: pw.TextStyle(fontSize: 11, color: color, fontWeight: emphasize ? pw.FontWeight.bold : pw.FontWeight.normal)),
-          pw.Text(
+          _pdfText(label, style: pw.TextStyle(fontSize: 11, color: color, fontWeight: emphasize ? pw.FontWeight.bold : pw.FontWeight.normal)),
+          _pdfText(
             asPercent ? '${amount.toStringAsFixed(1)}%' : '${amount.toStringAsFixed(0)} ج.م',
             style: pw.TextStyle(fontSize: 11, color: color, fontWeight: emphasize ? pw.FontWeight.bold : pw.FontWeight.normal),
           ),

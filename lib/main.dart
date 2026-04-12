@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 import 'services/api_service.dart';
 import 'providers/cart_provider.dart';
@@ -7,6 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'controllers/theme_controller.dart';
 import 'providers/auth_provider.dart';
+import 'providers/scenario_provider.dart';
 import 'providers/smart_home_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/role_select_screen.dart';
@@ -24,6 +26,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
 
   ErrorWidget.builder = (FlutterErrorDetails details) => Material(
         color: Colors.red.shade900,
@@ -57,6 +60,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => ThemeController()),
         ChangeNotifierProvider(create: (_) => SmartHomeProvider()),
+        ChangeNotifierProvider(create: (_) => ScenarioProvider()),
       ],
       child: const EasyTechApp(),
     ),

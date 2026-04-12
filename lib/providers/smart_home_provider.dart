@@ -1,23 +1,49 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+
 import '../services/api_service.dart';
 import '../services/home_assistant_service.dart';
+import '../smart_home/device_manager.dart';
+import '../smart_home/models/app_device.dart';
 
 class SmartHomeProvider extends ChangeNotifier {
-  SmartHomeProvider();
+  SmartHomeProvider() {
+    _deviceManager.onChanged = notifyListeners;
+  }
+
+  final DeviceManager _deviceManager = DeviceManager();
 
   bool _loading = false;
   String? _error;
   HomeAssistantCredentials? _creds;
-  List<HaEntity> _entities = const [];
 
-  String? get error => _error;
-  bool get isLoading => _loading;
+  String? get error => _error ?? _deviceManager.error;
+  bool get isLoading => _loading || _deviceManager.isLoading;
   bool get isEnabled => _creds?.enabled == true;
-  List<HaEntity> get entities => _entities;
 
-  StreamSubscription<HaEntity>? _realtimeSub;
+  DeviceManager get deviceManager => _deviceManager;
+
+  List<AppDevice> get devices => _deviceManager.devices;
+  List<AppDevice> get placedDevices => _deviceManager.placedDevices;
+  List<AppDevice> get unassignedDevices => _deviceManager.unassignedDevices;
+
+  /// Floors that have at least one placed device (sorted).
+  List<String> floorNames() => _deviceManager.floorNames();
+
+  List<String> roomNamesForFloor(String floor) =>
+      _deviceManager.roomNamesForFloor(floor);
+
+  List<AppDevice> devicesForFloorAndRoom(String floor, String room) {
+    var list = placedDevices;
+    if (floor != 'All') {
+      list = list.where((d) => d.floorName == floor).toList();
+    }
+    if (room != 'All') {
+      list = list.where((d) => d.roomName == room).toList();
+    }
+    return list;
+  }
 
   Future<void> initSilent() async {
     if (_loading) return;
@@ -41,14 +67,16 @@ class SmartHomeProvider extends ChangeNotifier {
       HomeAssistantService.instance.configure(_creds!);
 
       if (!enabled) {
-        _entities = const [];
+        await _deviceManager.initStorage();
+        await _deviceManager.syncFromHa();
         _loading = false;
         notifyListeners();
         return;
       }
 
-      await refreshStates();
-      await _connectRealtime();
+      await _deviceManager.initStorage();
+      await _deviceManager.syncFromHa();
+      await _deviceManager.connectRealtime();
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -57,89 +85,37 @@ class SmartHomeProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshStates() async {
-    try {
-      final list = await HomeAssistantService.instance.listStates();
-      _entities = _filterInteresting(list);
-      notifyListeners();
-    } catch (e) {
-      _error = e.toString();
-      notifyListeners();
-    }
+  Future<void> refreshStates() => _deviceManager.syncFromHa();
+
+  Future<void> toggleDevice(AppDevice device) async {
+    await _deviceManager.toggle(device);
   }
 
-  List<HaEntity> _filterInteresting(List<HaEntity> input) {
-    // Keep UI focused (Tuya-like): controllable domains by default.
-    const allowed = {'light', 'switch', 'fan', 'climate', 'cover'};
-    final filtered = input.where((e) => allowed.contains(e.domain)).toList();
-    filtered.sort((a, b) => a.friendlyName.compareTo(b.friendlyName));
-    return filtered;
+  Future<void> setBrightness(AppDevice device, int brightness0to255) async {
+    await _deviceManager.setBrightness(device, brightness0to255);
   }
 
-  Future<void> toggleEntity(HaEntity entity) async {
-    try {
-      await HomeAssistantService.instance.toggle(entity);
-    } catch (e) {
-      _error = e.toString();
-      notifyListeners();
-    }
+  Future<void> assignToRoom({
+    required String entityId,
+    required String floorName,
+    required String roomName,
+    int? customSortOrder,
+  }) async {
+    await _deviceManager.assignToRoom(
+      entityId: entityId,
+      floorName: floorName,
+      roomName: roomName,
+      customSortOrder: customSortOrder,
+    );
   }
 
-  Future<void> setBrightness(HaEntity entity, int brightness0to255) async {
-    try {
-      await HomeAssistantService.instance
-          .setLightBrightness(entity.entityId, brightness0to255);
-    } catch (e) {
-      _error = e.toString();
-      notifyListeners();
-    }
-  }
-
-  Future<void> _connectRealtime() async {
-    await _realtimeSub?.cancel();
-    _realtimeSub = null;
-
-    try {
-      await HomeAssistantService.instance.connectRealtime();
-      _realtimeSub =
-          HomeAssistantService.instance.onEntityChanged.listen((changed) {
-        final idx = _entities.indexWhere((e) => e.entityId == changed.entityId);
-        if (idx >= 0) {
-          final copy = List<HaEntity>.from(_entities);
-          copy[idx] = changed;
-          _entities = copy;
-          notifyListeners();
-        }
-      });
-    } catch (_) {
-      // best-effort realtime
-    }
-  }
-
-  List<String> buildRoomChips() {
-    // If you later add a custom attribute (easytecheg_room), we'll auto-pick it.
-    final rooms = <String>{};
-    for (final e in _entities) {
-      final r = (e.attributes['easytecheg_room'] ?? '').toString().trim();
-      if (r.isNotEmpty) rooms.add(r);
-    }
-    final list = rooms.toList()..sort();
-    return ['All', ...list];
-  }
-
-  List<HaEntity> entitiesForRoom(String room) {
-    if (room == 'All') return _entities;
-    return _entities
-        .where((e) =>
-            (e.attributes['easytecheg_room'] ?? '').toString().trim() == room)
-        .toList(growable: false);
+  Future<void> unassignDevice(String entityId) async {
+    await _deviceManager.unassign(entityId);
   }
 
   @override
   void dispose() {
-    unawaited(_realtimeSub?.cancel());
-    unawaited(HomeAssistantService.instance.disconnectRealtime());
+    unawaited(_deviceManager.dispose());
     super.dispose();
   }
 }
-

@@ -204,6 +204,7 @@ class NotificationService {
 
   // Badge count tracker
   static int _badgeCount = 0;
+  static bool _didBindTokenRefresh = false;
 
   static Future<void> _loadBadgeFromPrefs() async {
     try {
@@ -220,6 +221,8 @@ class NotificationService {
       return;
     }
     final fcm = _fcm!;
+    await fcm.setAutoInitEnabled(true);
+
     // 1. Request permission
     final settings = await fcm.requestPermission(
       alert: true,
@@ -297,6 +300,7 @@ class NotificationService {
       sound: true,
     );
 
+    await getAndSaveFcmToken();
     debugPrint('[NotificationService] Initialized successfully');
   }
 
@@ -323,11 +327,14 @@ class NotificationService {
         }
       }
 
-      // Listen for token refresh
-      _fcm!.onTokenRefresh.listen((newToken) {
-        debugPrint('[FCM Token] Token refreshed, saving new token...');
-        ApiService().saveFcmToken(newToken);
-      });
+      // Listen for token refresh مرة واحدة فقط حتى لا تتكرر الحفظات مع كل تهيئة.
+      if (!_didBindTokenRefresh) {
+        _didBindTokenRefresh = true;
+        _fcm!.onTokenRefresh.listen((newToken) {
+          debugPrint('[FCM Token] Token refreshed, saving new token...');
+          ApiService().saveFcmToken(newToken);
+        });
+      }
 
       return token;
     } catch (e) {

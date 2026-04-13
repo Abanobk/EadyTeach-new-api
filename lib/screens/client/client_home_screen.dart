@@ -325,7 +325,14 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               decoration: AppThemeDecorations.glassCard(context, radius: 18),
               child: IconButton(
                 icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primary, size: 20),
-                onPressed: () => Navigator.pushReplacementNamed(context, '/role-select'),
+                onPressed: () {
+                  final auth = context.read<AuthProvider>();
+                  if (auth.canAccessAdmin) {
+                    Navigator.pushReplacementNamed(context, '/role-select');
+                    return;
+                  }
+                  Navigator.maybePop(context);
+                },
               ),
             ),
           ),

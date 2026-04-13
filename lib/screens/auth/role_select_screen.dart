@@ -28,30 +28,29 @@ class RoleSelectScreen extends StatelessWidget {
     final effectiveProductId = auth.pendingProductId ?? ((urlProductId != null && urlProductId > 0) ? urlProductId : null);
     if (effectiveProductId != null && effectiveProductId > 0) {
       auth.setPendingProductId(effectiveProductId);
+    }
+    if (!auth.canAccessAdmin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) _openClient(context, auth);
+        if (!context.mounted) return;
+        if (auth.defaultLandingRoute == '/technician') {
+          Navigator.pushReplacementNamed(context, '/technician');
+          return;
+        }
+        _openClient(context, auth);
       });
     }
     final items = <_RoleEntry>[
       _RoleEntry(
-        title: 'عميل',
-        subtitle: 'تصفح المنتجات والخدمات، راجع العروض، وتابع الطلبات بسهولة.',
+        title: 'المتجر',
+        subtitle: 'عرض المنتجات والخدمات والعروض كما يراها العميل أو التاجر داخل الواجهة التجارية.',
         icon: Icons.shopping_bag_rounded,
         badge: 'الواجهة التجارية',
         gradient: const [Color(0xFF2563EB), Color(0xFF1D4ED8)],
         onTap: () => _openClient(context, auth),
       ),
-      _RoleEntry(
-        title: 'فني',
-        subtitle: 'وصول سريع للمهام اليومية، التحديثات الميدانية، وحالة التنفيذ.',
-        icon: Icons.handyman_rounded,
-        badge: 'العمليات',
-        gradient: const [Color(0xFF14B8A6), Color(0xFF0F766E)],
-        onTap: () => Navigator.pushReplacementNamed(context, '/technician'),
-      ),
       if (auth.canAccessAdmin)
         _RoleEntry(
-          title: 'مسؤول',
+          title: 'الإدارة',
           subtitle: 'لوحة قيادة كاملة لإدارة العملاء والطلبات والتقارير والمنصة.',
           icon: Icons.space_dashboard_rounded,
           badge: 'إدارة متقدمة',
@@ -224,7 +223,7 @@ class _HeroPanel extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'يمكنك دائمًا العودة وتبديل الوضع لاحقًا بدون فقدان سياق العمل.',
+                      'هذه الشاشة أصبحت مخصصة لحسابات الإدارة فقط لتبديل الواجهة عند الحاجة.',
                       style: TextStyle(color: c.onPrimary.withOpacity(0.85), fontWeight: FontWeight.w600),
                     ),
                   ),

@@ -59,7 +59,14 @@ class _SignupScreenState extends State<SignupScreen> {
         await auth.checkAuth();
         if (!mounted) return;
         if (auth.isLoggedIn) {
-          Navigator.pushReplacementNamed(context, '/role-select');
+          final pendingProductId = auth.consumePendingProductId();
+          Navigator.pushReplacementNamed(
+            context,
+            auth.defaultLandingRoute,
+            arguments: auth.defaultLandingRoute == '/client' && pendingProductId != null
+                ? {'productId': pendingProductId}
+                : null,
+          );
         } else {
           setState(() => _error = 'تم إنشاء الحساب لكن تعذّر تحميل البيانات.');
         }

@@ -109,7 +109,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     if (!auth.canAccessAdmin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) {
-          Navigator.of(context).pushReplacementNamed('/role-select');
+          Navigator.of(context).pushReplacementNamed(auth.defaultLandingRoute);
         }
       });
       return Scaffold(

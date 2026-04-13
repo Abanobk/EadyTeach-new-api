@@ -237,7 +237,14 @@ class _LoginScreenState extends State<LoginScreen> {
           } catch (e) {
             print('FCM_ERROR: $e');
           }
-          Navigator.pushReplacementNamed(context, '/role-select');
+          final pendingProductId = auth.consumePendingProductId();
+          Navigator.pushReplacementNamed(
+            context,
+            auth.defaultLandingRoute,
+            arguments: auth.defaultLandingRoute == '/client' && pendingProductId != null
+                ? {'productId': pendingProductId}
+                : null,
+          );
         } else {
           setState(() => _error = 'تم تسجيل الدخول لكن تعذّر تحميل البيانات.');
         }
@@ -288,7 +295,14 @@ class _LoginScreenState extends State<LoginScreen> {
           } catch (e) {
             print('FCM_ERROR: $e');
           }
-          Navigator.pushReplacementNamed(context, '/role-select');
+          final pendingProductId = auth.consumePendingProductId();
+          Navigator.pushReplacementNamed(
+            context,
+            auth.defaultLandingRoute,
+            arguments: auth.defaultLandingRoute == '/client' && pendingProductId != null
+                ? {'productId': pendingProductId}
+                : null,
+          );
         } else {
           setState(() => _error = 'تم تسجيل الدخول لكن تعذّر تحميل البيانات.');
         }

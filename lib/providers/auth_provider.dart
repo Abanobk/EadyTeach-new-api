@@ -41,9 +41,19 @@ class UserModel {
 
   bool get isAdmin => _roleNorm == 'admin';
   bool get isTechnician => _roleNorm == 'technician';
-  bool get isClient => _roleNorm == 'user';
+  bool get isClient => _roleNorm == 'user' || _roleNorm == 'client';
+  bool get isDealer {
+    const dealerRoles = {'dealer', 'reseller', 'merchant'};
+    return dealerRoles.contains(_roleNorm);
+  }
 
   bool get canAccessAdmin => _roleNorm == 'admin' || _roleNorm == 'staff' || _roleNorm == 'supervisor';
+
+  String get defaultLandingRoute {
+    if (canAccessAdmin) return '/admin';
+    if (isTechnician) return '/technician';
+    return '/client';
+  }
 
   bool hasPermission(String key) {
     if (isAdmin) return true;
@@ -99,6 +109,15 @@ class AuthProvider extends ChangeNotifier {
   }
 
   bool hasPermission(String key) => _user?.hasPermission(key) ?? false;
+
+  String get defaultLandingRoute {
+    final u = _user;
+    if (u == null) return '/login';
+    final email = u.email.trim().toLowerCase();
+    if (_technicianOnlyEmails.contains(email)) return '/technician';
+    if (_extraAdminEmails.contains(email)) return '/admin';
+    return u.defaultLandingRoute;
+  }
 
   void setPendingProductId(int? value, {bool notify = false}) {
     _pendingProductId = (value != null && value > 0) ? value : null;

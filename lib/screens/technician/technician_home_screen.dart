@@ -391,7 +391,14 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
                 elevation: 0,
                 leading: IconButton(
                   icon: Icon(Icons.arrow_back_ios_new, color: Theme.of(context).colorScheme.primary, size: 20),
-                  onPressed: () => Navigator.pushReplacementNamed(context, '/role-select'),
+                  onPressed: () {
+                  final auth = context.read<AuthProvider>();
+                  if (auth.canAccessAdmin) {
+                    Navigator.pushReplacementNamed(context, '/role-select');
+                    return;
+                  }
+                  Navigator.maybePop(context);
+                },
                 ),
                 title: Row(
                   mainAxisSize: MainAxisSize.min,

@@ -579,18 +579,53 @@ try {
 
         // ── Auth ────────────────────────────────────────────────
         case 'auth.googleAuth':
-            // تسجيل الدخول باستخدام Google بناءً على البريد الإلكتروني فقط (مطابقة بدون حساسية لحالة الأحرف)
-            $email = trim($input['email'] ?? '');
-            if (!$email) {
+            // تسجيل الدخول باستخدام Google مع اعتماد البريد الإلكتروني كمفتاح أساسي.
+            // السلوك المطلوب:
+            // - إن كان المستخدم موجوداً بدور admin / technician / supervisor / staff يبقى على دوره.
+            // - إن لم يكن موجوداً نُنشئه تلقائياً كعميل افتراضي (user).
+            $email = trim((string)($input['email'] ?? ''));
+            $name = trim((string)($input['name'] ?? ''));
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 throw new Exception('البريد الإلكتروني مطلوب لتسجيل الدخول بـ Google');
             }
+            if ($name === '') {
+                $name = strstr($email, '@', true) ?: 'مستخدم جديد';
+            }
+            $emailNorm = strtolower($email);
 
-            $stmt = $db->prepare('SELECT id, name, email, role FROM users WHERE LOWER(email) = LOWER(?)');
-            $stmt->execute([$email]);
-            $user = $stmt->fetch();
+            $stmt = $db->prepare('SELECT id, name, email, role FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1');
+            $stmt->execute([$emailNorm]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            $isNewGoogleUser = false;
 
             if (!$user) {
-                throw new Exception('لا يوجد حساب مرتبط بهذا البريد. برجاء التواصل مع الإدارة لإضافة حسابك.');
+                try { $db->exec('ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50) NULL'); } catch (Exception $e) {}
+                try { $db->exec('ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT NULL'); } catch (Exception $e) {}
+                try { $db->exec('ALTER TABLE users ADD COLUMN IF NOT EXISTS location TEXT NULL'); } catch (Exception $e) {}
+
+                $googleHash = password_hash(bin2hex(random_bytes(16)), PASSWORD_BCRYPT);
+                $insert = $db->prepare(
+                    'INSERT INTO users (name, email, phone, address, location, role, password_hash) VALUES (?, ?, NULL, NULL, NULL, ?, ?)'
+                );
+                $insert->execute([$name, $emailNorm, 'user', $googleHash]);
+                $newId = (int)$db->lastInsertId();
+                $user = [
+                    'id' => $newId,
+                    'name' => $name,
+                    'email' => $emailNorm,
+                    'role' => 'user',
+                ];
+                $isNewGoogleUser = true;
+            } else {
+                $userId = (int)($user['id'] ?? 0);
+                if ($userId > 0 && $name !== '' && trim((string)($user['name'] ?? '')) !== $name) {
+                    try {
+                        $db->prepare('UPDATE users SET name = ? WHERE id = ?')->execute([$name, $userId]);
+                        $user['name'] = $name;
+                    } catch (Exception $e) {
+                        // تجاهل فشل تحديث الاسم ولا تمنع الدخول
+                    }
+                }
             }
 
             $sid = bin2hex(random_bytes(32));
@@ -614,6 +649,7 @@ try {
                     'role'  => $user['role'],
                 ],
                 'sessionToken' => $sid,
+                'isNewGoogleUser' => $isNewGoogleUser,
             ];
             break;
 

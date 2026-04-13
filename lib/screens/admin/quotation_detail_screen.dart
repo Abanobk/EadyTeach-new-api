@@ -18,6 +18,7 @@ import '../../utils/pdf_saver_stub.dart'
     if (dart.library.html) '../../utils/pdf_saver_web.dart' as pdf_saver;
 import '../../utils/quotation_line_pricing.dart';
 import 'package:arabic_reshaper/arabic_reshaper.dart';
+import 'package:bidi/bidi.dart' as bidi;
 
 class QuotationDetailScreen extends StatefulWidget {
   final int quotationId;
@@ -521,6 +522,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     s = s
         .replaceAll('\u2190', ' - ')
         .replaceAll('\u2192', ' - ')
+        .replaceAll('—', '-')
+        .replaceAll('–', '-')
+        .replaceAll('“', '"')
+        .replaceAll('”', '"')
+        .replaceAll('‘', "'")
+        .replaceAll('’', "'")
         .replaceAll('•', '- ')
         .replaceAll('●', '- ')
         .replaceAll('▪', '- ')
@@ -554,10 +561,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     if (s.isEmpty) return s;
     final shapedLines = s.split('\n').map((line) {
       if (line.trim().isEmpty) return line;
-      if (ArabicReshaper.isArabic(line)) {
-        return _arabicReshaper.reshape(line);
-      }
-      return line;
+      final hasArabic = RegExp(r'[\u0600-\u06FF]').hasMatch(line);
+      if (!hasArabic) return line;
+      final reshaped = _arabicReshaper.reshape(line);
+      return bidi.logicalToVisual(reshaped);
     }).toList();
     return shapedLines.join('\n');
   }

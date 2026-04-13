@@ -116,7 +116,23 @@ class EasyTechApp extends StatelessWidget {
       routes: {
         '/splash': (_) => const SplashScreen(),
         '/login': (_) => const LoginScreen(),
-        '/role-select': (_) => const RoleSelectScreen(),
+        '/role-select': (ctx) {
+          final auth = Provider.of<AuthProvider>(ctx, listen: false);
+          if (!auth.canAccessAdmin) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!ctx.mounted) return;
+              final pendingProductId = auth.consumePendingProductId();
+              Navigator.of(ctx).pushReplacementNamed(
+                auth.defaultLandingRoute,
+                arguments: auth.defaultLandingRoute == '/client' && pendingProductId != null
+                    ? {'productId': pendingProductId}
+                    : null,
+              );
+            });
+            return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFFD4920A))));
+          }
+          return const RoleSelectScreen();
+        },
         '/client': (_) => const ClientHomeScreen(),
         '/technician': (_) => const TechnicianHomeScreen(),
         '/smart-home': (_) => const SmartHomeDashboard(),
@@ -136,9 +152,14 @@ class EasyTechApp extends StatelessWidget {
           final auth = Provider.of<AuthProvider>(ctx, listen: false);
           if (!auth.canAccessAdmin) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (ctx.mounted) {
-                Navigator.of(ctx).pushReplacementNamed('/role-select');
-              }
+              if (!ctx.mounted) return;
+              final pendingProductId = auth.consumePendingProductId();
+              Navigator.of(ctx).pushReplacementNamed(
+                auth.defaultLandingRoute,
+                arguments: auth.defaultLandingRoute == '/client' && pendingProductId != null
+                    ? {'productId': pendingProductId}
+                    : null,
+              );
             });
             return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFFD4920A))));
           }
@@ -216,7 +237,16 @@ class _SplashScreenState extends State<SplashScreen> {
             }
           }
         } catch (_) {}
-        if (mounted) Navigator.pushReplacementNamed(context, '/role-select');
+        if (mounted) {
+          final pendingProductId = auth.consumePendingProductId();
+          Navigator.pushReplacementNamed(
+            context,
+            auth.defaultLandingRoute,
+            arguments: auth.defaultLandingRoute == '/client' && pendingProductId != null
+                ? {'productId': pendingProductId}
+                : null,
+          );
+        }
       } else {
         if (mounted) Navigator.pushReplacementNamed(context, '/login');
       }

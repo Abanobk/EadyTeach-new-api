@@ -31,8 +31,10 @@ class _PublicProductScreenState extends State<PublicProductScreen> {
         _error = null;
       });
 
-      final list = await ApiService.query('products.list');
-      final products = (list is List) ? list.cast<dynamic>() : const [];
+      final response = await ApiService.query('products.list');
+      final rawProducts = response['data'];
+      final List<dynamic> products =
+          rawProducts is List ? List<dynamic>.from(rawProducts) : <dynamic>[];
       Map<String, dynamic>? found;
 
       for (final raw in products) {

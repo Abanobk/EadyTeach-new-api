@@ -6,48 +6,221 @@
 # (وجود DIRECT_SSH_HOST وحده يُتجاهل لتفادي فشل Network unreachable من غير قصد.)
 name: Remote Update
 
-
 permissions:
   contents: read
 
+concurrency:
+  group: remote-update-${{ github.ref }}
+  cancel-in-progress: true
 
-  concurrency:
-    group: remote-update-${{ github.ref }}
-      cancel-in-progress: true
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: "What to deploy"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - both
+          - web
+          - backend
 
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
 
-      on:
-        push:
-            branches: [ main ]
-              workflow_dispatch:
-                  inputs:
-                        deploy_target:
-                                description: "What to deploy"
-                                        required: true
-                                                default: "both"
-                                                        type: choice
-                                                                options:
-                                                                          - both
-                                                                                    - web
-                                                                                              - backend
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
 
+      - name: Build Web
+        if: ${{ github.event_name == 'push' || github.event.inputs.deploy_target == 'both' || github.event.inputs.deploy_target == 'web' }}
+        run: |
+          set -e
+          flutter --version
+          flutter pub get
+          flutter build web --release --base-href "/app/" --no-wasm-dry-run
+          [ -f build/web/index.html ] || { echo "::error::Build failed"; exit 1; }
 
-                                                                                              jobs:
-                                                                                                deploy:
-                                                                                                    runs-on: ubuntu-latest
-                                                                                                        timeout-minutes: 30
-                                                                                                            steps:
-                                                                                                                  - uses: actions/checkout@v5
-                                                                                                                  
-                                                                                                                        - name: Setup Flutter
-                                                                                                                                uses: subosito/flutter-action@v2
-                                                                                                                                        with:
-                                                                                                                                                  channel: 'stable'
-                                                                                                                                                            cache: true
-                                                                                                                                                            
-                                                                                                                                                                  - name: Build Web
-                                                                                                                                                                          if: ${{ github.event_name == 'push' || github.event.inputs.deploy_target == 'both' || github.event.inputs.deploy_target == 'web' }}
-                                                                                                                                                                                  run: |
-                                                                                                                                                                                            set -e
-                                                                                                                                                                                                      flutter --version
-                                                                                                                                                                                                          
+      - name: Install Cloudflared (للنشر عبر Tunnel فقط)
+        if: ${{ github.event_name == 'push' || github.event.inputs.deploy_target == 'both' || github.event.inputs.deploy_target == 'web' || github.event.inputs.deploy_target == 'backend' }}
+        env:
+          DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
+          USE_DIRECT_SSH_FOR_CI: ${{ secrets.USE_DIRECT_SSH_FOR_CI }}
+        run: |
+          set -e
+          _flag=$(echo "${USE_DIRECT_SSH_FOR_CI:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          if [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ]; }; then
+            echo "Skipping cloudflared (USE_DIRECT_SSH_FOR_CI + DIRECT_SSH_HOST — direct SSH)."
+            exit 0
+          fi
+          curl -fLsS -o cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb
+          cloudflared --version
+
+      - name: Deploy Web
+        if: ${{ github.event_name == 'push' || github.event.inputs.deploy_target == 'both' || github.event.inputs.deploy_target == 'web' }}
+        env:
+          CF_TUNNEL_HOST: ${{ secrets.CF_TUNNEL_HOST }}
+          CF_SERVICE_TOKEN_ID: ${{ secrets.CF_SERVICE_TOKEN_ID }}
+          CF_SERVICE_TOKEN_SECRET: ${{ secrets.CF_SERVICE_TOKEN_SECRET }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          WEB_DEPLOY_PATH: ${{ secrets.WEB_DEPLOY_PATH }}
+          DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
+          USE_DIRECT_SSH_FOR_CI: ${{ secrets.USE_DIRECT_SSH_FOR_CI }}
+          SSH_DEPLOY_USER: ${{ secrets.SSH_DEPLOY_USER }}
+        run: |
+          set -e
+          DEPLOY_PATH="${WEB_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/app}"
+          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6"
+          SSH_USER="${SSH_DEPLOY_USER:-root}"
+
+          _flag=$(echo "${USE_DIRECT_SSH_FOR_CI:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          USE_DIRECT_CI=0
+          if [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ]; }; then
+            USE_DIRECT_CI=1
+          elif [ -n "${DIRECT_SSH_HOST:-}" ]; then
+            echo "::notice::DIRECT_SSH_HOST موجود لكن USE_DIRECT_SSH_FOR_CI ليس 1/true — استخدام Cloudflare Tunnel (تجاهل SSH المباشر)."
+          fi
+
+          if [ -z "$SERVER_SSH_KEY" ]; then
+            echo "::error::Add SERVER_SSH_KEY in repo Secrets"
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          echo "Creating archive..."
+          tar czf /tmp/deploy.tar -C build web
+
+          if [ "$USE_DIRECT_CI" = 1 ]; then
+            TARGET="${SSH_USER}@${DIRECT_SSH_HOST}"
+            echo "::notice::Deploy via direct SSH → $TARGET"
+            upload_and_extract() {
+              echo "Uploading (scp)..."
+              scp $SSH_OPTS -i ~/.ssh/id_rsa /tmp/deploy.tar "${TARGET}:/tmp/deploy.tar"
+              echo "Extracting on server..."
+              ssh $SSH_OPTS -i ~/.ssh/id_rsa "${TARGET}" \
+                "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed to $DEPLOY_PATH"
+            }
+          else
+            CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
+            if [ -z "$CF_SERVICE_TOKEN_ID" ] || [ -z "$CF_SERVICE_TOKEN_SECRET" ]; then
+              echo "::error::أضف CF_SERVICE_TOKEN_ID + CF_SERVICE_TOKEN_SECRET (Tunnel)، أو فعّل SSH المباشر بـ USE_DIRECT_SSH_FOR_CI=1 مع DIRECT_SSH_HOST."
+              exit 1
+            fi
+            export TUNNEL_SERVICE_TOKEN_ID="$CF_SERVICE_TOKEN_ID"
+            export TUNNEL_SERVICE_TOKEN_SECRET="$CF_SERVICE_TOKEN_SECRET"
+            echo "::notice::Deploy via Cloudflare Access TCP → $CF_HOST"
+            upload_and_extract() {
+              echo "Uploading via Cloudflare Tunnel ($CF_HOST)..."
+              scp $SSH_OPTS -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ${CF_HOST}" /tmp/deploy.tar "${SSH_USER}@${CF_HOST}:/tmp/deploy.tar"
+              echo "Extracting on server..."
+              ssh $SSH_OPTS -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ${CF_HOST}" "${SSH_USER}@${CF_HOST}" \
+                "mkdir -p '$DEPLOY_PATH' && cd '$DEPLOY_PATH' && tar xzf /tmp/deploy.tar --strip-components=1 && rm -f /tmp/deploy.tar && echo Deployed to $DEPLOY_PATH"
+            }
+          fi
+
+          ok=0
+          for attempt in 1 2 3; do
+            echo "::notice::Deploy attempt $attempt/3"
+            if upload_and_extract; then
+              ok=1
+              break
+            fi
+            echo "::warning::Deploy attempt $attempt failed; retrying in 45s..."
+            sleep 45
+          done
+          if [ "$ok" != 1 ]; then
+            echo "::error::Deploy failed after 3 attempts."
+            if [ "$USE_DIRECT_CI" = 1 ]; then
+              echo "::error::Check SERVER_SSH_KEY, DIRECT_SSH_HOST, firewall (port 22), and that this runner IP is allowed if you use allowlists."
+            else
+              echo "::error::Cloudflare: websocket bad handshake = Service Token أو سياسة Access. حدّث CF_SERVICE_TOKEN_* في GitHub."
+            fi
+            exit 1
+          fi
+
+      - name: Deploy Backend
+        if: ${{ github.event_name == 'push' || github.event.inputs.deploy_target == 'both' || github.event.inputs.deploy_target == 'backend' }}
+        env:
+          CF_TUNNEL_HOST: ${{ secrets.CF_TUNNEL_HOST }}
+          CF_SERVICE_TOKEN_ID: ${{ secrets.CF_SERVICE_TOKEN_ID }}
+          CF_SERVICE_TOKEN_SECRET: ${{ secrets.CF_SERVICE_TOKEN_SECRET }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          BACKEND_DEPLOY_PATH: ${{ secrets.BACKEND_DEPLOY_PATH }}
+          DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
+          USE_DIRECT_SSH_FOR_CI: ${{ secrets.USE_DIRECT_SSH_FOR_CI }}
+          SSH_DEPLOY_USER: ${{ secrets.SSH_DEPLOY_USER }}
+        run: |
+          set -e
+          BACKEND_PATH="${BACKEND_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/backend}"
+          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6"
+          SSH_USER="${SSH_DEPLOY_USER:-root}"
+
+          _flag=$(echo "${USE_DIRECT_SSH_FOR_CI:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          USE_DIRECT_CI=0
+          if [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ]; }; then
+            USE_DIRECT_CI=1
+          fi
+
+          if [ -z "$SERVER_SSH_KEY" ]; then
+            echo "::error::Add SERVER_SSH_KEY in repo Secrets"
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          tar czf /tmp/backend.tar -C "$GITHUB_WORKSPACE" backend
+
+          if [ "$USE_DIRECT_CI" = 1 ]; then
+            TARGET="${SSH_USER}@${DIRECT_SSH_HOST}"
+            run_scp_ssh() {
+              scp $SSH_OPTS -i ~/.ssh/id_rsa /tmp/backend.tar "${TARGET}:/tmp/backend.tar" \
+                && ssh $SSH_OPTS -i ~/.ssh/id_rsa "${TARGET}" \
+                  "mkdir -p '$BACKEND_PATH' && cd '$BACKEND_PATH' && tar xzf /tmp/backend.tar --strip-components=1 && rm -f /tmp/backend.tar && echo Backend deployed"
+            }
+          else
+            CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
+            if [ -z "$CF_SERVICE_TOKEN_ID" ] || [ -z "$CF_SERVICE_TOKEN_SECRET" ]; then
+              echo "::error::Add CF_SERVICE_TOKEN_ID + CF_SERVICE_TOKEN_SECRET in repo Secrets (or enable direct SSH with USE_DIRECT_SSH_FOR_CI=1 + DIRECT_SSH_HOST)."
+              exit 1
+            fi
+            export TUNNEL_SERVICE_TOKEN_ID="$CF_SERVICE_TOKEN_ID"
+            export TUNNEL_SERVICE_TOKEN_SECRET="$CF_SERVICE_TOKEN_SECRET"
+            run_scp_ssh() {
+              scp $SSH_OPTS -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ${CF_HOST}" /tmp/backend.tar "${SSH_USER}@${CF_HOST}:/tmp/backend.tar" \
+                && ssh $SSH_OPTS -i ~/.ssh/id_rsa -o "ProxyCommand=cloudflared access tcp --hostname ${CF_HOST}" "${SSH_USER}@${CF_HOST}" \
+                  "mkdir -p '$BACKEND_PATH' && cd '$BACKEND_PATH' && tar xzf /tmp/backend.tar --strip-components=1 && rm -f /tmp/backend.tar && echo Backend deployed"
+            }
+          fi
+
+          ok=0
+          for attempt in 1 2 3; do
+            echo "::notice::Backend deploy attempt $attempt/3"
+            if run_scp_ssh; then
+              ok=1
+              break
+            fi
+            echo "::warning::Backend deploy attempt $attempt failed; retrying in 45s..."
+            sleep 45
+          done
+          if [ "$ok" != 1 ]; then
+            echo "::error::Backend deploy failed after 3 attempts."
+            exit 1
+          fi
+          echo "Backend deployed to $BACKEND_PATH"
+
+      - name: Done
+        run: echo "✅ Deploy finished. Open https://api.easytecheg.net/app and hard refresh (Ctrl+F5)."

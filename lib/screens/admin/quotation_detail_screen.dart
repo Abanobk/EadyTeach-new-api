@@ -549,6 +549,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       ];
 
   static bool _hasArabic(String text) => RegExp(r'[\u0600-\u06FF]').hasMatch(text);
+  static bool _hasLatinOrDigits(String text) => RegExp(r'[A-Za-z0-9]').hasMatch(text);
 
   static String _reshapeArabicRuns(String text) {
     return text.replaceAllMapped(RegExp(r'[\u0600-\u06FF]+'), (match) {
@@ -603,17 +604,19 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     if (s.isEmpty || !_hasArabic(s)) return s;
     return s
         .split('\n')
-        .map((line) => line.trim().isEmpty
-            ? line
-            : String.fromCharCodes(bidi.logicalToVisual(_reshapeArabicRuns(line))))
+        .map((line) {
+          if (line.trim().isEmpty) return line;
+          final reshaped = _reshapeArabicRuns(line);
+          if (_hasLatinOrDigits(line)) return reshaped;
+          return String.fromCharCodes(bidi.logicalToVisual(reshaped));
+        })
         .join('\n');
   }
 
   static pw.TextDirection _pdfTextDirectionFor(String text) {
-    if (_hasArabic(text)) {
-      // بعد تحويل السطر العربي إلى العرض البصري لا نريد من محرك PDF أن يعيد ترتيبه مرة أخرى.
-      return pw.TextDirection.ltr;
-    }
+    if (!_hasArabic(text)) return pw.TextDirection.ltr;
+    if (_hasLatinOrDigits(text)) return pw.TextDirection.rtl;
+    // السطور العربية الخالصة تم تحويلها مسبقاً إلى ترتيب بصري، لذا تُرسم كـ LTR.
     return pw.TextDirection.ltr;
   }
 

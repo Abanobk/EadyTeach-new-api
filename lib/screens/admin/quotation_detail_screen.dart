@@ -603,7 +603,9 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     if (s.isEmpty || !_hasArabic(s)) return s;
     return s
         .split('\n')
-        .map((line) => line.trim().isEmpty ? line : bidi.logicalToVisual(_reshapeArabicRuns(line)))
+        .map((line) => line.trim().isEmpty
+            ? line
+            : String.fromCharCodes(bidi.logicalToVisual(_reshapeArabicRuns(line))))
         .join('\n');
   }
 

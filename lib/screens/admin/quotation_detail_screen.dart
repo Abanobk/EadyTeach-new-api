@@ -1,6 +1,7 @@
-import 'dart:typed_data';
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
@@ -54,6 +55,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   // Toggle UI for dealer price override inputs.
   bool _showAdminDealerPriceEditor = false;
+
+  pw.Font? _pdfLatinRegular;
+  pw.Font? _pdfLatinBold;
+  pw.Font? _pdfArabicRegular;
+  pw.Font? _pdfArabicBold;
+  pw.Font? _pdfSymbols;
 
   final _statusLabels = {
     'draft': 'مسودة',
@@ -515,13 +522,48 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   static final ArabicReshaper _arabicReshaper = ArabicReshaper.instance;
 
-  /// تنظيف النص وإعادة تشكيل العربية قبل الطباعة داخل PDF.
+  Future<void> _ensurePdfFontsLoaded() async {
+    if (_pdfLatinRegular != null &&
+        _pdfLatinBold != null &&
+        _pdfArabicRegular != null &&
+        _pdfArabicBold != null &&
+        _pdfSymbols != null) {
+      return;
+    }
+
+    Future<pw.Font> loadFont(String assetPath) async {
+      final data = await rootBundle.load(assetPath);
+      return pw.Font.ttf(data);
+    }
+
+    _pdfLatinRegular ??= await loadFont('assets/fonts/NotoSans-Regular.ttf');
+    _pdfLatinBold ??= await loadFont('assets/fonts/NotoSans-Bold.ttf');
+    _pdfArabicRegular ??= await loadFont('assets/fonts/NotoSansArabic-Regular.ttf');
+    _pdfArabicBold ??= await loadFont('assets/fonts/NotoSansArabic-Bold.ttf');
+    _pdfSymbols ??= await loadFont('assets/fonts/NotoSansSymbols2-Regular.ttf');
+  }
+
+  List<pw.Font> _pdfFallbackFonts({bool bold = false}) => [
+        bold ? _pdfArabicBold! : _pdfArabicRegular!,
+        _pdfSymbols!,
+      ];
+
+  static bool _hasArabic(String text) => RegExp(r'[\u0600-\u06FF]').hasMatch(text);
+
+  static String _reshapeArabicRuns(String text) {
+    return text.replaceAllMapped(RegExp(r'[\u0600-\u06FF]+'), (match) {
+      final value = match.group(0) ?? '';
+      return value.isEmpty ? value : _arabicReshaper.reshape(value);
+    });
+  }
+
+  /// تنظيف النص قبل الطباعة داخل PDF مع الإبقاء على الأحرف اللاتينية والرموز الصالحة.
   static String _pdfSafeText(String? raw, {bool preserveNewLines = false}) {
     if (raw == null) return '';
     var s = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     s = s
-        .replaceAll('\u2190', ' - ')
-        .replaceAll('\u2192', ' - ')
+        .replaceAll('\u2190', ' ← ')
+        .replaceAll('\u2192', ' → ')
         .replaceAll('—', '-')
         .replaceAll('–', '-')
         .replaceAll('“', '"')
@@ -540,14 +582,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         .replaceAll('☆', '- ')
         .replaceAll('■', '- ')
         .replaceAll('□', '')
-        .replaceAll('▪️', '- ')
-        .replaceAll('™', '')
-        .replaceAll('®', '')
-        .replaceAll('©', '');
+        .replaceAll('▪️', '- ');
     s = s.replaceAll(RegExp(r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]'), '');
     s = s.replaceAll(RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F]'), '');
     s = s.replaceAll(RegExp(r'[\uE000-\uF8FF\uFFF0-\uFFFF]'), '');
-    s = s.replaceAll(RegExp(r'[^0-9A-Za-z\u0600-\u06FF\s\n\-\+\(\)\[\]\{\}\.,:;!؟،/\\&%#@]'), ' ');
     if (preserveNewLines) {
       final lines = s
           .split('\n')
@@ -558,28 +596,51 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     } else {
       s = s.trim().replaceAll(RegExp(r'\s+'), ' ');
     }
-    if (s.isEmpty) return s;
-    final shapedLines = s.split('\n').map((line) {
-      if (line.trim().isEmpty) return line;
-      final hasArabic = RegExp(r'[\u0600-\u06FF]').hasMatch(line);
-      if (!hasArabic) return line;
-      final reshaped = _arabicReshaper.reshape(line);
-      return bidi.logicalToVisual(reshaped);
-    }).toList();
-    return shapedLines.join('\n');
+    if (s.isEmpty || !_hasArabic(s)) return s;
+    return s
+        .split('\n')
+        .map((line) => line.trim().isEmpty ? line : bidi.logicalToVisual(_reshapeArabicRuns(line)))
+        .join('\n');
+  }
+
+  static pw.TextDirection _pdfTextDirectionFor(String text) {
+    if (_hasArabic(text)) {
+      // بعد تحويل السطر العربي إلى العرض البصري لا نريد من محرك PDF أن يعيد ترتيبه مرة أخرى.
+      return pw.TextDirection.ltr;
+    }
+    return pw.TextDirection.ltr;
   }
 
   pw.Widget _pdfText(
     String text, {
-    pw.TextStyle? style,
-    pw.TextAlign? textAlign,
-    int? maxLines,
-  }) => pw.Text(
-        _pdfSafeText(text, preserveNewLines: true),
-        style: style,
-        textAlign: textAlign ?? pw.TextAlign.right,
-        maxLines: maxLines,
-      );
+      pw.TextStyle? style,
+      pw.TextAlign? textAlign,
+      int? maxLines,
+  }) {
+    final cleanedText = _pdfSafeText(text, preserveNewLines: true);
+    final resolvedStyle = style ?? const pw.TextStyle();
+    final isBold = resolvedStyle.fontWeight != null && resolvedStyle.fontWeight!.index >= pw.FontWeight.bold.index;
+    final hasArabic = _hasArabic(cleanedText);
+    final direction = _pdfTextDirectionFor(cleanedText);
+    final resolvedAlign = textAlign ?? (hasArabic ? pw.TextAlign.right : pw.TextAlign.left);
+    final primaryFont = hasArabic
+        ? (isBold ? _pdfArabicBold : _pdfArabicRegular)
+        : (isBold ? _pdfLatinBold : _pdfLatinRegular);
+    final fallbackFonts = hasArabic
+        ? <pw.Font>[isBold ? _pdfLatinBold! : _pdfLatinRegular!, _pdfSymbols!]
+        : _pdfFallbackFonts(bold: isBold);
+    return pw.Text(
+      cleanedText,
+      style: resolvedStyle.copyWith(
+        font: primaryFont,
+        fontFallback: fallbackFonts,
+      ),
+      textAlign: resolvedAlign,
+      textDirection: direction,
+      maxLines: maxLines,
+    );
+  }
+
 
   /// إجماليات عرض السعر للعميل: مبنية على سعر البيع للعميل في كل بند.
   /// إذا كان `subtotal` المخزّن يطابق مجموع البنود (ضمن هامش) نستخدم المخزن؛ وإلا نُعيد حساب التركيبات والخصم والنهائي (عروض قديمة خُزن فيها الإجمالي على أساس سعر التاجر).
@@ -806,8 +867,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   Future<Uint8List> _buildPdfBytes() async {
     final q = _quotation!;
-    final arabicFont = await PdfGoogleFonts.cairoRegular();
-    final arabicBold = await PdfGoogleFonts.cairoBold();
+    await _ensurePdfFontsLoaded();
     final items = (q['items'] as List? ?? []);
     final installPct = double.tryParse(q['installationPercent']?.toString() ?? '0') ?? 0;
     final discountPct = double.tryParse(q['discountPercent']?.toString() ?? '0') ?? 0;
@@ -829,7 +889,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     pdf.addPage(
       pw.MultiPage(
         textDirection: pw.TextDirection.rtl,
-        theme: pw.ThemeData.withFont(base: arabicFont, bold: arabicBold),
+        theme: pw.ThemeData.withFont(base: _pdfLatinRegular!, bold: _pdfLatinBold!),
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
         header: (ctx) => pw.Column(children: [
@@ -1058,8 +1118,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   Future<Uint8List> _buildDealerPricingPdfBytes() async {
     final q = _quotation!;
-    final arabicFont = await PdfGoogleFonts.cairoRegular();
-    final arabicBold = await PdfGoogleFonts.cairoBold();
+    await _ensurePdfFontsLoaded();
     final totals = _dealerPricingSnapshot();
     final revenueForMargin = totals['soldTotal']! + totals['installation']!;
     final profitPercent = revenueForMargin > 0 ? ((totals['profit']! / revenueForMargin) * 100.0) : 0.0;
@@ -1085,7 +1144,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     pdf.addPage(
       pw.MultiPage(
         textDirection: pw.TextDirection.rtl,
-        theme: pw.ThemeData.withFont(base: arabicFont, bold: arabicBold),
+        theme: pw.ThemeData.withFont(base: _pdfLatinRegular!, bold: _pdfLatinBold!),
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(36),
         build: (ctx) => [

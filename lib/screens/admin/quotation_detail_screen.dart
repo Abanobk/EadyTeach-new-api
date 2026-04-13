@@ -524,13 +524,23 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         .replaceAll('•', '- ')
         .replaceAll('●', '- ')
         .replaceAll('▪', '- ')
-        .replaceAll('✔', '✓ ')
-        .replaceAll('✅', '✓ ')
+        .replaceAll('✔', 'تم ')
+        .replaceAll('✅', 'تم ')
+        .replaceAll('☑', 'تم ')
+        .replaceAll('✓', 'تم ')
+        .replaceAll('✦', '- ')
+        .replaceAll('★', '- ')
+        .replaceAll('☆', '- ')
+        .replaceAll('■', '- ')
+        .replaceAll('□', '')
+        .replaceAll('▪️', '- ')
         .replaceAll('™', '')
         .replaceAll('®', '')
         .replaceAll('©', '');
     s = s.replaceAll(RegExp(r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]'), '');
     s = s.replaceAll(RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F]'), '');
+    s = s.replaceAll(RegExp(r'[\uE000-\uF8FF\uFFF0-\uFFFF]'), '');
+    s = s.replaceAll(RegExp(r"[^0-9A-Za-z\u0600-\u06FF\s\n\-\+\(\)\[\]\{\}\.,:;!؟،/\\&%#@'\"]"), ' ');
     if (preserveNewLines) {
       final lines = s
           .split('\n')

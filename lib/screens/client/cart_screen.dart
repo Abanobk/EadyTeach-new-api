@@ -61,12 +61,13 @@ class _CartScreenState extends State<CartScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final c = theme.colorScheme;
     final cart = context.watch<CartProvider>();
+    final itemCount = cart.items.fold<int>(0, (s, i) => s + i.quantity);
 
-    // If cart sync updates items after this screen was built, ensure we show them from top.
-    final currentLen = cart.items.length;
-    if (_lastItemsLen != currentLen) {
-      _lastItemsLen = currentLen;
+    if (_lastItemsLen != cart.items.length) {
+      _lastItemsLen = cart.items.length;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (_itemsScrollController.hasClients) {
@@ -78,21 +79,66 @@ class _CartScreenState extends State<CartScreen> {
     return Scaffold(
       backgroundColor: AppThemeDecorations.pageBackground(context),
       appBar: AppBar(
-        title: const Text('السلة'),
-        backgroundColor: AppThemeDecorations.cardColor(context),
         automaticallyImplyLeading: false,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        titleSpacing: 16,
+        title: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: AppThemeDecorations.glassCard(context, radius: 16),
+              child: const Icon(Icons.shopping_bag_rounded, color: AppColors.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('السلة', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                  Text(
+                    'مراجعة الطلب قبل الإتمام',
+                    style: theme.textTheme.bodySmall?.copyWith(color: c.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
       body: cart.items.isEmpty
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.shopping_cart_outlined,
-                      size: 64, color: AppColors.muted),
-                  SizedBox(height: 16),
-                  Text('السلة فارغة',
-                      style: TextStyle(color: AppColors.muted, fontSize: 18)),
-                ],
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(28),
+                  decoration: AppThemeDecorations.loginStyleCard(context, 28),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 88,
+                        height: 88,
+                        decoration: BoxDecoration(
+                          gradient: AppThemeDecorations.primaryButtonGradient,
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        child: const Icon(Icons.shopping_cart_checkout_rounded, color: Colors.white, size: 40),
+                      ),
+                      const SizedBox(height: 20),
+                      Text('السلة فارغة حالياً', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 10),
+                      Text(
+                        'ابدأ بإضافة المنتجات التي تعجبك لتظهر هنا داخل تجربة شراء أكثر ترتيبًا وأناقة.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(color: c.onSurfaceVariant, height: 1.6),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             )
           : Column(
@@ -100,209 +146,289 @@ class _CartScreenState extends State<CartScreen> {
                 Expanded(
                   child: SingleChildScrollView(
                     controller: _itemsScrollController,
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                     child: Column(
-                      children: List.generate(cart.items.length, (idx) {
-                        final item = cart.items[idx];
-                        final hasOriginal = item.originalPrice != null && item.originalPrice! > item.price;
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(12),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(22),
                           decoration: BoxDecoration(
-                            // Ensure high contrast so the card content is always visible.
-                            color: AppColors.primary.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.redAccent, width: 2),
+                            borderRadius: BorderRadius.circular(28),
+                            gradient: const LinearGradient(
+                              begin: Alignment.topRight,
+                              end: Alignment.bottomLeft,
+                              colors: [Color(0xFF0F172A), Color(0xFF17345F), Color(0xFFF59E0B)],
+                            ),
+                            boxShadow: theme.brightness == Brightness.dark
+                                ? []
+                                : [
+                                    BoxShadow(
+                                      color: const Color(0xFF0F172A).withOpacity(0.12),
+                                      blurRadius: 30,
+                                      spreadRadius: -10,
+                                      offset: const Offset(0, 20),
+                                    ),
+                                  ],
                           ),
-                          child: Row(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Fixed-size image box avoids RTL/constraint issues.
-                              SizedBox(
-                                width: 72,
-                                height: 72,
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: const Text(
+                                  'ملخص سريع',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              const Text(
+                                'تجربة طلب أكثر وضوحًا وأناقة',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 24, height: 1.2),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                'راجع منتجاتك، اختر طريقة الدفع المناسبة، ثم أكمل الطلب في واجهة مرتبة وسهلة.',
+                                style: TextStyle(color: Colors.white.withOpacity(0.84), height: 1.6),
+                              ),
+                              const SizedBox(height: 18),
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: [
+                                  _CartSummaryPill(icon: Icons.inventory_2_rounded, label: '$itemCount قطعة'),
+                                  _CartSummaryPill(icon: Icons.sell_rounded, label: '${cart.items.length} منتج'),
+                                  _CartSummaryPill(icon: Icons.payments_rounded, label: '${cart.total.toStringAsFixed(2)} ج.م'),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text('العناصر المضافة', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 6),
+                        Text(
+                          'تم ترتيب البطاقات بشكل أوضح لتسهيل مراجعة السعر والكمية والخصم.',
+                          style: theme.textTheme.bodyMedium?.copyWith(color: c.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 14),
+                        ...List.generate(cart.items.length, (idx) {
+                          final item = cart.items[idx];
+                          final hasOriginal = item.originalPrice != null && item.originalPrice! > item.price;
+                          final lineTotal = item.price * item.quantity;
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 14),
+                            padding: const EdgeInsets.all(14),
+                            decoration: AppThemeDecorations.loginStyleCard(context, 24),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 92,
+                                  height: 92,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(22),
+                                    border: Border.all(color: c.outline.withOpacity(0.45)),
+                                  ),
+                                  clipBehavior: Clip.hardEdge,
                                   child: item.image != null && item.image!.isNotEmpty
                                       ? Image.network(
                                           ApiService.proxyImageUrl(item.image!),
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => _imgPlaceholder(),
+                                          errorBuilder: (_, __, ___) => _imgPlaceholder(context),
                                         )
-                                      : _imgPlaceholder(),
+                                      : _imgPlaceholder(context),
                                 ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Product title
-                                    Text(
-                                      item.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: AppColors.text,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                    if (item.variant != null && item.variant!.toString().isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 4),
-                                        child: Text(
-                                          item.variant!,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(color: AppColors.muted, fontSize: 12),
-                                        ),
-                                      ),
-                                    const SizedBox(height: 10),
-
-                                    // Original price (before discount)
-                                    if (hasOriginal)
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
                                       Text(
-                                        'السعر الاساسي: ${item.originalPrice!.toStringAsFixed(2)} ج.م',
-                                        style: const TextStyle(
-                                          color: AppColors.muted,
-                                          decoration: TextDecoration.lineThrough,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
+                                        item.name,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, height: 1.35),
+                                      ),
+                                      if (item.variant != null && item.variant!.trim().isNotEmpty) ...[
+                                        const SizedBox(height: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: c.secondary.withOpacity(0.12),
+                                            borderRadius: BorderRadius.circular(999),
+                                          ),
+                                          child: Text(
+                                            item.variant!,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(color: c.secondary, fontWeight: FontWeight.w700, fontSize: 11),
+                                          ),
                                         ),
-                                      ),
-
-                                    // Current price (after discount)
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'السعر بعد الخصم: ${item.price.toStringAsFixed(2)} ج.م',
-                                      style: const TextStyle(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
+                                      ],
+                                      const SizedBox(height: 10),
+                                      _CartLine(label: 'سعر القطعة', value: '${item.price.toStringAsFixed(2)} ج.م', emphasize: true),
+                                      if (hasOriginal)
+                                        _CartLine(
+                                          label: 'قبل الخصم',
+                                          value: '${item.originalPrice!.toStringAsFixed(2)} ج.م',
+                                          struck: true,
+                                        ),
+                                      _CartLine(label: 'الإجمالي', value: '${lineTotal.toStringAsFixed(2)} ج.م'),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              // Fixed-width qty column so the rest doesn't collapse.
-                              SizedBox(
-                                width: 60,
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.remove_circle_outline, color: AppColors.muted, size: 20),
-                                      onPressed: () => cart.decrementItem(item.productId),
-                                    ),
-                                    Text(
-                                      '${item.quantity}',
-                                      style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 13),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 20),
-                                      onPressed: () => cart.incrementItem(item.productId),
-                                    ),
-                                  ],
+                                const SizedBox(width: 10),
+                                Container(
+                                  width: 56,
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: c.surfaceContainerHighest.withOpacity(0.55),
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.add_circle_rounded, color: AppColors.primary, size: 24),
+                                        onPressed: () => cart.incrementItem(item.productId),
+                                      ),
+                                      Text(
+                                        '${item.quantity}',
+                                        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                                      ),
+                                      IconButton(
+                                        icon: Icon(Icons.remove_circle_rounded, color: c.onSurfaceVariant, size: 24),
+                                        onPressed: () => cart.decrementItem(item.productId),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
                     ),
                   ),
                 ),
-
-                // Payment + Summary
                 Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppThemeDecorations.cardColor(context),
-                    border: const Border(top: BorderSide(color: AppColors.border)),
-                  ),
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  padding: const EdgeInsets.all(18),
+                  decoration: AppThemeDecorations.loginStyleCard(context, 28),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'عدد المنتجات/القطع: ${cart.items.fold<int>(0, (s, i) => s + i.quantity)}',
-                        style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                      const Text('طريقة الدفع:',
-                          style: TextStyle(
-                              color: AppColors.text,
-                              fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
                       Row(
                         children: [
-                          _PaymentBtn(
-                              label: 'كاش',
-                              icon: Icons.money,
-                              selected: _paymentMethod == 'cash',
-                              onTap: () =>
-                                  setState(() => _paymentMethod = 'cash')),
-                          const SizedBox(width: 8),
-                          _PaymentBtn(
-                              label: 'فيزا',
-                              icon: Icons.credit_card,
-                              selected: _paymentMethod == 'visa',
-                              onTap: () =>
-                                  setState(() => _paymentMethod = 'visa')),
-                          const SizedBox(width: 8),
-                          _PaymentBtn(
-                              label: 'Apple Pay',
-                              icon: Icons.apple,
-                              selected: _paymentMethod == 'apple_pay',
-                              onTap: () =>
-                                  setState(() => _paymentMethod = 'apple_pay')),
-                          const SizedBox(width: 8),
-                          _PaymentBtn(
-                              label: 'تحويل',
-                              icon: Icons.account_balance_wallet_outlined,
-                              selected: _paymentMethod == 'transfer',
-                              onTap: () {
-                                setState(() => _paymentMethod = 'transfer');
-                                // Open link + upload receipt right away for transfer.
-                                _openTransferProofDialog();
-                              }),
+                          Expanded(
+                            child: Text('ملخص الدفع', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                          ),
+                          if (_paymentMethod == 'transfer' && _transferProofUrl != null && _transferProofUrl!.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDCFCE7),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text(
+                                'الإيصال مرفوع',
+                                style: TextStyle(color: Color(0xFF166534), fontWeight: FontWeight.w700, fontSize: 11),
+                              ),
+                            ),
                         ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _loadingProfile
+                            ? 'جاري تحميل بيانات التوصيل...' : 'الاسم: ${_shippingName?.isNotEmpty == true ? _shippingName : 'لم يتم إدخاله بعد'}',
+                        style: theme.textTheme.bodyMedium?.copyWith(color: c.onSurfaceVariant),
                       ),
                       const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
                         children: [
-                          const Text('الإجمالي:',
-                              style: TextStyle(
-                                  color: AppColors.text,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16)),
-                          Text('${cart.total.toStringAsFixed(2)} ج.م',
-                              style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 20)),
+                          _PaymentBtn(
+                            label: 'كاش',
+                            icon: Icons.money_rounded,
+                            selected: _paymentMethod == 'cash',
+                            onTap: () => setState(() => _paymentMethod = 'cash'),
+                          ),
+                          _PaymentBtn(
+                            label: 'فيزا',
+                            icon: Icons.credit_card_rounded,
+                            selected: _paymentMethod == 'visa',
+                            onTap: () => setState(() => _paymentMethod = 'visa'),
+                          ),
+                          _PaymentBtn(
+                            label: 'Apple Pay',
+                            icon: Icons.apple_rounded,
+                            selected: _paymentMethod == 'apple_pay',
+                            onTap: () => setState(() => _paymentMethod = 'apple_pay'),
+                          ),
+                          _PaymentBtn(
+                            label: 'تحويل',
+                            icon: Icons.account_balance_wallet_rounded,
+                            selected: _paymentMethod == 'transfer',
+                            onTap: () {
+                              setState(() => _paymentMethod = 'transfer');
+                              _openTransferProofDialog();
+                            },
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 18),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: c.surfaceContainerHighest.withOpacity(0.42),
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                        child: Column(
+                          children: [
+                            _CartLine(label: 'عدد القطع', value: '$itemCount'),
+                            const SizedBox(height: 10),
+                            _CartLine(label: 'عدد المنتجات', value: '${cart.items.length}'),
+                            const SizedBox(height: 10),
+                            _CartLine(label: 'طريقة الدفع', value: _paymentMethod == 'cash' ? 'كاش عند الاستلام' : _paymentMethod == 'visa' ? 'بطاقة' : _paymentMethod == 'apple_pay' ? 'Apple Pay' : 'تحويل بنكي'),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 14),
+                              child: Divider(height: 1),
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('الإجمالي النهائي', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                                Text(
+                                  '${cart.total.toStringAsFixed(2)} ج.م',
+                                  style: theme.textTheme.titleLarge?.copyWith(color: AppColors.primary, fontWeight: FontWeight.w900),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed:
-                              _submitting ? null : () => _placeOrder(cart),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
+                          onPressed: _submitting ? null : () => _placeOrder(cart),
+                          style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18)),
                           child: _submitting
                               ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.black))
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                                )
                               : Text(
                                   'إتمام الطلب — ${cart.total.toStringAsFixed(2)} ج.م',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold)),
+                                  style: const TextStyle(fontWeight: FontWeight.w800),
+                                ),
                         ),
                       ),
                     ],
@@ -571,12 +697,87 @@ class _CartScreenState extends State<CartScreen> {
     return false;
   }
 
-  Widget _imgPlaceholder() {
+  Widget _imgPlaceholder(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
     return Container(
-      width: 60,
-      height: 60,
-      color: AppColors.border,
-      child: const Icon(Icons.image_outlined, color: AppColors.muted),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [c.surfaceContainerHighest, c.surface],
+        ),
+      ),
+      child: Center(
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.55),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(Icons.image_outlined, color: c.onSurfaceVariant),
+        ),
+      ),
+    );
+  }
+}
+
+class _CartSummaryPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _CartSummaryPill({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 16),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CartLine extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool emphasize;
+  final bool struck;
+
+  const _CartLine({
+    required this.label,
+    required this.value,
+    this.emphasize = false,
+    this.struck = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final c = theme.colorScheme;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: theme.textTheme.bodySmall?.copyWith(color: c.onSurfaceVariant)),
+        Text(
+          value,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: emphasize ? AppColors.primary : c.onSurface,
+            fontWeight: emphasize ? FontWeight.w800 : FontWeight.w700,
+            decoration: struck ? TextDecoration.lineThrough : TextDecoration.none,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -587,36 +788,46 @@ class _PaymentBtn extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _PaymentBtn(
-      {required this.label,
-      required this.icon,
-      required this.selected,
-      required this.onTap});
+  const _PaymentBtn({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppThemeDecorations.pageBackground(context),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-              color: selected ? AppColors.primary : AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Icon(icon,
-                color: selected ? Colors.black : AppColors.muted, size: 16),
-            const SizedBox(width: 4),
-            Text(label,
+    final c = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: selected ? AppThemeDecorations.primaryButtonGradient : null,
+            color: selected ? null : c.surfaceContainerHighest.withOpacity(0.45),
+            border: Border.all(
+              color: selected ? Colors.transparent : c.outline.withOpacity(0.45),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: selected ? Colors.white : c.onSurfaceVariant, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                label,
                 style: TextStyle(
-                    color: selected ? Colors.black : AppColors.text,
-                    fontWeight:
-                        selected ? FontWeight.bold : FontWeight.normal,
-                    fontSize: 12)),
-          ],
+                  color: selected ? Colors.white : c.onSurface,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -7,6 +7,10 @@ import '../../theme/app_theme.dart';
 class RoleSelectScreen extends StatelessWidget {
   const RoleSelectScreen({super.key});
 
+  int? _urlProductId() {
+    return int.tryParse(Uri.base.queryParameters['productId'] ?? '');
+  }
+
   void _openClient(BuildContext context, AuthProvider auth) {
     final pendingProductId = auth.consumePendingProductId();
     Navigator.pushReplacementNamed(
@@ -20,6 +24,14 @@ class RoleSelectScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final c = Theme.of(context).colorScheme;
+    final urlProductId = _urlProductId();
+    final effectiveProductId = auth.pendingProductId ?? ((urlProductId != null && urlProductId > 0) ? urlProductId : null);
+    if (effectiveProductId != null && effectiveProductId > 0) {
+      auth.setPendingProductId(effectiveProductId);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) _openClient(context, auth);
+      });
+    }
     final items = <_RoleEntry>[
       _RoleEntry(
         title: 'عميل',

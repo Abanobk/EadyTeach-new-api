@@ -527,8 +527,19 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   static String _pdfSafeText(String? raw, {bool preserveNewLines = false}) {
     if (raw == null) return '';
     var s = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-    s = s.replaceAll('\u2190', ' - ').replaceAll('\u2192', ' - ');
+    s = s
+        .replaceAll('\u2190', ' - ')
+        .replaceAll('\u2192', ' - ')
+        .replaceAll('•', '- ')
+        .replaceAll('●', '- ')
+        .replaceAll('▪', '- ')
+        .replaceAll('✔', '✓ ')
+        .replaceAll('✅', '✓ ')
+        .replaceAll('™', '')
+        .replaceAll('®', '')
+        .replaceAll('©', '');
     s = s.replaceAll(RegExp(r'[\u200B-\u200D\uFEFF]'), '');
+    s = s.replaceAll(RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F]'), '');
     if (preserveNewLines) {
       final lines = s
           .split('\n')
@@ -540,18 +551,15 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       s = s.trim().replaceAll(RegExp(r'\s+'), ' ');
     }
     if (s.isEmpty) return s;
-    if (ArabicReshaper.isArabic(s)) {
-      final visualLines = s
-          .split('\n')
-          .map((line) {
-            if (line.trim().isEmpty) return line;
-            final shaped = _arabicReshaper.reshape(line);
-            return _toVisualRtl(shaped);
-          })
-          .toList();
-      return visualLines.join('\n');
-    }
-    return s;
+    final visualLines = s.split('\n').map((line) {
+      if (line.trim().isEmpty) return line;
+      if (ArabicReshaper.isArabic(line)) {
+        final shaped = _arabicReshaper.reshape(line);
+        return _toVisualRtl(shaped);
+      }
+      return line;
+    }).toList();
+    return visualLines.join('\n');
   }
 
   pw.Widget _pdfText(
@@ -784,9 +792,9 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   String? _quotationProductWebUrl(Map<String, dynamic> item) {
     final productId = int.tryParse(item['productId']?.toString() ?? item['id']?.toString() ?? '');
-    if (productId == null || productId <= 0 || !kIsWeb) return null;
-    final root = Uri.base.replace(path: '/', queryParameters: {'productId': '$productId'}, fragment: '');
-    return root.toString();
+    if (productId == null || productId <= 0) return null;
+    final base = Uri.parse(ApiService.baseUrl);
+    return base.replace(path: '/', queryParameters: {'productId': '$productId'}, fragment: '').toString();
   }
 
   Future<Uint8List> _buildPdfBytes() async {
@@ -848,8 +856,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             decoration: const pw.BoxDecoration(color: PdfColors.blue800),
             child: pw.Row(children: [
               pw.Expanded(flex: 1, child: _pdfText('#', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
-              pw.Expanded(flex: 2, child: _pdfText('الصورة', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
-              pw.Expanded(flex: 4, child: _pdfText('المنتج', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
+              pw.Expanded(flex: 3, child: _pdfText('الصورة', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
+              pw.Expanded(flex: 5, child: _pdfText('المنتج', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
               pw.Expanded(flex: 1, child: _pdfText('الكمية', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
               pw.Expanded(flex: 2, child: _pdfText('سعر الوحدة', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
               pw.Expanded(flex: 2, child: _pdfText('الإجمالي', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white), textAlign: pw.TextAlign.center)),
@@ -880,21 +888,24 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                 pw.Expanded(flex: 1, child: _pdfText('${i + 1}', style: const pw.TextStyle(fontSize: 9), textAlign: pw.TextAlign.center)),
                 _pdfCellImage(
                   hasImage ? itemImages[i] : null,
-                  2,
+                  3,
                   link: productUrl,
-                  size: 58,
+                  size: 74,
                 ),
-                pw.Expanded(flex: 4, child: pw.Padding(
+                pw.Expanded(flex: 5, child: pw.Padding(
                   padding: const pw.EdgeInsets.symmetric(horizontal: 4),
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
-                      _pdfText(item['productName']?.toString() ?? '', style: const pw.TextStyle(fontSize: 10)),
+                      _pdfText(item['productName']?.toString() ?? '', style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold)),
                       if (descriptionText.isNotEmpty)
-                        _pdfText(
-                          descriptionText,
-                          style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
-                          maxLines: 3,
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.only(top: 3),
+                          child: _pdfText(
+                            descriptionText,
+                            style: const pw.TextStyle(fontSize: 8.2, color: PdfColors.grey800, lineSpacing: 1.3),
+                            maxLines: 4,
+                          ),
                         ),
                     ],
                   ),
@@ -1119,8 +1130,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             child: pw.Row(
               children: [
                 _pdfHeaderCell('#', 1),
-                _pdfHeaderCell('صورة', 2),
-                _pdfHeaderCell('المنتج', 2),
+                _pdfHeaderCell('صورة', 3),
+                _pdfHeaderCell('المنتج', 5),
                 _pdfHeaderCell('الكمية', 1),
                 _pdfHeaderCell('سعر شراء (وحدة)', 1),
                 _pdfHeaderCell('سعر بيع (وحدة)', 1),
@@ -1174,14 +1185,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                   _pdfCell('${i + 1}', 1),
                   _pdfCellImage(
                     itemImages[i],
-                    2,
+                    3,
                     link: _quotationProductWebUrl(itemMap),
-                    size: 46,
+                    size: 60,
                   ),
                   _pdfProductCell(
                     item['productName']?.toString() ?? '-',
                     subLines.isEmpty ? null : subLines.join('\n'),
-                    2,
+                    5,
                   ),
                   _pdfCell('$qty', 1),
                   _pdfCell('${dealerUnit.toStringAsFixed(0)} ج.م', 1),
@@ -1224,16 +1235,17 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           children: [
             _pdfText(
               title,
-              style: const pw.TextStyle(fontSize: 9),
+              style: pw.TextStyle(fontSize: 9.4, fontWeight: pw.FontWeight.bold),
               textAlign: pw.TextAlign.center,
             ),
             if (subtitle != null && subtitle.isNotEmpty)
               pw.Padding(
-                padding: const pw.EdgeInsets.only(top: 3),
+                padding: const pw.EdgeInsets.only(top: 4),
                 child: _pdfText(
                   subtitle,
-                  style: pw.TextStyle(fontSize: 7, color: PdfColors.grey800, lineSpacing: 1.2),
+                  style: pw.TextStyle(fontSize: 7.8, color: PdfColors.grey800, lineSpacing: 1.3),
                   textAlign: pw.TextAlign.center,
+                  maxLines: 4,
                 ),
               ),
           ],

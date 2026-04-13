@@ -784,7 +784,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     final productId = int.tryParse(item['productId']?.toString() ?? item['id']?.toString() ?? '');
     if (productId == null || productId <= 0) return null;
     final base = Uri.parse(ApiService.baseUrl);
-    return base.replace(path: '/', queryParameters: {'productId': '$productId'}, fragment: '').toString();
+    return base.replace(path: '/app/', queryParameters: {'productId': '$productId'}, fragment: '').toString();
   }
 
   Future<Uint8List> _buildPdfBytes() async {

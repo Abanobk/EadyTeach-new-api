@@ -824,11 +824,11 @@ class _StatusBadge extends StatelessWidget {
         label = 'جاري';
         break;
       case 'completed':
-        color = AppThemeColors.success;
+        color = AppColors.success;
         label = 'مكتملة';
         break;
       case 'cancelled':
-        color = AppThemeColors.error;
+        color = AppColors.error;
         label = 'ملغاة';
         break;
       default:
@@ -859,7 +859,7 @@ class _PriorityBadge extends StatelessWidget {
     String label;
     switch (priority) {
       case 'high':
-        color = AppThemeColors.error;
+        color = AppColors.error;
         label = 'عاجل';
         break;
       case 'medium':
@@ -867,7 +867,7 @@ class _PriorityBadge extends StatelessWidget {
         label = 'متوسط';
         break;
       case 'low':
-        color = AppThemeColors.success;
+        color = AppColors.success;
         label = 'عادي';
         break;
       default:

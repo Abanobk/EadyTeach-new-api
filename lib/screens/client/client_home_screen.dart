@@ -567,7 +567,6 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   }
 
   Widget _buildBanner() {
-  Widget _buildBanner() {
     final theme = Theme.of(context);
     final c = theme.colorScheme;
 

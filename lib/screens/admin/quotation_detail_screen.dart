@@ -554,9 +554,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return text.replaceAllMapped(RegExp(r'[\u0600-\u06FF]+'), (match) {
       final value = match.group(0) ?? '';
       if (value.isEmpty) return value;
-      final reshaped = _arabicReshaper.reshape(value);
+      final dynamic reshaped = _arabicReshaper.reshape(value);
       if (reshaped is String) return reshaped;
-      if (reshaped is List<int>) return String.fromCharCodes(reshaped);
       if (reshaped is Iterable<int>) return String.fromCharCodes(reshaped);
       return reshaped.toString();
     });

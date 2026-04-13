@@ -18,7 +18,6 @@ import '../../utils/pdf_saver_stub.dart'
     if (dart.library.html) '../../utils/pdf_saver_web.dart' as pdf_saver;
 import '../../utils/quotation_line_pricing.dart';
 import 'package:arabic_reshaper/arabic_reshaper.dart';
-import 'package:bidi/bidi.dart' as bidi;
 
 class QuotationDetailScreen extends StatefulWidget {
   final int quotationId;
@@ -515,14 +514,6 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   static final ArabicReshaper _arabicReshaper = ArabicReshaper.instance;
 
-  static String _toVisualRtl(String text) {
-    try {
-      return String.fromCharCodes(bidi.logicalToVisual(text));
-    } catch (_) {
-      return text.split('').reversed.join();
-    }
-  }
-
   /// تنظيف النص وإعادة تشكيل العربية قبل الطباعة داخل PDF.
   static String _pdfSafeText(String? raw, {bool preserveNewLines = false}) {
     if (raw == null) return '';
@@ -538,7 +529,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         .replaceAll('™', '')
         .replaceAll('®', '')
         .replaceAll('©', '');
-    s = s.replaceAll(RegExp(r'[\u200B-\u200D\uFEFF]'), '');
+    s = s.replaceAll(RegExp(r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]'), '');
     s = s.replaceAll(RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F]'), '');
     if (preserveNewLines) {
       final lines = s
@@ -551,15 +542,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       s = s.trim().replaceAll(RegExp(r'\s+'), ' ');
     }
     if (s.isEmpty) return s;
-    final visualLines = s.split('\n').map((line) {
+    final shapedLines = s.split('\n').map((line) {
       if (line.trim().isEmpty) return line;
       if (ArabicReshaper.isArabic(line)) {
-        final shaped = _arabicReshaper.reshape(line);
-        return _toVisualRtl(shaped);
+        return _arabicReshaper.reshape(line);
       }
       return line;
     }).toList();
-    return visualLines.join('\n');
+    return shapedLines.join('\n');
   }
 
   pw.Widget _pdfText(

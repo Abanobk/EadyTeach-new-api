@@ -564,10 +564,26 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   static String _pdfNormalizeField(dynamic raw) => _pdfCleanText(raw?.toString(), preserveNewLines: true);
 
+  static String _pdfExtractVariantLabel(Map<String, dynamic> item) {
+    final directVariant = _pdfNormalizeField(item['selectedVariant']);
+    if (directVariant.isNotEmpty) return directVariant;
+
+    final variantName = _pdfNormalizeField(item['variantName']);
+    if (variantName.isNotEmpty) return variantName;
+
+    final description = _pdfNormalizeField(item['description']);
+    final variantMatch = RegExp(r'(?:^|\|)\s*النوع\s*:\s*([^|\n]+)').firstMatch(description);
+    if (variantMatch != null) {
+      return _pdfCleanText(variantMatch.group(1), preserveNewLines: true).trim();
+    }
+
+    return '';
+  }
+
   static String _pdfComposeItemTitle(Map<String, dynamic> item) {
     final parts = <String>[];
     final productName = _pdfNormalizeField(item['productName']);
-    final selectedVariant = _pdfNormalizeField(item['selectedVariant']);
+    final selectedVariant = _pdfExtractVariantLabel(item);
     if (productName.isNotEmpty) parts.add(productName);
     if (selectedVariant.isNotEmpty) parts.add(selectedVariant);
     return parts.join(' - ');

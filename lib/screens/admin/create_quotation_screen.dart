@@ -816,6 +816,8 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
             if (item['officialUnitPrice'] != null) 'officialUnitPrice': (item['officialUnitPrice'] as num).toDouble(),
             if (item['dealerUnitPrice'] != null) 'dealerUnitPrice': (item['dealerUnitPrice'] as num).toDouble(),
             if (item['selectedVariant'] != null && item['selectedVariant'].toString().trim().isNotEmpty)
+              'selectedVariant': item['selectedVariant'].toString(),
+            if (item['selectedVariant'] != null && item['selectedVariant'].toString().trim().isNotEmpty)
               'variantName': item['selectedVariant'].toString(),
             if (_itemManualDiscountPercent(item) > 0) 'manualDiscountPercent': _itemManualDiscountPercent(item),
             if (_itemManualDiscountAmount(item) > 0) 'manualDiscountAmount': _itemManualDiscountAmount(item),

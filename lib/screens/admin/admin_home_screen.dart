@@ -794,8 +794,6 @@ class _PerformanceInsightsCard extends StatelessWidget {
   String _smartSummary({
     required bool taskBreakdownReady,
     required int effectiveTasks,
-    required int totalTasks,
-    required int tasksCancelled,
     required double completionRatio,
     required int ordersPending,
     required double pendingRatio,
@@ -814,9 +812,6 @@ class _PerformanceInsightsCard extends StatelessWidget {
     }
     if (completionRatio < 0.45) {
       return 'سرعة الإغلاق منخفضة مقارنة بعدد المهام الفعّالة، ويُنصح بمراجعة توزيع العمل على الفريق.';
-    }
-    if (tasksCancelled > 0 && totalTasks > 0) {
-      return 'الأداء متوسط، مع وجود مهام ملغاة تم استبعادها من الحسابات التشغيلية لكن يجدر تتبع أسبابها.';
     }
     return 'الصورة العامة متوازنة، ويمكن الضغط على أي بطاقة لقراءة التفاصيل واتخاذ قرار أدق.';
   }
@@ -965,7 +960,6 @@ class _PerformanceInsightsCard extends StatelessWidget {
     final effectiveTasks = math.max(totalTasks - tasksCancelled, 0);
     final completionRatio = taskBreakdownReady ? _dashboardRatio(tasksCompleted, effectiveTasks) : 0.0;
     final activeRatio = taskBreakdownReady ? _dashboardRatio(tasksActive, effectiveTasks) : 0.0;
-    final cancelledRatio = _dashboardRatio(tasksCancelled, totalTasks);
 
     final totalOrders = _dashboardInt(stats, 'totalOrders');
     final ordersPending = _dashboardInt(stats, 'ordersPending');
@@ -982,8 +976,6 @@ class _PerformanceInsightsCard extends StatelessWidget {
     final smartSummary = _smartSummary(
       taskBreakdownReady: taskBreakdownReady,
       effectiveTasks: effectiveTasks,
-      totalTasks: totalTasks,
-      tasksCancelled: tasksCancelled,
       completionRatio: completionRatio,
       ordersPending: ordersPending,
       pendingRatio: pendingOrdersRatio,
@@ -1095,10 +1087,6 @@ class _PerformanceInsightsCard extends StatelessWidget {
                       label: 'طلبات معلقة ${_dashboardPercent(pendingOrdersRatio)}',
                       color: const Color(0xFF1565C0),
                     ),
-                    _InsightChip(
-                      label: 'إلغاء ${_dashboardPercent(cancelledRatio)}',
-                      color: const Color(0xFFB71C1C),
-                    ),
                   ],
                 ),
               ],
@@ -1122,7 +1110,7 @@ class _PerformanceInsightsCard extends StatelessWidget {
           const SizedBox(height: 18),
           _SectionShell(
             title: 'صحة المهام',
-            subtitle: 'تم استبعاد المهام الملغاة من جميع نسب الإنجاز والضغط التشغيلي.',
+            subtitle: 'المؤشرات المعروضة هنا تعتمد فقط على المهام الفعّالة غير التجريبية.',
             child: Column(
               children: [
                 LayoutBuilder(
@@ -1135,7 +1123,7 @@ class _PerformanceInsightsCard extends StatelessWidget {
                         title: 'المهام الفعالة',
                         value: '$effectiveTasks',
                         subtitle: taskBreakdownReady
-                            ? 'الإجمالي بعد استبعاد $tasksCancelled مهمة ملغاة'
+                            ? 'إجمالي المهام المعتمدة في القراءة التشغيلية الحالية'
                             : 'الإجمالي المتاح حالياً للقراءة التشغيليّة',
                         footer: 'إجمالي السجل: $totalTasks',
                         onTap: () => _showDetailsSheet(
@@ -1145,11 +1133,10 @@ class _PerformanceInsightsCard extends StatelessWidget {
                           title: 'تفاصيل المهام الفعالة',
                           subtitle: 'هذا الرقم يمثل المهام المستخدمة في الحسابات التشغيلية الحالية.',
                           facts: [
-                            _DetailFact(label: 'إجمالي المهام في السجل', value: '$totalTasks'),
-                            _DetailFact(label: 'المهام الملغاة المستبعدة', value: '$tasksCancelled', color: const Color(0xFFB71C1C)),
+                            _DetailFact(label: 'إجمالي السجل', value: '$totalTasks'),
                             _DetailFact(label: 'المهام الفعالة المعتمدة', value: '$effectiveTasks', color: const Color(0xFF6A1B9A)),
                           ],
-                          note: 'أي نسبة إنجاز أو ضغط تشغيلي في هذه البطاقة تعتمد فقط على المهام غير الملغاة.',
+                          note: 'أي نسبة إنجاز أو ضغط تشغيلي في هذه البطاقة تعتمد فقط على المهام الفعالة المعتمدة.',
                           actionLabel: 'فتح صفحة المهام',
                           onAction: () => Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const AdminTasksScreen()),
@@ -1210,27 +1197,6 @@ class _PerformanceInsightsCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      _InsightMetricCard(
-                        icon: Icons.cancel_schedule_send_outlined,
-                        color: const Color(0xFFB71C1C),
-                        title: 'المهام الملغاة',
-                        value: '$tasksCancelled',
-                        subtitle: 'ظاهرة للمتابعة فقط ومُستبعدة من جميع النسب الأساسية',
-                        footer: 'معدل الإلغاء من كامل السجل: ${_dashboardPercent(cancelledRatio)}',
-                        onTap: () => _showDetailsSheet(
-                          context,
-                          icon: Icons.cancel_schedule_send_outlined,
-                          color: const Color(0xFFB71C1C),
-                          title: 'تفاصيل الإلغاء',
-                          subtitle: 'تُعرض المهام الملغاة للمراجعة الإدارية فقط ولا تدخل في نسب الإنجاز أو الضغط.',
-                          facts: [
-                            _DetailFact(label: 'المهام الملغاة', value: '$tasksCancelled', color: const Color(0xFFB71C1C)),
-                            _DetailFact(label: 'إجمالي السجل', value: '$totalTasks'),
-                            _DetailFact(label: 'معدل الإلغاء', value: _dashboardPercent(cancelledRatio)),
-                          ],
-                          note: 'يمكن الاستفادة من هذا الرقم لتتبّع جودة الإدخال أو أسباب إيقاف الطلبات، لكن دون التأثير على تقييم الأداء التنفيذي.',
-                        ),
-                      ),
                     ];
                     return GridView.builder(
                       itemCount: cards.length,
@@ -1240,7 +1206,7 @@ class _PerformanceInsightsCard extends StatelessWidget {
                         crossAxisCount: wide ? 2 : 1,
                         crossAxisSpacing: 12,
                         mainAxisSpacing: 12,
-                        childAspectRatio: wide ? 2.05 : 2.7,
+                        childAspectRatio: wide ? 1.45 : 1.22,
                       ),
                       itemBuilder: (_, index) => cards[index],
                     );
@@ -1251,7 +1217,6 @@ class _PerformanceInsightsCard extends StatelessWidget {
                   scheme: scheme,
                   completedRatio: completionRatio,
                   activeRatio: activeRatio,
-                  cancelledRatio: cancelledRatio,
                 ),
               ],
             ),
@@ -1366,7 +1331,7 @@ class _PerformanceInsightsCard extends StatelessWidget {
                         crossAxisCount: wide ? 3 : 1,
                         crossAxisSpacing: 12,
                         mainAxisSpacing: 12,
-                        childAspectRatio: wide ? 1.1 : 2.55,
+                        childAspectRatio: wide ? 1.02 : 1.28,
                       ),
                       itemBuilder: (_, index) => cards[index],
                     );
@@ -1513,7 +1478,7 @@ class _InsightMetricCard extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const Spacer(),
+              const SizedBox(height: 12),
               Text(
                 footer,
                 style: TextStyle(
@@ -1534,13 +1499,11 @@ class _SegmentedInsightBar extends StatelessWidget {
   final ColorScheme scheme;
   final double completedRatio;
   final double activeRatio;
-  final double cancelledRatio;
 
   const _SegmentedInsightBar({
     required this.scheme,
     required this.completedRatio,
     required this.activeRatio,
-    required this.cancelledRatio,
   });
 
   @override
@@ -1593,7 +1556,6 @@ class _SegmentedInsightBar extends StatelessWidget {
           children: [
             _InsightChip(label: 'منجز ${_dashboardPercent(completedRatio)}', color: const Color(0xFF2E7D32)),
             _InsightChip(label: 'مفتوح ${_dashboardPercent(activeRatio)}', color: const Color(0xFFEF6C00)),
-            _InsightChip(label: 'ملغى ${_dashboardPercent(cancelledRatio)}', color: const Color(0xFFB71C1C)),
           ],
         ),
       ],
@@ -1682,7 +1644,7 @@ class _OperationsInsightCard extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const Spacer(),
+              const SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(99),
                 child: LinearProgressIndicator(

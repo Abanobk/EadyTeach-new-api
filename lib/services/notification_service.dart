@@ -38,6 +38,7 @@ String? _pendingTapPayload;
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
+    DartPluginRegistrant.ensureInitialized();
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp();
     }
@@ -619,6 +620,8 @@ class NotificationService {
 /// Background notification tap handler - must be top-level
 @pragma('vm:entry-point')
 void _onBackgroundNotificationTap(NotificationResponse response) {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
   debugPrint('[Background Notification Tap] payload: ${response.payload}');
   _pendingTapPayload = response.payload;
   WidgetsBinding.instance.addPostFrameCallback((_) {

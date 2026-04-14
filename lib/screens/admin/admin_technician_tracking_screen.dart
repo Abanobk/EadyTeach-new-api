@@ -220,12 +220,15 @@ class _AdminTechnicianTrackingScreenState extends State<AdminTechnicianTrackingS
     if (techId == null) return;
     setState(() => _loadingTrack = true);
     try {
+      final localCalendarDay = DateTime(_day.year, _day.month, _day.day);
       final res = await ApiService.query('technicianLocation.track', input: {
         'technicianId': techId,
         'date': _dayStr(_day),
         'fromHour': 0,
         'toHour': 23,
         'intervalMin': 30,
+        // يطابق «يوم التقويم» على جهاز الأدمن مع created_at (UTC) على السيرفر.
+        'utcOffsetMinutes': localCalendarDay.timeZoneOffset.inMinutes,
       });
       if (!mounted) return;
       setState(() {

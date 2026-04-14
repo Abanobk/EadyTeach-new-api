@@ -1370,8 +1370,33 @@ function technicianLocation_latest($input, $ctx) {
 
 /**
  * Admin: track points for a technician on a given day/time window.
- * input: { technicianId: number, date: 'YYYY-MM-DD', fromHour?: number, toHour?: number, intervalMin?: number }
+ * input: { technicianId: number, date: 'YYYY-MM-DD', fromHour?: number, toHour?: number, intervalMin?: number, utcOffsetMinutes?: number }
+ * utcOffsetMinutes: device offset for the selected calendar day (e.g. Egypt +120). Converts local midnight–end to UTC for TIMESTAMP comparison.
  */
+function _technicianTrackLocalDayUtcBounds(string $dateYmd, int $fromHour, int $toHour, int $offsetMinutes): array {
+    if ($offsetMinutes < -840 || $offsetMinutes > 840) {
+        throw new Exception('INVALID_TIMEZONE_OFFSET');
+    }
+    $sign = $offsetMinutes >= 0 ? '+' : '-';
+    $abs = abs($offsetMinutes);
+    $h = intdiv($abs, 60);
+    $m = $abs % 60;
+    $tzId = sprintf('%s%02d:%02d', $sign, $h, $m);
+    $tz = new DateTimeZone($tzId);
+    $fh = str_pad((string)$fromHour, 2, '0', STR_PAD_LEFT);
+    $th = str_pad((string)$toHour, 2, '0', STR_PAD_LEFT);
+    $start = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', "{$dateYmd} {$fh}:00:00", $tz);
+    $end = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', "{$dateYmd} {$th}:59:59", $tz);
+    if ($start === false || $end === false) {
+        throw new Exception('INVALID_DATE');
+    }
+    $utc = new DateTimeZone('UTC');
+    return [
+        $start->setTimezone($utc)->format('Y-m-d H:i:s'),
+        $end->setTimezone($utc)->format('Y-m-d H:i:s'),
+    ];
+}
+
 function technicianLocation_track($input, $ctx) {
     global $db;
     _requireAdminStaffSupervisor($ctx);
@@ -1392,8 +1417,13 @@ function technicianLocation_track($input, $ctx) {
     if ($intervalMin < 1) $intervalMin = 1;
     if ($intervalMin > 240) $intervalMin = 240;
 
-    $fromTs = "{$date} " . str_pad((string)$fromHour, 2, '0', STR_PAD_LEFT) . ":00:00";
-    $toTs = "{$date} " . str_pad((string)$toHour, 2, '0', STR_PAD_LEFT) . ":59:59";
+    $offsetRaw = $input['utcOffsetMinutes'] ?? null;
+    if ($offsetRaw !== null && $offsetRaw !== '') {
+        [$fromTs, $toTs] = _technicianTrackLocalDayUtcBounds($date, $fromHour, $toHour, (int)$offsetRaw);
+    } else {
+        $fromTs = "{$date} " . str_pad((string)$fromHour, 2, '0', STR_PAD_LEFT) . ":00:00";
+        $toTs = "{$date} " . str_pad((string)$toHour, 2, '0', STR_PAD_LEFT) . ":59:59";
+    }
 
     $stmt = $db->prepare("
         SELECT tl.id, tl.technician_id, tl.task_id, tl.request_id,

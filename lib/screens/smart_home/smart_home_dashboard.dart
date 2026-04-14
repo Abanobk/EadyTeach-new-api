@@ -6,7 +6,7 @@ import '../../providers/scenario_provider.dart';
 import '../../providers/smart_home_provider.dart';
 import '../../smart_home/models/app_device.dart';
 import '../../smart_home/models/scenario_model.dart';
-import '../../theme/app_theme.dart';
+import '../../utils/theme_modern.dart';
 import 'premium_scenario_card.dart';
 import 'scenario_editor_sheet.dart';
 
@@ -24,7 +24,6 @@ class _SmartHomeDashboardState extends State<SmartHomeDashboard> {
   @override
   void initState() {
     super.initState();
-    // Silent provisioning on entry (no HA login UI).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SmartHomeProvider>().initSilent();
       context.read<ScenarioProvider>().ensureInitialized();
@@ -77,6 +76,19 @@ class _SmartHomeDashboardState extends State<SmartHomeDashboard> {
     return entities.where((e) => e.domain == 'light' && e.isOn).length;
   }
 
+  int _countActiveDevices(List<AppDevice> entities) {
+    return entities.where((e) => e.isOn).length;
+  }
+
+  int _uniquePlacedRoomCount(List<AppDevice> entities) {
+    final keys = <String>{};
+    for (final e in entities) {
+      if (!e.isPlaced) continue;
+      keys.add('${e.floorName}__${e.roomName}');
+    }
+    return keys.length;
+  }
+
   IconData _iconForEntity(AppDevice e) {
     switch (e.domain) {
       case 'light':
@@ -93,6 +105,25 @@ class _SmartHomeDashboardState extends State<SmartHomeDashboard> {
         return Icons.lock_rounded;
       default:
         return Icons.device_unknown_rounded;
+    }
+  }
+
+  String _domainLabel(AppDevice e) {
+    switch (e.domain) {
+      case 'light':
+        return 'Light';
+      case 'switch':
+        return 'Switch';
+      case 'fan':
+        return 'Fan';
+      case 'climate':
+        return 'Climate';
+      case 'cover':
+        return 'Curtain';
+      case 'lock':
+        return 'Lock';
+      default:
+        return 'Device';
     }
   }
 
@@ -119,76 +150,79 @@ class _SmartHomeDashboardState extends State<SmartHomeDashboard> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        final scheme = Theme.of(ctx).colorScheme;
         final bottom = MediaQuery.of(ctx).viewInsets.bottom;
         return Padding(
           padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 8,
-            bottom: bottom + 20,
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: bottom + 16,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Edit location',
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
+          child: GlassCard(
+            borderRadius: 28,
+            tintColor: Colors.white,
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Edit location',
+                  style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: AppColorsModern.primary,
+                      ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                d.friendlyName,
-                style: TextStyle(
-                  color: scheme.onSurfaceVariant,
-                  fontSize: 13,
+                const SizedBox(height: 4),
+                Text(
+                  d.friendlyName,
+                  style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                        color: AppColorsModern.textSecondary,
+                      ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: floorCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Floor',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: floorCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Floor',
+                    border: OutlineInputBorder(),
+                  ),
+                  textCapitalization: TextCapitalization.words,
                 ),
-                textCapitalization: TextCapitalization.words,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: roomCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Room',
-                  hintText: 'Use "Unassigned" for the default bucket',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: roomCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Room',
+                    hintText: 'Use "Unassigned" for the default bucket',
+                    border: OutlineInputBorder(),
+                  ),
+                  textCapitalization: TextCapitalization.words,
                 ),
-                textCapitalization: TextCapitalization.words,
-              ),
-              const SizedBox(height: 18),
-              FilledButton(
-                onPressed: () async {
-                  await smart.assignToRoom(
-                    entityId: d.entityId,
-                    floorName: floorCtrl.text,
-                    roomName: roomCtrl.text,
-                  );
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: const Text('Save'),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () async {
-                  await smart.unassignDevice(d.entityId);
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: const Text('Reset to General / Unassigned'),
-              ),
-            ],
+                const SizedBox(height: 18),
+                FilledButton(
+                  onPressed: () async {
+                    await smart.assignToRoom(
+                      entityId: d.entityId,
+                      floorName: floorCtrl.text,
+                      roomName: roomCtrl.text,
+                    );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  child: const Text('Save location'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () async {
+                    await smart.unassignDevice(d.entityId);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  child: const Text('Reset to General / Unassigned'),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -203,8 +237,8 @@ class _SmartHomeDashboardState extends State<SmartHomeDashboard> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        final scheme = Theme.of(ctx).colorScheme;
         if (e.domain == 'light') {
           final initial = (e.brightness ?? (e.isOn ? 200 : 0)).clamp(0, 255);
           double v = initial.toDouble();
@@ -213,52 +247,87 @@ class _SmartHomeDashboardState extends State<SmartHomeDashboard> {
               padding: EdgeInsets.only(
                 left: 16,
                 right: 16,
-                top: 10,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+                top: 16,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    e.friendlyName,
-                    style: TextStyle(
-                      color: scheme.onSurface,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+              child: GlassCard(
+                borderRadius: 28,
+                tintColor: Colors.white,
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        _MiniIconBubble(
+                          icon: _iconForEntity(e),
+                          color: AppColorsModern.accent,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                e.friendlyName,
+                                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColorsModern.primary,
+                                    ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${e.floorName} · ${e.roomName}',
+                                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                      color: AppColorsModern.textSecondary,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Brightness',
-                    style: TextStyle(
-                      color: scheme.onSurfaceVariant,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                    const SizedBox(height: 18),
+                    Text(
+                      'Brightness',
+                      style: Theme.of(ctx).textTheme.labelLarge?.copyWith(
+                            color: AppColorsModern.textSecondary,
+                          ),
                     ),
-                  ),
-                  Slider(
-                    value: v,
-                    min: 0,
-                    max: 255,
-                    onChanged: (nv) => setSheet(() => v = nv),
-                    onChangeEnd: (nv) =>
-                        smart.setBrightness(e, nv.round().clamp(0, 255)),
-                  ),
-                  const SizedBox(height: 4),
-                  TextButton.icon(
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      await _openEditLocation(e);
-                    },
-                    icon: const Icon(Icons.edit_location_alt_rounded, size: 18),
-                    label: const Text('Edit floor & room'),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Done'),
-                  ),
-                ],
+                    Slider(
+                      value: v,
+                      min: 0,
+                      max: 255,
+                      activeColor: AppColorsModern.accent,
+                      onChanged: (nv) => setSheet(() => v = nv),
+                      onChangeEnd: (nv) =>
+                          smart.setBrightness(e, nv.round().clamp(0, 255)),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              Navigator.pop(ctx);
+                              await _openEditLocation(e);
+                            },
+                            icon: const Icon(Icons.edit_location_alt_rounded, size: 18),
+                            label: const Text('Edit location'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Done'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -266,37 +335,75 @@ class _SmartHomeDashboardState extends State<SmartHomeDashboard> {
 
         return Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                e.friendlyName,
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+          child: GlassCard(
+            borderRadius: 28,
+            tintColor: Colors.white,
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    _MiniIconBubble(
+                      icon: _iconForEntity(e),
+                      color: e.isOn ? AppColorsModern.accent : AppColorsModern.primary,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            e.friendlyName,
+                            style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColorsModern.primary,
+                                ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${e.floorName} · ${e.roomName}',
+                            style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                  color: AppColorsModern.textSecondary,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'No detailed controls for this device yet.',
-                style: TextStyle(color: scheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 12),
-              TextButton.icon(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  await _openEditLocation(e);
-                },
-                icon: const Icon(Icons.edit_location_alt_rounded, size: 18),
-                label: const Text('Edit floor & room'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Close'),
-              ),
-            ],
+                const SizedBox(height: 12),
+                Text(
+                  'No detailed controls for this device yet.',
+                  style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                        color: AppColorsModern.textSecondary,
+                      ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await _openEditLocation(e);
+                        },
+                        icon: const Icon(Icons.edit_location_alt_rounded, size: 18),
+                        label: const Text('Edit location'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Close'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -307,7 +414,7 @@ class _SmartHomeDashboardState extends State<SmartHomeDashboard> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final smart = context.watch<SmartHomeProvider>();
-    final scheme = Theme.of(context).colorScheme;
+    final scenarios = context.watch<ScenarioProvider>();
 
     final floors = ['All', ...smart.floorNames()];
     final floorOk = floors.contains(_selectedFloor);
@@ -336,13 +443,27 @@ class _SmartHomeDashboardState extends State<SmartHomeDashboard> {
     final unassigned = smart.unassignedDevices;
     final assignedEntities = smart.devicesForFloorAndRoom(floor, room);
     final lightsOn = _countLightsOn(smart.devices);
+    final activeDevices = _countActiveDevices(smart.devices);
     final showFilterHint = assignedEntities.isEmpty &&
         smart.placedDevices.isNotEmpty &&
         (floor != 'All' || room != 'All');
 
     return Scaffold(
+      backgroundColor: AppColorsModern.primary,
       appBar: AppBar(
-        title: const Text('Smart Home'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: const Text(
+          'Smart Home',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.2,
+          ),
+        ),
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           if (smart.isEnabled)
             IconButton(
@@ -352,369 +473,597 @@ class _SmartHomeDashboardState extends State<SmartHomeDashboard> {
             ),
           IconButton(
             tooltip: 'Refresh',
-            onPressed: smart.refreshStates,
+            onPressed: smart.isEnabled ? smart.refreshStates : smart.initSilent,
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
       body: Container(
-        decoration: AppThemeDecorations.gradientBackground(context),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _HeaderCard(
-                  title: 'Welcome, ${auth.userDisplayName}',
-                  subtitle: smart.isEnabled
-                      ? 'Status: $lightsOn lights on · New devices appear under Unassigned'
-                      : 'Smart Home is not activated for this account',
-                  isEnabled: smart.isEnabled,
-                  isLoading: smart.isLoading,
-                  error: smart.error,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF06162D),
+              Color(0xFF0A1F3E),
+              Color(0xFF10294F),
+            ],
+          ),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: -120,
+              right: -60,
+              child: Container(
+                width: 240,
+                height: 240,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColorsModern.accent.withOpacity(0.16),
                 ),
-                if (smart.isEnabled) ...[
-                  const SizedBox(height: 12),
-                  Consumer<ScenarioProvider>(
-                    builder: (context, sp, _) {
-                      if (sp.isLoading && sp.scenarios.isEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: LinearProgressIndicator(),
-                        );
-                      }
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                'Scenarios',
-                                style: TextStyle(
-                                  color: scheme.onSurface,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const Spacer(),
-                              IconButton(
-                                tooltip: 'New scenario',
-                                onPressed: () =>
-                                    showScenarioEditorSheet(context),
-                                icon: const Icon(
-                                  Icons.add_circle_outline_rounded,
-                                ),
-                              ),
-                            ],
+              ),
+            ),
+            Positioned(
+              bottom: -100,
+              left: -60,
+              child: Container(
+                width: 220,
+                height: 220,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.07),
+                ),
+              ),
+            ),
+            SafeArea(
+              child: RefreshIndicator(
+                color: AppColorsModern.accent,
+                onRefresh: smart.isEnabled ? smart.refreshStates : smart.initSilent,
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      sliver: SliverList(
+                        delegate: SliverChildListDelegate([
+                          _HeroHeader(
+                            userName: auth.userDisplayName,
+                            isEnabled: smart.isEnabled,
+                            isLoading: smart.isLoading,
+                            error: smart.error,
+                            lightsOn: lightsOn,
+                            activeDevices: activeDevices,
+                            totalDevices: smart.devices.length,
+                            floorCount: smart.floorNames().length,
+                            roomCount: _uniquePlacedRoomCount(smart.devices),
+                            scenarioCount: scenarios.scenarios.length,
                           ),
-                          if (sp.scenarios.isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Text(
-                                'Tap + to create a scenario. Actions run in parallel in Home Assistant.',
-                                style: TextStyle(
-                                  color: scheme.onSurfaceVariant,
-                                  fontSize: 12.5,
-                                  height: 1.35,
-                                ),
+                          const SizedBox(height: 18),
+                          if (smart.isEnabled) ...[
+                            _SectionShell(
+                              title: 'Quick scenes',
+                              subtitle: scenarios.scenarios.isEmpty
+                                  ? 'Create one-tap routines to control multiple devices together.'
+                                  : 'Run or edit your saved scenes instantly without changing the connection logic.',
+                              trailing: IconButton(
+                                tooltip: 'New scenario',
+                                onPressed: () => showScenarioEditorSheet(context),
+                                icon: const Icon(Icons.add_circle_outline_rounded),
+                                color: Colors.white,
                               ),
-                            )
-                          else
-                            SizedBox(
-                              height: 168,
-                              child: ListView.separated(
-                                scrollDirection: Axis.horizontal,
-                                padding: EdgeInsets.zero,
-                                itemCount: sp.scenarios.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(width: 10),
-                                itemBuilder: (ctx, i) {
-                                  final s = sp.scenarios[i];
-                                  return PremiumScenarioCard(
-                                    scenario: s,
-                                    isRunning: sp.isScenarioRunning(s.id),
-                                    onTap: () => _runScenario(context, s),
-                                    onEdit: () => showScenarioEditorSheet(
-                                      context,
-                                      existing: s,
-                                    ),
-                                    onDelete: () =>
-                                        _confirmDeleteScenario(context, s),
-                                  );
-                                },
-                              ),
+                              child: scenarios.isLoading && scenarios.scenarios.isEmpty
+                                  ? const Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 10),
+                                      child: LinearProgressIndicator(),
+                                    )
+                                  : scenarios.scenarios.isEmpty
+                                      ? _InlineCallout(
+                                          icon: Icons.auto_awesome_rounded,
+                                          title: 'No scenes yet',
+                                          subtitle: 'Use the add button to create a lighting, curtain, or all-off scene.',
+                                          actionLabel: 'Create scene',
+                                          onPressed: () => showScenarioEditorSheet(context),
+                                        )
+                                      : SizedBox(
+                                          height: 168,
+                                          child: ListView.separated(
+                                            scrollDirection: Axis.horizontal,
+                                            itemCount: scenarios.scenarios.length,
+                                            separatorBuilder: (_, __) => const SizedBox(width: 10),
+                                            itemBuilder: (ctx, i) {
+                                              final s = scenarios.scenarios[i];
+                                              return PremiumScenarioCard(
+                                                scenario: s,
+                                                isRunning: scenarios.isScenarioRunning(s.id),
+                                                onTap: () => _runScenario(context, s),
+                                                onEdit: () => showScenarioEditorSheet(
+                                                  context,
+                                                  existing: s,
+                                                ),
+                                                onDelete: () => _confirmDeleteScenario(context, s),
+                                              );
+                                            },
+                                          ),
+                                        ),
                             ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
-                const SizedBox(height: 10),
-                Text(
-                  'Floor',
-                  style: TextStyle(
-                    color: scheme.onSurfaceVariant,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                SizedBox(
-                  height: 44,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: floors.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, i) {
-                      final f = floors[i];
-                      final selected = f == floor;
-                      return ChoiceChip(
-                        label: Text(f),
-                        selected: selected,
-                        onSelected: (_) => setState(() {
-                          _selectedFloor = f;
-                          _selectedRoom = 'All';
-                        }),
-                        side: BorderSide(
-                          color: selected
-                              ? scheme.primary
-                              : scheme.outline.withOpacity(0.4),
-                        ),
-                        selectedColor: scheme.primary.withOpacity(0.18),
-                        labelStyle: TextStyle(
-                          color: selected
-                              ? scheme.primary
-                              : scheme.onSurfaceVariant,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w600,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Room',
-                  style: TextStyle(
-                    color: scheme.onSurfaceVariant,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                SizedBox(
-                  height: 44,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: rooms.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, i) {
-                      final r = rooms[i];
-                      final selected = r == room;
-                      return ChoiceChip(
-                        label: Text(r),
-                        selected: selected,
-                        onSelected: (_) => setState(() => _selectedRoom = r),
-                        side: BorderSide(
-                          color: selected
-                              ? scheme.primary
-                              : scheme.outline.withOpacity(0.4),
-                        ),
-                        selectedColor: scheme.primary.withOpacity(0.18),
-                        labelStyle: TextStyle(
-                          color: selected
-                              ? scheme.primary
-                              : scheme.onSurfaceVariant,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w600,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Expanded(
-                  child: !smart.isEnabled
-                      ? _EmptyState(
-                          title: 'Not provisioned',
-                          subtitle:
-                              'Ask the admin to add your Home Assistant URL + token.',
-                          onRetry: smart.initSilent,
-                        )
-                      : smart.devices.isEmpty
-                          ? _EmptyState(
-                              title: 'No devices',
-                              subtitle:
-                                  'Pull to refresh or add controllable devices in Home Assistant.',
-                              onRetry: smart.refreshStates,
-                            )
-                          : ListView(
-                              padding: EdgeInsets.zero,
+                            const SizedBox(height: 16),
+                          ],
+                          _SectionShell(
+                            title: 'Browse by space',
+                            subtitle: 'Filter devices by floor and room for a faster and cleaner control experience.',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                if (unassigned.isNotEmpty) ...[
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      'Unassigned devices',
-                                      style: TextStyle(
-                                        color: scheme.onSurface,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  GridView.builder(
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    itemCount: unassigned.length,
-                                    gridDelegate:
-                                        const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2,
-                                      crossAxisSpacing: 12,
-                                      mainAxisSpacing: 12,
-                                      childAspectRatio: 1.08,
-                                    ),
-                                    itemBuilder: (context, index) {
-                                      final e = unassigned[index];
-                                      return _DeviceCard(
-                                        name: e.friendlyName,
-                                        subtitle:
-                                            '${e.floorName} · ${e.roomName}',
-                                        icon: _iconForEntity(e),
-                                        status: _statusForEntity(e),
-                                        isOn: e.isOn,
-                                        onTap: () => smart.toggleDevice(e),
-                                        onLongPress: () => _openDetails(e),
-                                        onEdit: () => _openEditLocation(e),
-                                      );
-                                    },
-                                  ),
-                                  const SizedBox(height: 20),
-                                ],
-                                if (assignedEntities.isNotEmpty) ...[
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      floor == 'All' && room == 'All'
-                                          ? 'All placed devices'
-                                          : 'Devices',
-                                      style: TextStyle(
-                                        color: scheme.onSurface,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  GridView.builder(
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    itemCount: assignedEntities.length,
-                                    gridDelegate:
-                                        const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2,
-                                      crossAxisSpacing: 12,
-                                      mainAxisSpacing: 12,
-                                      childAspectRatio: 1.08,
-                                    ),
-                                    itemBuilder: (context, index) {
-                                      final e = assignedEntities[index];
-                                      return _DeviceCard(
-                                        name: e.friendlyName,
-                                        subtitle:
-                                            '${e.floorName} · ${e.roomName}',
-                                        icon: _iconForEntity(e),
-                                        status: _statusForEntity(e),
-                                        isOn: e.isOn,
-                                        onTap: () => smart.toggleDevice(e),
-                                        onLongPress: () => _openDetails(e),
-                                        onEdit: () => _openEditLocation(e),
-                                      );
-                                    },
-                                  ),
-                                ],
-                                if (showFilterHint)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 8),
-                                    child: Text(
-                                      'No devices match this floor/room. Try All for floor and room.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: scheme.onSurfaceVariant,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ),
+                                _FilterGroup(
+                                  label: 'Floor',
+                                  items: floors,
+                                  selectedValue: floor,
+                                  onSelected: (value) => setState(() {
+                                    _selectedFloor = value;
+                                    _selectedRoom = 'All';
+                                  }),
+                                ),
+                                const SizedBox(height: 14),
+                                _FilterGroup(
+                                  label: 'Room',
+                                  items: rooms,
+                                  selectedValue: room,
+                                  onSelected: (value) => setState(() => _selectedRoom = value),
+                                ),
                               ],
                             ),
+                          ),
+                          const SizedBox(height: 16),
+                          if (!smart.isEnabled)
+                            _PremiumEmptyState(
+                              icon: Icons.home_work_rounded,
+                              accent: AppColorsModern.accent,
+                              title: 'Smart Home is not provisioned yet',
+                              subtitle:
+                                  'The connection flow with Home Assistant is kept unchanged. Once the admin adds the URL and token, this dashboard will immediately show your devices and rooms here in the new modern layout.',
+                              actionLabel: 'Retry connection',
+                              onPressed: smart.initSilent,
+                            )
+                          else if (smart.devices.isEmpty)
+                            _PremiumEmptyState(
+                              icon: Icons.devices_other_rounded,
+                              accent: Colors.white,
+                              title: 'No controllable devices found',
+                              subtitle:
+                                  'Pull to refresh or add compatible devices in Home Assistant. As soon as they appear, you can assign them to floors and rooms from this page.',
+                              actionLabel: 'Refresh devices',
+                              onPressed: smart.refreshStates,
+                            )
+                          else ...[
+                            if (unassigned.isNotEmpty) ...[
+                              _SectionShell(
+                                title: 'New or unassigned devices',
+                                subtitle: 'These devices are online but not yet attached to a room. Long-press or use the location icon to organize them.',
+                                child: _DeviceGrid(
+                                  devices: unassigned,
+                                  iconForEntity: _iconForEntity,
+                                  domainLabel: _domainLabel,
+                                  statusForEntity: _statusForEntity,
+                                  onToggle: (e) => smart.toggleDevice(e),
+                                  onOpenDetails: _openDetails,
+                                  onEditLocation: _openEditLocation,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+                            _SectionShell(
+                              title: floor == 'All' && room == 'All'
+                                  ? 'Your organized devices'
+                                  : 'Devices in $floor${room == 'All' ? '' : ' · $room'}',
+                              subtitle: floor == 'All' && room == 'All'
+                                  ? 'A cleaner overview of all devices already assigned to rooms.'
+                                  : 'Use the filters above to jump between areas without changing any connection settings.',
+                              child: assignedEntities.isEmpty
+                                  ? Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        'No devices match this floor or room yet. Try selecting All or move devices from the unassigned section.',
+                                        textAlign: TextAlign.center,
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                              color: Colors.white70,
+                                              height: 1.45,
+                                            ),
+                                      ),
+                                    )
+                                  : _DeviceGrid(
+                                      devices: assignedEntities,
+                                      iconForEntity: _iconForEntity,
+                                      domainLabel: _domainLabel,
+                                      statusForEntity: _statusForEntity,
+                                      onToggle: (e) => smart.toggleDevice(e),
+                                      onOpenDetails: _openDetails,
+                                      onEditLocation: _openEditLocation,
+                                    ),
+                            ),
+                            if (showFilterHint)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 14),
+                                child: Text(
+                                  'No devices match this floor/room. Try switching both filters back to All.',
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        color: Colors.white70,
+                                      ),
+                                ),
+                              ),
+                          ],
+                        ]),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _HeaderCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
+class _HeroHeader extends StatelessWidget {
+  final String userName;
   final bool isEnabled;
   final bool isLoading;
   final String? error;
+  final int lightsOn;
+  final int activeDevices;
+  final int totalDevices;
+  final int floorCount;
+  final int roomCount;
+  final int scenarioCount;
 
-  const _HeaderCard({
-    required this.title,
-    required this.subtitle,
+  const _HeroHeader({
+    required this.userName,
     required this.isEnabled,
     required this.isLoading,
     required this.error,
+    required this.lightsOn,
+    required this.activeDevices,
+    required this.totalDevices,
+    required this.floorCount,
+    required this.roomCount,
+    required this.scenarioCount,
   });
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: scheme.surface.withOpacity(0.9),
-        border: Border.all(color: scheme.outline.withOpacity(0.2)),
+        borderRadius: BorderRadius.circular(28),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(0.16),
+            Colors.white.withOpacity(0.06),
+          ],
+        ),
+        border: Border.all(color: Colors.white.withOpacity(0.14)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.10),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 26,
+            offset: const Offset(0, 16),
           ),
         ],
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: AppColorsModern.accent.withOpacity(0.16),
+                  border: Border.all(color: AppColorsModern.accent.withOpacity(0.35)),
+                ),
+                child: const Icon(
+                  Icons.home_rounded,
+                  color: AppColorsModern.accent,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Welcome, $userName',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 28,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      error != null
+                          ? 'Connection issue: $error'
+                          : isEnabled
+                              ? 'A modern control hub for your home devices, rooms, and quick scenes.'
+                              : 'Your modern dashboard is ready and will activate as soon as Home Assistant credentials are provisioned.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.white.withOpacity(0.82),
+                            height: 1.45,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isLoading)
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: AppColorsModern.accent,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _StatPill(
+                icon: Icons.wb_incandescent_rounded,
+                label: 'Lights on',
+                value: '$lightsOn',
+                highlight: true,
+              ),
+              _StatPill(
+                icon: Icons.power_settings_new_rounded,
+                label: 'Active',
+                value: '$activeDevices / $totalDevices',
+              ),
+              _StatPill(
+                icon: Icons.layers_rounded,
+                label: 'Floors',
+                value: '$floorCount',
+              ),
+              _StatPill(
+                icon: Icons.meeting_room_rounded,
+                label: 'Rooms',
+                value: '$roomCount',
+              ),
+              _StatPill(
+                icon: Icons.auto_mode_rounded,
+                label: 'Scenes',
+                value: '$scenarioCount',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool highlight;
+
+  const _StatPill({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: highlight
+            ? AppColorsModern.accent.withOpacity(0.18)
+            : Colors.white.withOpacity(0.08),
+        border: Border.all(
+          color: highlight
+              ? AppColorsModern.accent.withOpacity(0.34)
+              : Colors.white.withOpacity(0.10),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: highlight ? AppColorsModern.accent : Colors.white),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Colors.white70,
+                    ),
+              ),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionShell extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget child;
+  final Widget? trailing;
+
+  const _SectionShell({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: Colors.white.withOpacity(0.07),
+        border: Border.all(color: Colors.white.withOpacity(0.10)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.white70,
+                            height: 1.45,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              if (trailing != null) trailing!,
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterGroup extends StatelessWidget {
+  final String label;
+  final List<String> items;
+  final String selectedValue;
+  final ValueChanged<String> onSelected;
+
+  const _FilterGroup({
+    required this.label,
+    required this.items,
+    required this.selectedValue,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: items.map((item) {
+            final selected = item == selectedValue;
+            return ChoiceChip(
+              label: Text(item),
+              selected: selected,
+              onSelected: (_) => onSelected(item),
+              backgroundColor: Colors.white.withOpacity(0.05),
+              selectedColor: AppColorsModern.accent.withOpacity(0.18),
+              side: BorderSide(
+                color: selected
+                    ? AppColorsModern.accent.withOpacity(0.45)
+                    : Colors.white.withOpacity(0.10),
+              ),
+              labelStyle: TextStyle(
+                color: selected ? AppColorsModern.accent : Colors.white,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _InlineCallout extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String actionLabel;
+  final VoidCallback onPressed;
+
+  const _InlineCallout({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.actionLabel,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.06),
+        border: Border.all(color: Colors.white.withOpacity(0.10)),
+      ),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: isEnabled
-                  ? scheme.primary.withOpacity(0.18)
-                  : scheme.outline.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              Icons.home_work_rounded,
-              color: isEnabled ? scheme.primary : scheme.onSurfaceVariant,
-            ),
-          ),
+          _MiniIconBubble(icon: icon, color: AppColorsModern.accent),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -722,43 +1071,117 @@ class _HeaderCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: scheme.onSurface,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
-                  error != null ? 'Error: $error' : subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: error != null
-                        ? scheme.error
-                        : scheme.onSurfaceVariant,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white70,
+                        height: 1.45,
+                      ),
                 ),
               ],
             ),
           ),
-          if (isLoading) ...[
-            const SizedBox(width: 10),
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: scheme.primary,
-              ),
+          const SizedBox(width: 12),
+          FilledButton(
+            onPressed: onPressed,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColorsModern.accent,
+              foregroundColor: Colors.black,
             ),
-          ],
+            child: Text(actionLabel),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _DeviceGrid extends StatelessWidget {
+  final List<AppDevice> devices;
+  final IconData Function(AppDevice e) iconForEntity;
+  final String Function(AppDevice e) domainLabel;
+  final String Function(AppDevice e) statusForEntity;
+  final Future<void> Function(AppDevice e) onOpenDetails;
+  final Future<void> Function(AppDevice e) onEditLocation;
+  final ValueChanged<AppDevice> onToggle;
+
+  const _DeviceGrid({
+    required this.devices,
+    required this.iconForEntity,
+    required this.domainLabel,
+    required this.statusForEntity,
+    required this.onOpenDetails,
+    required this.onEditLocation,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        int crossAxisCount = 2;
+        if (constraints.maxWidth >= 980) {
+          crossAxisCount = 4;
+        } else if (constraints.maxWidth >= 700) {
+          crossAxisCount = 3;
+        }
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: devices.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: constraints.maxWidth < 420 ? 0.90 : 1.02,
+          ),
+          itemBuilder: (context, index) {
+            final e = devices[index];
+            return _DeviceCard(
+              name: e.friendlyName,
+              subtitle: '${e.floorName} · ${e.roomName}',
+              typeLabel: domainLabel(e),
+              icon: iconForEntity(e),
+              status: statusForEntity(e),
+              isOn: e.isOn,
+              onTap: () => onToggle(e),
+              onLongPress: () => onOpenDetails(e),
+              onEdit: () => onEditLocation(e),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _MiniIconBubble extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+
+  const _MiniIconBubble({
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: color.withOpacity(0.14),
+        border: Border.all(color: color.withOpacity(0.30)),
+      ),
+      child: Icon(icon, color: color),
     );
   }
 }
@@ -766,6 +1189,7 @@ class _HeaderCard extends StatelessWidget {
 class _DeviceCard extends StatelessWidget {
   final String name;
   final String? subtitle;
+  final String typeLabel;
   final IconData icon;
   final String status;
   final bool isOn;
@@ -776,6 +1200,7 @@ class _DeviceCard extends StatelessWidget {
   const _DeviceCard({
     required this.name,
     this.subtitle,
+    required this.typeLabel,
     required this.icon,
     required this.status,
     required this.isOn,
@@ -786,41 +1211,43 @@ class _DeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final bg = isOn
-        ? scheme.primary.withOpacity(0.16)
-        : scheme.surface.withOpacity(0.92);
+    final borderColor = isOn
+        ? AppColorsModern.accent.withOpacity(0.36)
+        : Colors.white.withOpacity(0.10);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            color: bg,
-            border: Border.all(
-              color: isOn
-                  ? scheme.primary.withOpacity(0.35)
-                  : scheme.outline.withOpacity(0.18),
+            borderRadius: BorderRadius.circular(24),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isOn
+                  ? [
+                      Colors.white.withOpacity(0.16),
+                      AppColorsModern.accent.withOpacity(0.10),
+                    ]
+                  : [
+                      Colors.white.withOpacity(0.09),
+                      Colors.white.withOpacity(0.05),
+                    ],
             ),
+            border: Border.all(color: borderColor),
             boxShadow: [
-              if (isOn)
-                BoxShadow(
-                  color: scheme.primary.withOpacity(0.22),
-                  blurRadius: 18,
-                  offset: const Offset(0, 10),
-                )
-              else
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, 10),
-                ),
+              BoxShadow(
+                color: isOn
+                    ? AppColorsModern.accent.withOpacity(0.12)
+                    : Colors.black.withOpacity(0.10),
+                blurRadius: 20,
+                offset: const Offset(0, 12),
+              ),
             ],
           ),
           child: Column(
@@ -828,78 +1255,102 @@ class _DeviceCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: isOn
-                          ? scheme.primary.withOpacity(0.22)
-                          : scheme.outline.withOpacity(0.10),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(
-                      icon,
-                      color: isOn ? scheme.primary : scheme.onSurfaceVariant,
-                    ),
+                  _MiniIconBubble(
+                    icon: icon,
+                    color: isOn ? AppColorsModern.accent : Colors.white,
                   ),
                   const Spacer(),
                   if (onEdit != null)
                     IconButton(
                       tooltip: 'Edit location',
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 36,
-                        minHeight: 36,
-                      ),
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                       onPressed: onEdit,
-                      icon: Icon(
+                      icon: const Icon(
                         Icons.edit_location_alt_rounded,
                         size: 20,
-                        color: scheme.onSurfaceVariant,
+                        color: Colors.white70,
                       ),
                     ),
-                  Switch(
-                    value: isOn,
-                    onChanged: (_) => onTap(),
-                    activeColor: scheme.primary,
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      color: Colors.white.withOpacity(0.08),
+                    ),
+                    child: Text(
+                      typeLabel,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      color: isOn
+                          ? AppColorsModern.accent.withOpacity(0.18)
+                          : Colors.white.withOpacity(0.08),
+                    ),
+                    child: Text(
+                      status,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: isOn ? AppColorsModern.accent : Colors.white70,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
                   ),
                 ],
               ),
               const Spacer(),
               Text(
                 name,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
-                ),
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      height: 1.25,
+                    ),
               ),
               if (subtitle != null) ...[
-                const SizedBox(height: 2),
+                const SizedBox(height: 6),
                 Text(
                   subtitle!,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: scheme.onSurfaceVariant,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white70,
+                      ),
                 ),
               ],
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    color: isOn ? scheme.primary : scheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      isOn ? 'Tap to turn off' : 'Tap to turn on',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.white60,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
                   ),
-                ),
+                  Switch(
+                    value: isOn,
+                    onChanged: (_) => onTap(),
+                    activeColor: AppColorsModern.accent,
+                  ),
+                ],
               ),
             ],
           ),
@@ -909,58 +1360,83 @@ class _DeviceCard extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
+class _PremiumEmptyState extends StatelessWidget {
+  final IconData icon;
+  final Color accent;
   final String title;
   final String subtitle;
-  final VoidCallback onRetry;
+  final String actionLabel;
+  final VoidCallback onPressed;
 
-  const _EmptyState({
+  const _PremiumEmptyState({
+    required this.icon,
+    required this.accent,
     required this.title,
     required this.subtitle,
-    required this.onRetry,
+    required this.actionLabel,
+    required this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        constraints: const BoxConstraints(maxWidth: 520),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: scheme.surface.withOpacity(0.9),
-          border: Border.all(color: scheme.outline.withOpacity(0.2)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.home_work_rounded, size: 44, color: scheme.primary),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              style: TextStyle(
-                color: scheme.onSurface,
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
-            ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(0.11),
+            Colors.white.withOpacity(0.05),
           ],
         ),
+        border: Border.all(color: Colors.white.withOpacity(0.10)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 74,
+            height: 74,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              color: accent.withOpacity(0.14),
+              border: Border.all(color: accent.withOpacity(0.30)),
+            ),
+            child: Icon(icon, size: 36, color: accent),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white70,
+                  height: 1.55,
+                ),
+          ),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            onPressed: onPressed,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColorsModern.accent,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            ),
+            icon: const Icon(Icons.refresh_rounded),
+            label: Text(actionLabel),
+          ),
+        ],
       ),
     );
   }
 }
-

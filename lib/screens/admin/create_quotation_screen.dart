@@ -807,6 +807,8 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
             'productId': item['productId'] is int ? item['productId'] as int : int.tryParse(item['productId'].toString()),
             'productName': item['productName'] as String,
             'productNameAr': item['productName'] as String,
+            if (item['productDescription'] != null && item['productDescription'].toString().trim().isNotEmpty)
+              'productDescription': item['productDescription'].toString().trim(),
             'description': descParts.isEmpty ? null : descParts.join(' | '),
             'imageUrl': item['productImage'],
             'quantity': item['qty'] as int,

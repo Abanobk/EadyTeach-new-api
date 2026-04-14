@@ -596,8 +596,24 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return '${cut.trim()}...';
   }
 
+  static String _pdfLegacyBaseDescription(String raw) {
+    final cleaned = _pdfCleanText(raw, preserveNewLines: true);
+    if (cleaned.isEmpty) return '';
+    if (cleaned.contains(' | ')) {
+      return cleaned.split(' | ').first.trim();
+    }
+    return cleaned;
+  }
+
   static String _pdfComposeItemDescription(Map<String, dynamic> item) {
-    final description = _pdfDescriptionPreview(item['description']?.toString() ?? '');
+    final originalDescription = _pdfDescriptionPreview(
+      item['pdfOriginalDescription']?.toString() ?? item['productDescription']?.toString() ?? '',
+    );
+    if (originalDescription.isNotEmpty) return originalDescription;
+
+    final description = _pdfDescriptionPreview(
+      _pdfLegacyBaseDescription(item['description']?.toString() ?? ''),
+    );
     if (description.isNotEmpty) return description;
 
     final selectedColor = _pdfNormalizeField(item['selectedColor']);
@@ -923,6 +939,35 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return base.replace(path: '/app/', queryParameters: {'productId': '$productId'}, fragment: '').toString();
   }
 
+  Future<Map<int, String>> _pdfFetchOriginalDescriptions(List items) async {
+    final ids = items
+        .whereType<Map>()
+        .map((raw) => int.tryParse(raw['productId']?.toString() ?? raw['id']?.toString() ?? '') ?? 0)
+        .where((id) => id > 0)
+        .toSet();
+    if (ids.isEmpty) return {};
+
+    try {
+      final res = await ApiService.query('products.list');
+      final data = res['data'];
+      if (data is! List) return {};
+      final out = <int, String>{};
+      for (final raw in data) {
+        if (raw is! Map) continue;
+        final id = int.tryParse(raw['id']?.toString() ?? '') ?? 0;
+        if (!ids.contains(id)) continue;
+        final description = _pdfCleanText(
+          (raw['descriptionAr'] ?? raw['description'] ?? '').toString(),
+          preserveNewLines: true,
+        );
+        if (description.isNotEmpty) out[id] = description;
+      }
+      return out;
+    } catch (_) {
+      return {};
+    }
+  }
+
   Future<Uint8List> _buildPdfBytes() async {
     final q = _quotation!;
     await _ensurePdfFontsLoaded();
@@ -935,6 +980,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     final discountAmt = ct['discountAmount'] ?? 0.0;
     final totalAmt = ct['totalAmount'] ?? 0.0;
 
+    final originalDescriptions = await _pdfFetchOriginalDescriptions(items);
     final Map<int, pw.ImageProvider> itemImages = {};
     for (int i = 0; i < items.length; i++) {
       final item = items[i] as Map;
@@ -998,6 +1044,11 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           ...List.generate(items.length, (i) {
             final item = items[i] as Map;
             final itemMap = Map<String, dynamic>.from(item);
+            final productId = int.tryParse(item['productId']?.toString() ?? item['id']?.toString() ?? '') ?? 0;
+            final originalDescription = originalDescriptions[productId];
+            if (originalDescription != null && originalDescription.isNotEmpty) {
+              itemMap['pdfOriginalDescription'] = originalDescription;
+            }
             final rawUp = double.tryParse(item['unitPrice']?.toString() ?? '0') ?? 0;
             final up = quotationPdfClientUnitPriceForItem(itemMap);
             final qty = int.tryParse(item['qty']?.toString() ?? item['quantity']?.toString() ?? '1') ?? 1;

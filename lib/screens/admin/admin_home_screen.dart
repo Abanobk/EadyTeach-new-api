@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -778,11 +779,178 @@ int _dashboardInt(Map<String, dynamic>? s, String key) {
   return int.tryParse('${raw ?? 0}') ?? 0;
 }
 
-/// بطاقة واحدة كبيرة: مهام (إجمالي / منجز / نسبة / متاحة) + ملخص طلبات وعملاء ومنتجات
+double _dashboardRatio(num numerator, num denominator) {
+  if (denominator <= 0) return 0;
+  return (numerator / denominator).clamp(0.0, 1.0);
+}
+
+String _dashboardPercent(double ratio) => '${(ratio * 100).round()}٪';
+
 class _PerformanceInsightsCard extends StatelessWidget {
   final Map<String, dynamic>? stats;
 
   const _PerformanceInsightsCard({required this.stats});
+
+  String _smartSummary({
+    required bool taskBreakdownReady,
+    required int effectiveTasks,
+    required int totalTasks,
+    required int tasksCancelled,
+    required double completionRatio,
+    required int ordersPending,
+    required double pendingRatio,
+  }) {
+    if (!taskBreakdownReady) {
+      return 'البيانات الأساسية متاحة، لكن قراءة المهام الذكية تحتاج حقول التوزيع التفصيلي من الخادم.';
+    }
+    if (effectiveTasks == 0 && ordersPending == 0) {
+      return 'الوضع التشغيلي هادئ حالياً؛ لا توجد مهام فعّالة أو طلبات معلقة تحتاج تدخلاً فورياً.';
+    }
+    if (completionRatio >= 0.75 && pendingRatio <= 0.25) {
+      return 'الأداء مستقر؛ نسبة الإنجاز مرتفعة والضغط على الطلبات ما زال ضمن النطاق المريح.';
+    }
+    if (ordersPending > 0 && pendingRatio >= 0.45) {
+      return 'يوجد ضغط تشغيلي واضح في الطلبات، ويُفضَّل مراجعة الطلبات المعلقة قبل توسعة الحمل الحالي.';
+    }
+    if (completionRatio < 0.45) {
+      return 'سرعة الإغلاق منخفضة مقارنة بعدد المهام الفعّالة، ويُنصح بمراجعة توزيع العمل على الفريق.';
+    }
+    if (tasksCancelled > 0 && totalTasks > 0) {
+      return 'الأداء متوسط، مع وجود مهام ملغاة تم استبعادها من الحسابات التشغيلية لكن يجدر تتبع أسبابها.';
+    }
+    return 'الصورة العامة متوازنة، ويمكن الضغط على أي بطاقة لقراءة التفاصيل واتخاذ قرار أدق.';
+  }
+
+  void _showDetailsSheet(
+    BuildContext context, {
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required List<_DetailFact> facts,
+    String? note,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: Container(
+            margin: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: scheme.outlineVariant.withOpacity(0.35)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 46,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: scheme.outlineVariant.withOpacity(0.65),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Icon(icon, color: color, size: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: TextStyle(
+                                  color: scheme.onSurface,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                subtitle,
+                                style: TextStyle(
+                                  color: scheme.onSurfaceVariant,
+                                  fontSize: 13,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    ...facts.map((fact) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _DetailFactTile(fact: fact),
+                        )),
+                    if (note != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: scheme.primary.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          note,
+                          style: TextStyle(
+                            color: scheme.onSurfaceVariant,
+                            fontSize: 12.5,
+                            height: 1.4,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (onAction != null && actionLabel != null) ...[
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.of(sheetContext).pop();
+                            onAction();
+                          },
+                          icon: const Icon(Icons.open_in_new_rounded),
+                          label: Text(actionLabel),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -794,20 +962,32 @@ class _PerformanceInsightsCard extends StatelessWidget {
     final tasksCompleted = _dashboardInt(stats, 'tasksCompleted');
     final tasksActive = _dashboardInt(stats, 'tasksActive');
     final tasksCancelled = _dashboardInt(stats, 'tasksCancelled');
-    final completionPct = !taskBreakdownReady
-        ? 0.0
-        : (totalTasks > 0 ? ((tasksCompleted * 100.0) / totalTasks).clamp(0.0, 100.0) : 0.0);
-    final completionRatio = completionPct / 100.0;
+    final effectiveTasks = math.max(totalTasks - tasksCancelled, 0);
+    final completionRatio = taskBreakdownReady ? _dashboardRatio(tasksCompleted, effectiveTasks) : 0.0;
+    final activeRatio = taskBreakdownReady ? _dashboardRatio(tasksActive, effectiveTasks) : 0.0;
+    final cancelledRatio = _dashboardRatio(tasksCancelled, totalTasks);
 
     final totalOrders = _dashboardInt(stats, 'totalOrders');
     final ordersPending = _dashboardInt(stats, 'ordersPending');
     final totalCustomers = _dashboardInt(stats, 'totalCustomers');
     final totalProducts = _dashboardInt(stats, 'totalProducts');
 
-    final opsMax = [totalOrders, totalCustomers, totalProducts, 1].reduce((a, b) => a > b ? a : b);
-    final orderRatio = (totalOrders / opsMax).clamp(0.0, 1.0);
-    final customerRatio = (totalCustomers / opsMax).clamp(0.0, 1.0);
-    final productRatio = (totalProducts / opsMax).clamp(0.0, 1.0);
+    final pendingOrdersRatio = _dashboardRatio(ordersPending, totalOrders);
+    final productsPerCustomer = totalCustomers > 0 ? (totalProducts / totalCustomers) : 0.0;
+    final opsMax = [totalOrders, totalCustomers, totalProducts, 1].reduce(math.max);
+    final orderRatio = _dashboardRatio(totalOrders, opsMax);
+    final customerRatio = _dashboardRatio(totalCustomers, opsMax);
+    final productRatio = _dashboardRatio(totalProducts, opsMax);
+
+    final smartSummary = _smartSummary(
+      taskBreakdownReady: taskBreakdownReady,
+      effectiveTasks: effectiveTasks,
+      totalTasks: totalTasks,
+      tasksCancelled: tasksCancelled,
+      completionRatio: completionRatio,
+      ordersPending: ordersPending,
+      pendingRatio: pendingOrdersRatio,
+    );
 
     return Container(
       width: double.infinity,
@@ -855,7 +1035,7 @@ class _PerformanceInsightsCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'ملخص المهام والعمليات — يتحدث تلقائياً كل بضع ثوانٍ',
+                      'قراءة تشغيلية تفاعلية تتحدث تلقائياً — اضغط على أي بطاقة لعرض التفاصيل.',
                       style: TextStyle(
                         color: scheme.onSurfaceVariant,
                         fontSize: 13,
@@ -868,13 +1048,64 @@ class _PerformanceInsightsCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 22),
-          Text(
-            'المهام',
-            style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w900, fontSize: 15),
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  scheme.primary.withOpacity(0.14),
+                  scheme.secondary.withOpacity(0.08),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'قراءة ذكية',
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  smartSummary,
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: 13,
+                    height: 1.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _InsightChip(
+                      label: 'إنجاز فعلي ${_dashboardPercent(completionRatio)}',
+                      color: const Color(0xFF2E7D32),
+                    ),
+                    _InsightChip(
+                      label: 'طلبات معلقة ${_dashboardPercent(pendingOrdersRatio)}',
+                      color: const Color(0xFF1565C0),
+                    ),
+                    _InsightChip(
+                      label: 'إلغاء ${_dashboardPercent(cancelledRatio)}',
+                      color: const Color(0xFFB71C1C),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           if (!taskBreakdownReady) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 16),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -883,135 +1114,266 @@ class _PerformanceInsightsCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                'لعرض نسبة الإنجاز والمهام المتاحة: حدّث ملف السيرفر tasks_procedures.php (admin.getDashboardStats) لآخر نسخة.',
+                'لعرض التوزيع الكامل للمهام والرسومات الدقيقة: حدّث ملف السيرفر tasks_procedures.php (admin.getDashboardStats) لآخر نسخة.',
                 style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12, height: 1.35),
               ),
             ),
           ],
-          const SizedBox(height: 12),
-          if (!taskBreakdownReady)
-            _BigStatPill(
-              label: 'إجمالي المهام',
-              value: '$totalTasks',
-              scheme: scheme,
-              accent: const Color(0xFF6A1B9A),
-            )
-          else
-            LayoutBuilder(
-              builder: (context, c) {
-                final pill1 = _BigStatPill(
-                  label: 'إجمالي المهام',
-                  value: '$totalTasks',
+          const SizedBox(height: 18),
+          _SectionShell(
+            title: 'صحة المهام',
+            subtitle: 'تم استبعاد المهام الملغاة من جميع نسب الإنجاز والضغط التشغيلي.',
+            child: Column(
+              children: [
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final wide = constraints.maxWidth >= 760;
+                    final cards = [
+                      _InsightMetricCard(
+                        icon: Icons.assignment_outlined,
+                        color: const Color(0xFF6A1B9A),
+                        title: 'المهام الفعالة',
+                        value: '$effectiveTasks',
+                        subtitle: taskBreakdownReady
+                            ? 'الإجمالي بعد استبعاد $tasksCancelled مهمة ملغاة'
+                            : 'الإجمالي المتاح حالياً للقراءة التشغيليّة',
+                        footer: 'إجمالي السجل: $totalTasks',
+                        onTap: () => _showDetailsSheet(
+                          context,
+                          icon: Icons.assignment_outlined,
+                          color: const Color(0xFF6A1B9A),
+                          title: 'تفاصيل المهام الفعالة',
+                          subtitle: 'هذا الرقم يمثل المهام المستخدمة في الحسابات التشغيلية الحالية.',
+                          facts: [
+                            _DetailFact(label: 'إجمالي المهام في السجل', value: '$totalTasks'),
+                            _DetailFact(label: 'المهام الملغاة المستبعدة', value: '$tasksCancelled', color: const Color(0xFFB71C1C)),
+                            _DetailFact(label: 'المهام الفعالة المعتمدة', value: '$effectiveTasks', color: const Color(0xFF6A1B9A)),
+                          ],
+                          note: 'أي نسبة إنجاز أو ضغط تشغيلي في هذه البطاقة تعتمد فقط على المهام غير الملغاة.',
+                          actionLabel: 'فتح صفحة المهام',
+                          onAction: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const AdminTasksScreen()),
+                          ),
+                        ),
+                      ),
+                      _InsightMetricCard(
+                        icon: Icons.task_alt_outlined,
+                        color: const Color(0xFF2E7D32),
+                        title: 'الإنجاز الفعلي',
+                        value: taskBreakdownReady ? _dashboardPercent(completionRatio) : '--',
+                        subtitle: taskBreakdownReady
+                            ? '$tasksCompleted مهمة مكتملة من أصل $effectiveTasks مهمة فعالة'
+                            : 'بانتظار توفر توزيع المهام التفصيلي',
+                        footer: 'المهام المكتملة: $tasksCompleted',
+                        onTap: () => _showDetailsSheet(
+                          context,
+                          icon: Icons.task_alt_outlined,
+                          color: const Color(0xFF2E7D32),
+                          title: 'تفاصيل الإنجاز',
+                          subtitle: 'نسبة الإنجاز مبنية فقط على المهام غير الملغاة.',
+                          facts: [
+                            _DetailFact(label: 'المهام المكتملة', value: '$tasksCompleted'),
+                            _DetailFact(label: 'المهام الفعالة', value: '$effectiveTasks'),
+                            _DetailFact(label: 'نسبة الإنجاز الحالية', value: taskBreakdownReady ? _dashboardPercent(completionRatio) : '--', color: const Color(0xFF2E7D32)),
+                          ],
+                          note: 'المعادلة الحالية = المهام المكتملة ÷ المهام الفعالة بعد استبعاد الإلغاء.',
+                          actionLabel: 'فتح صفحة المهام',
+                          onAction: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const AdminTasksScreen()),
+                          ),
+                        ),
+                      ),
+                      _InsightMetricCard(
+                        icon: Icons.engineering_outlined,
+                        color: const Color(0xFFEF6C00),
+                        title: 'الضغط الحالي',
+                        value: taskBreakdownReady ? _dashboardPercent(activeRatio) : '--',
+                        subtitle: taskBreakdownReady
+                            ? '$tasksActive مهمة قيد التنفيذ أو بانتظار التنفيذ'
+                            : 'بانتظار توفر توزيع المهام التفصيلي',
+                        footer: 'المهام المفتوحة: $tasksActive',
+                        onTap: () => _showDetailsSheet(
+                          context,
+                          icon: Icons.engineering_outlined,
+                          color: const Color(0xFFEF6C00),
+                          title: 'تفاصيل الضغط التشغيلي',
+                          subtitle: 'هذا المؤشر يوضح حجم الحمل الجاري مقارنة بإجمالي المهام الفعالة.',
+                          facts: [
+                            _DetailFact(label: 'المهام المفتوحة', value: '$tasksActive'),
+                            _DetailFact(label: 'المهام الفعالة', value: '$effectiveTasks'),
+                            _DetailFact(label: 'مؤشر الضغط', value: taskBreakdownReady ? _dashboardPercent(activeRatio) : '--', color: const Color(0xFFEF6C00)),
+                          ],
+                          note: 'كلما ارتفع هذا المؤشر مع انخفاض الإنجاز، زادت الحاجة لإعادة توزيع أو متابعة التنفيذ.',
+                          actionLabel: 'فتح صفحة المهام',
+                          onAction: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const AdminTasksScreen()),
+                          ),
+                        ),
+                      ),
+                      _InsightMetricCard(
+                        icon: Icons.cancel_schedule_send_outlined,
+                        color: const Color(0xFFB71C1C),
+                        title: 'المهام الملغاة',
+                        value: '$tasksCancelled',
+                        subtitle: 'ظاهرة للمتابعة فقط ومُستبعدة من جميع النسب الأساسية',
+                        footer: 'معدل الإلغاء من كامل السجل: ${_dashboardPercent(cancelledRatio)}',
+                        onTap: () => _showDetailsSheet(
+                          context,
+                          icon: Icons.cancel_schedule_send_outlined,
+                          color: const Color(0xFFB71C1C),
+                          title: 'تفاصيل الإلغاء',
+                          subtitle: 'تُعرض المهام الملغاة للمراجعة الإدارية فقط ولا تدخل في نسب الإنجاز أو الضغط.',
+                          facts: [
+                            _DetailFact(label: 'المهام الملغاة', value: '$tasksCancelled', color: const Color(0xFFB71C1C)),
+                            _DetailFact(label: 'إجمالي السجل', value: '$totalTasks'),
+                            _DetailFact(label: 'معدل الإلغاء', value: _dashboardPercent(cancelledRatio)),
+                          ],
+                          note: 'يمكن الاستفادة من هذا الرقم لتتبّع جودة الإدخال أو أسباب إيقاف الطلبات، لكن دون التأثير على تقييم الأداء التنفيذي.',
+                        ),
+                      ),
+                    ];
+                    return GridView.builder(
+                      itemCount: cards.length,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: wide ? 2 : 1,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: wide ? 2.05 : 2.7,
+                      ),
+                      itemBuilder: (_, index) => cards[index],
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+                _SegmentedInsightBar(
                   scheme: scheme,
-                  accent: const Color(0xFF6A1B9A),
-                );
-                final pill2 = _BigStatPill(
-                  label: 'منجزة',
-                  value: '$tasksCompleted',
+                  completedRatio: completionRatio,
+                  activeRatio: activeRatio,
+                  cancelledRatio: cancelledRatio,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionShell(
+            title: 'ملخص العمليات',
+            subtitle: 'مقارنة بصرية سريعة بين الطلبات والعملاء والمنتجات مع إمكان فتح التفاصيل.',
+            child: Column(
+              children: [
+                _MiniComparisonChart(
                   scheme: scheme,
-                  accent: const Color(0xFF2E7D32),
-                );
-                final pill3 = _BigStatPill(
-                  label: 'نسبة الإنجاز',
-                  value: '${completionPct.toStringAsFixed(0)}٪',
-                  scheme: scheme,
-                  accent: scheme.primary,
-                );
-                if (c.maxWidth >= 340) {
-                  return Row(
-                    children: [
-                      Expanded(child: pill1),
-                      const SizedBox(width: 10),
-                      Expanded(child: pill2),
-                      const SizedBox(width: 10),
-                      Expanded(child: pill3),
-                    ],
-                  );
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: pill1),
-                        const SizedBox(width: 8),
-                        Expanded(child: pill2),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    pill3,
+                  items: [
+                    _ChartBarData(label: 'طلبات', value: totalOrders, ratio: orderRatio, color: const Color(0xFF1565C0)),
+                    _ChartBarData(label: 'عملاء', value: totalCustomers, ratio: customerRatio, color: const Color(0xFF2E7D32)),
+                    _ChartBarData(label: 'منتجات', value: totalProducts, ratio: productRatio, color: const Color(0xFFE65100)),
                   ],
-                );
-              },
+                ),
+                const SizedBox(height: 14),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final wide = constraints.maxWidth >= 900;
+                    final cards = [
+                      _OperationsInsightCard(
+                        icon: Icons.receipt_long_outlined,
+                        color: const Color(0xFF1565C0),
+                        title: 'الطلبات',
+                        value: '$totalOrders',
+                        subtitle: ordersPending > 0
+                            ? '$ordersPending طلباً ما زال يحتاج معالجة أو تجهيز'
+                            : 'لا توجد طلبات معلقة حالياً',
+                        ratioLabel: 'ضغط الطلبات ${_dashboardPercent(pendingOrdersRatio)}',
+                        ratio: pendingOrdersRatio,
+                        onTap: () => _showDetailsSheet(
+                          context,
+                          icon: Icons.receipt_long_outlined,
+                          color: const Color(0xFF1565C0),
+                          title: 'تفاصيل الطلبات',
+                          subtitle: 'قراءة سريعة لعبء الطلبات داخل النظام.',
+                          facts: [
+                            _DetailFact(label: 'إجمالي الطلبات', value: '$totalOrders'),
+                            _DetailFact(label: 'طلبات معلقة / قيد المعالجة', value: '$ordersPending', color: const Color(0xFF1565C0)),
+                            _DetailFact(label: 'نسبة الضغط', value: _dashboardPercent(pendingOrdersRatio)),
+                          ],
+                          note: 'يُحتسب ضغط الطلبات من خلال مقارنة عدد الطلبات المعلقة بإجمالي الطلبات الحالية.',
+                          actionLabel: 'فتح صفحة الطلبات',
+                          onAction: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const AdminOrdersScreen()),
+                          ),
+                        ),
+                      ),
+                      _OperationsInsightCard(
+                        icon: Icons.people_alt_outlined,
+                        color: const Color(0xFF2E7D32),
+                        title: 'العملاء',
+                        value: '$totalCustomers',
+                        subtitle: 'إجمالي الحسابات التي تعمل بدور عميل أو مستخدم',
+                        ratioLabel: 'حصة المقارنة ${_dashboardPercent(customerRatio)}',
+                        ratio: customerRatio,
+                        onTap: () => _showDetailsSheet(
+                          context,
+                          icon: Icons.people_alt_outlined,
+                          color: const Color(0xFF2E7D32),
+                          title: 'تفاصيل العملاء',
+                          subtitle: 'حجم قاعدة العملاء مقارنة بباقي عناصر التشغيل المعروضة.',
+                          facts: [
+                            _DetailFact(label: 'عدد العملاء', value: '$totalCustomers', color: const Color(0xFF2E7D32)),
+                            _DetailFact(label: 'مقارنة بالطلبات', value: '$totalOrders'),
+                            _DetailFact(label: 'مقارنة بالمنتجات', value: '$totalProducts'),
+                          ],
+                          note: 'يساعد هذا الرقم في فهم اتساع قاعدة العملاء مقابل المخزون والطلبات النشطة.',
+                          actionLabel: 'فتح صفحة العملاء',
+                          onAction: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const AdminCustomersScreen()),
+                          ),
+                        ),
+                      ),
+                      _OperationsInsightCard(
+                        icon: Icons.inventory_2_outlined,
+                        color: const Color(0xFFE65100),
+                        title: 'المنتجات',
+                        value: '$totalProducts',
+                        subtitle: 'اتساع الكتالوج الحالي داخل التطبيق',
+                        ratioLabel: totalCustomers > 0
+                            ? 'منتجات لكل عميل ${productsPerCustomer.toStringAsFixed(1)}'
+                            : 'لا توجد قاعدة عملاء للمقارنة بعد',
+                        ratio: productRatio,
+                        onTap: () => _showDetailsSheet(
+                          context,
+                          icon: Icons.inventory_2_outlined,
+                          color: const Color(0xFFE65100),
+                          title: 'تفاصيل المنتجات',
+                          subtitle: 'قراءة لحجم الكتالوج الحالي ومدى تغطيته أمام قاعدة العملاء.',
+                          facts: [
+                            _DetailFact(label: 'إجمالي المنتجات', value: '$totalProducts', color: const Color(0xFFE65100)),
+                            _DetailFact(label: 'إجمالي العملاء', value: '$totalCustomers'),
+                            _DetailFact(label: 'متوسط المنتجات لكل عميل', value: totalCustomers > 0 ? productsPerCustomer.toStringAsFixed(1) : '0.0'),
+                          ],
+                          note: 'هذا المؤشر لا يقيس المبيعات، لكنه يعطي انطباعاً سريعاً عن سعة الكتالوج أمام قاعدة العملاء الحالية.',
+                          actionLabel: 'فتح صفحة المنتجات',
+                          onAction: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const AdminProductsScreen()),
+                          ),
+                        ),
+                      ),
+                    ];
+                    return GridView.builder(
+                      itemCount: cards.length,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: wide ? 3 : 1,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: wide ? 1.1 : 2.55,
+                      ),
+                      itemBuilder: (_, index) => cards[index],
+                    );
+                  },
+                ),
+              ],
             ),
-          const SizedBox(height: 14),
-          if (taskBreakdownReady)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: LinearProgressIndicator(
-                minHeight: 14,
-                value: completionRatio,
-                backgroundColor: scheme.surfaceContainerHighest.withOpacity(0.7),
-                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2E7D32)),
-              ),
-            ),
-          if (taskBreakdownReady) const SizedBox(height: 10),
-          if (taskBreakdownReady)
-            Text(
-              'مهام متاحة أو قيد التنفيذ: $tasksActive\n(معلقة، مُسندة، أو جاري العمل — غير المكتملة وغير الملغاة)',
-              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13, height: 1.4),
-            ),
-          if (taskBreakdownReady && tasksCancelled > 0) ...[
-            const SizedBox(height: 8),
-            Text(
-              'مهام ملغاة: $tasksCancelled',
-              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12.5, fontWeight: FontWeight.w600),
-            ),
-          ],
-          if (taskBreakdownReady) ...[
-            const SizedBox(height: 8),
-            Text(
-              'من أصل $totalTasks مهمة، تم إنجاز ${completionPct.toStringAsFixed(0)}٪',
-              style: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w700, fontSize: 13.5),
-            ),
-          ],
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 18),
-            child: Divider(height: 1),
-          ),
-          Text(
-            'ملخص العمليات',
-            style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w900, fontSize: 15),
-          ),
-          const SizedBox(height: 12),
-          _OpsRow(
-            icon: Icons.receipt_long_outlined,
-            label: 'الطلبات',
-            main: 'إجمالي الطلبات: $totalOrders',
-            sub: ordersPending > 0 ? 'قيد المعالجة (معلقة / تحت التجهيز): $ordersPending' : 'لا توجد طلبات عالقة حالياً',
-            color: const Color(0xFF1565C0),
-            ratio: orderRatio,
-            scheme: scheme,
-          ),
-          const SizedBox(height: 14),
-          _OpsRow(
-            icon: Icons.people_outline,
-            label: 'العملاء',
-            main: 'عملاء نشطون في النظام: $totalCustomers',
-            sub: 'حسابات بدور عميل / مستخدم',
-            color: const Color(0xFF2E7D32),
-            ratio: customerRatio,
-            scheme: scheme,
-          ),
-          const SizedBox(height: 14),
-          _OpsRow(
-            icon: Icons.inventory_2_outlined,
-            label: 'المنتجات',
-            main: 'منتجات في الكتالوج: $totalProducts',
-            sub: 'إجمالي الأصناف المسجلة',
-            color: const Color(0xFFE65100),
-            ratio: productRatio,
-            scheme: scheme,
           ),
         ],
       ),
@@ -1019,111 +1381,496 @@ class _PerformanceInsightsCard extends StatelessWidget {
   }
 }
 
-class _BigStatPill extends StatelessWidget {
-  final String label;
-  final String value;
-  final ColorScheme scheme;
-  final Color accent;
+class _SectionShell extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget child;
 
-  const _BigStatPill({
-    required this.label,
-    required this.value,
-    required this.scheme,
-    required this.accent,
+  const _SectionShell({
+    required this.title,
+    required this.subtitle,
+    required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: accent.withOpacity(0.11),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: accent.withOpacity(0.28)),
+        color: scheme.surfaceContainerLowest.withOpacity(0.65),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: scheme.outlineVariant.withOpacity(0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            value,
-            style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: scheme.onSurface),
+            title,
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+            ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
-            label,
-            style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600, height: 1.2),
+            subtitle,
+            style: TextStyle(
+              color: scheme.onSurfaceVariant,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              height: 1.35,
+            ),
           ),
+          const SizedBox(height: 14),
+          child,
         ],
       ),
     );
   }
 }
 
-class _OpsRow extends StatelessWidget {
+class _InsightMetricCard extends StatelessWidget {
   final IconData icon;
-  final String label;
-  final String main;
-  final String sub;
   final Color color;
-  final double ratio;
-  final ColorScheme scheme;
+  final String title;
+  final String value;
+  final String subtitle;
+  final String footer;
+  final VoidCallback onTap;
 
-  const _OpsRow({
+  const _InsightMetricCard({
     required this.icon,
-    required this.label,
-    required this.main,
-    required this.sub,
     required this.color,
-    required this.ratio,
-    required this.scheme,
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.footer,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.14),
-            borderRadius: BorderRadius.circular(12),
+            color: scheme.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: color.withOpacity(0.18)),
           ),
-          child: Icon(icon, color: color, size: 22),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: scheme.onSurface),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(icon, color: color, size: 20),
+                  ),
+                  const Spacer(),
+                  Icon(Icons.touch_app_outlined, color: scheme.onSurfaceVariant, size: 18),
+                ],
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 12),
               Text(
-                main,
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: scheme.onSurface),
+                value,
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Text(
-                sub,
-                style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant, height: 1.35),
+                title,
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: LinearProgressIndicator(
-                  minHeight: 7,
-                  value: ratio,
-                  backgroundColor: scheme.surfaceContainerHighest.withOpacity(0.55),
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
+              Text(
+                subtitle,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: scheme.onSurfaceVariant,
+                  fontSize: 12.5,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                footer,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SegmentedInsightBar extends StatelessWidget {
+  final ColorScheme scheme;
+  final double completedRatio;
+  final double activeRatio;
+  final double cancelledRatio;
+
+  const _SegmentedInsightBar({
+    required this.scheme,
+    required this.completedRatio,
+    required this.activeRatio,
+    required this.cancelledRatio,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final completedWidth = completedRatio.clamp(0.0, 1.0);
+    final activeWidth = activeRatio.clamp(0.0, 1.0);
+    final spacerRatio = math.max(0.0, 1 - completedWidth - activeWidth);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'رسم توضيحي للمهام الفعالة',
+          style: TextStyle(
+            color: scheme.onSurface,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(99),
+          child: SizedBox(
+            height: 16,
+            child: Row(
+              children: [
+                if (completedWidth > 0)
+                  Expanded(
+                    flex: (completedWidth * 1000).round(),
+                    child: Container(color: const Color(0xFF2E7D32)),
+                  ),
+                if (activeWidth > 0)
+                  Expanded(
+                    flex: (activeWidth * 1000).round(),
+                    child: Container(color: const Color(0xFFEF6C00)),
+                  ),
+                if (spacerRatio > 0)
+                  Expanded(
+                    flex: (spacerRatio * 1000).round(),
+                    child: Container(color: scheme.surfaceContainerHighest.withOpacity(0.85)),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _InsightChip(label: 'منجز ${_dashboardPercent(completedRatio)}', color: const Color(0xFF2E7D32)),
+            _InsightChip(label: 'مفتوح ${_dashboardPercent(activeRatio)}', color: const Color(0xFFEF6C00)),
+            _InsightChip(label: 'ملغى ${_dashboardPercent(cancelledRatio)}', color: const Color(0xFFB71C1C)),
+          ],
+        ),
       ],
+    );
+  }
+}
+
+class _OperationsInsightCard extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String value;
+  final String subtitle;
+  final String ratioLabel;
+  final double ratio;
+  final VoidCallback onTap;
+
+  const _OperationsInsightCard({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.ratioLabel,
+    required this.ratio,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: color.withOpacity(0.18)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(icon, color: color, size: 20),
+                  ),
+                  const Spacer(),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      color: scheme.onSurface,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: scheme.onSurfaceVariant,
+                  fontSize: 12.5,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: LinearProgressIndicator(
+                  minHeight: 8,
+                  value: ratio,
+                  backgroundColor: scheme.surfaceContainerHighest.withOpacity(0.65),
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                ratioLabel,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChartBarData {
+  final String label;
+  final int value;
+  final double ratio;
+  final Color color;
+
+  const _ChartBarData({
+    required this.label,
+    required this.value,
+    required this.ratio,
+    required this.color,
+  });
+}
+
+class _MiniComparisonChart extends StatelessWidget {
+  final ColorScheme scheme;
+  final List<_ChartBarData> items;
+
+  const _MiniComparisonChart({
+    required this.scheme,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: scheme.outlineVariant.withOpacity(0.2)),
+      ),
+      child: SizedBox(
+        height: 170,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: items
+              .map(
+                (item) => Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${item.value}',
+                          style: TextStyle(
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 350),
+                          curve: Curves.easeOut,
+                          height: 30 + (item.ratio.clamp(0.0, 1.0) * 86),
+                          decoration: BoxDecoration(
+                            color: item.color,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          item.label,
+                          style: TextStyle(
+                            color: scheme.onSurfaceVariant,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class _InsightChip extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _InsightChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w800,
+          fontSize: 11.5,
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailFact {
+  final String label;
+  final String value;
+  final Color? color;
+
+  const _DetailFact({
+    required this.label,
+    required this.value,
+    this.color,
+  });
+}
+
+class _DetailFactTile extends StatelessWidget {
+  final _DetailFact fact;
+
+  const _DetailFactTile({required this.fact});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLowest.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: scheme.outlineVariant.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              fact.label,
+              style: TextStyle(
+                color: scheme.onSurfaceVariant,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            fact.value,
+            style: TextStyle(
+              color: fact.color ?? scheme.onSurface,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

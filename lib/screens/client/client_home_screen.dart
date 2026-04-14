@@ -307,6 +307,13 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final featuredCount = _featuredProducts.length;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final productCardAspectRatio = screenWidth < 370
+        ? 0.53
+        : screenWidth < 430
+            ? 0.58
+            : 0.66;
+
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
@@ -542,6 +549,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               delegate: SliverChildBuilderDelegate(
                 (ctx, i) => _ProductCard(
                   product: _filteredProducts[i],
+                  compact: screenWidth < 430,
                   onAddToCart: (item) {
                     cart.addItem(item);
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -561,11 +569,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                 ),
                 childCount: _filteredProducts.length,
               ),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 crossAxisSpacing: 14,
                 mainAxisSpacing: 14,
-                childAspectRatio: 0.66,
+                childAspectRatio: productCardAspectRatio,
               ),
             ),
           ),
@@ -576,9 +584,16 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   Widget _buildBanner() {
     final theme = Theme.of(context);
     final c = theme.colorScheme;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 430;
+    final bannerHeight = isCompact ? 282.0 : 220.0;
+    final bannerTitleSize = isCompact ? 22.0 : 28.0;
+    final bannerDescSize = isCompact ? 12.5 : 14.0;
+    final bannerPadding = isCompact ? 18.0 : 24.0;
+    final badgeFontSize = isCompact ? 11.0 : 12.0;
 
     return Container(
-      height: 220,
+      height: bannerHeight,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(32),
         boxShadow: theme.brightness == Brightness.dark
@@ -643,43 +658,47 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(24),
+              padding: EdgeInsets.all(bannerPadding),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: EdgeInsets.symmetric(horizontal: isCompact ? 12 : 14, vertical: isCompact ? 7 : 8),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(999),
                       border: Border.all(color: Colors.white.withOpacity(0.08)),
                     ),
-                    child: const Text(
+                    child: Text(
                       'تجربة متجر مطورة',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: badgeFontSize),
                     ),
                   ),
                   const Spacer(),
                   Text(
                     _bannerTitle.isNotEmpty ? _bannerTitle : 'حلول متكاملة للمنزل الذكي بتجربة أكثر فخامة',
-                    style: const TextStyle(
+                    maxLines: isCompact ? 2 : 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 28,
+                      fontSize: bannerTitleSize,
                       fontWeight: FontWeight.w900,
                       height: 1.2,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: isCompact ? 8 : 10),
                   Text(
                     'تصميم أحدث، بحث أسرع، وبطاقات أوضح تساعدك على الوصول للمنتج المناسب واتخاذ القرار بثقة.',
+                    maxLines: isCompact ? 3 : 4,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.82),
-                      fontSize: 14,
-                      height: 1.6,
+                      fontSize: bannerDescSize,
+                      height: 1.55,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  SizedBox(height: isCompact ? 12 : 18),
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
@@ -919,11 +938,13 @@ class _CategoryCard extends StatelessWidget {
 // ─── Product Card ──────────────────────────────────────────────────────────────
 class _ProductCard extends StatelessWidget {
   final Map<String, dynamic> product;
+  final bool compact;
   final Function(CartItem) onAddToCart;
   final VoidCallback onTap;
 
   const _ProductCard({
     required this.product,
+    required this.compact,
     required this.onAddToCart,
     required this.onTap,
   });
@@ -932,12 +953,18 @@ class _ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final c = theme.colorScheme;
+    final name = product['nameAr'] ?? product['name'] ?? 'منتج بدون اسم';
+    final imageAspectRatio = compact ? 0.92 : 1.0;
+    final contentPadding = compact
+        ? const EdgeInsets.fromLTRB(12, 12, 12, 10)
+        : const EdgeInsets.fromLTRB(14, 14, 14, 12);
+    final titleFontSize = compact ? 13.0 : 14.0;
+    final actionButtonSize = compact ? 42.0 : 46.0;
     final price = double.tryParse(product['price']?.toString() ?? '0') ?? 0;
     final originalPrice = double.tryParse(product['originalPrice']?.toString() ?? '0') ?? 0;
     final discountPercent = double.tryParse(product['discountPercent']?.toString() ?? '0') ?? 0;
     final rawImage = product['mainImageUrl'] as String?;
     final image = (rawImage != null && rawImage.isNotEmpty) ? ApiService.proxyImageUrl(rawImage) : null;
-    final name = product['nameAr'] ?? product['name'] ?? '';
     final hasDiscount = (discountPercent > 0 && price > 0) || (originalPrice > price && originalPrice > 0);
     final stock = int.tryParse(product['stock']?.toString() ?? '') ?? 0;
     final category = (product['categoryNameAr'] ?? product['categoryName'] ?? 'منتج ذكي').toString();
@@ -972,7 +999,7 @@ class _ProductCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               AspectRatio(
-                aspectRatio: 1,
+                aspectRatio: imageAspectRatio,
                 child: Stack(
                   children: [
                     Positioned.fill(
@@ -1060,7 +1087,7 @@ class _ProductCard extends StatelessWidget {
               ),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+                  padding: contentPadding,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1070,13 +1097,15 @@ class _ProductCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleSmall?.copyWith(
                               color: c.onSurface,
-                              fontSize: 14,
+                              fontSize: titleFontSize,
                               fontWeight: FontWeight.w800,
-                              height: 1.35,
+                              height: 1.3,
                             ),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
+                      SizedBox(height: compact ? 6 : 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
                         children: [
                           _ProductMetaPill(
                             icon: Icons.verified_rounded,
@@ -1084,7 +1113,6 @@ class _ProductCard extends StatelessWidget {
                             foreground: stock > 0 ? const Color(0xFF166534) : c.onSurfaceVariant,
                             background: stock > 0 ? const Color(0xFFDCFCE7) : c.surfaceContainerHighest,
                           ),
-                          const SizedBox(width: 8),
                           _ProductMetaPill(
                             icon: Icons.local_shipping_rounded,
                             label: 'توصيل مرن',
@@ -1131,10 +1159,10 @@ class _ProductCard extends StatelessWidget {
                                       image: image,
                                     ))
                                 : null,
-                            borderRadius: BorderRadius.circular(18),
+                            borderRadius: BorderRadius.circular(compact ? 16 : 18),
                             child: Ink(
-                              width: 46,
-                              height: 46,
+                              width: actionButtonSize,
+                              height: actionButtonSize,
                               decoration: BoxDecoration(
                                 gradient: stock > 0 ? AppThemeDecorations.primaryButtonGradient : null,
                                 color: stock > 0 ? null : c.surfaceContainerHighest,

@@ -540,6 +540,44 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   _PerformanceInsightsCard(stats: _stats),
                 const SizedBox(height: 24),
                 Text(
+                  'وصول سريع',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isWide = constraints.maxWidth >= 640;
+                    final cards = [
+                      _DashboardCard(
+                        icon: Icons.storefront_outlined,
+                        title: 'المتجر',
+                        color: const Color(0xFF00695C),
+                        onTap: () => Navigator.pushNamed(context, '/client'),
+                      ),
+                      _DashboardCard(
+                        icon: Icons.engineering_outlined,
+                        title: 'صفحة الفني',
+                        color: const Color(0xFF6A1B9A),
+                        onTap: () => Navigator.pushNamed(context, '/technician'),
+                      ),
+                    ];
+                    return GridView.count(
+                      crossAxisCount: isWide ? 2 : 1,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: isWide ? 2.3 : 3.0,
+                      children: cards,
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+                Text(
                   'الأنظمة المتقدمة',
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurface,

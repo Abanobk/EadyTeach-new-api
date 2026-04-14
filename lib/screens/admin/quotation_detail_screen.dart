@@ -562,7 +562,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     });
   }
 
-  static String _pdfNormalizeField(dynamic raw) => _pdfSafeText(raw?.toString(), preserveNewLines: true);
+  static String _pdfNormalizeField(dynamic raw) => _pdfCleanText(raw?.toString(), preserveNewLines: true);
 
   static String _pdfComposeItemTitle(Map<String, dynamic> item) {
     final parts = <String>[];
@@ -582,8 +582,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return lines.join('\n');
   }
 
-  /// تنظيف النص قبل الطباعة داخل PDF مع الإبقاء على الأحرف اللاتينية والرموز الصالحة.
-  static String _pdfSafeText(String? raw, {bool preserveNewLines = false}) {
+  static String _pdfCleanText(String? raw, {bool preserveNewLines = false}) {
     if (raw == null) return '';
     var s = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     s = s
@@ -621,10 +620,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           .map((line) => line.trim().replaceAll(RegExp(r'\s+'), ' '))
           .where((line) => line.isNotEmpty)
           .toList();
-      s = lines.join('\n');
-    } else {
-      s = s.trim().replaceAll(RegExp(r'\s+'), ' ');
+      return lines.join('\n');
     }
+    return s.trim().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  /// تنظيف النص قبل الطباعة داخل PDF مع الإبقاء على الأحرف اللاتينية والرموز الصالحة.
+  static String _pdfSafeText(String? raw, {bool preserveNewLines = false}) {
+    final s = _pdfCleanText(raw, preserveNewLines: preserveNewLines);
     if (s.isEmpty || !_hasArabic(s)) return s;
     return s
         .split('\n')

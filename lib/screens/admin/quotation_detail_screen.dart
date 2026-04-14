@@ -573,13 +573,37 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     return parts.join(' - ');
   }
 
+  static String _pdfDescriptionPreview(String raw, {int maxLines = 3, int maxChars = 180}) {
+    final cleaned = _pdfCleanText(raw, preserveNewLines: true);
+    if (cleaned.isEmpty) return '';
+
+    final explicitLines = cleaned
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+
+    if (explicitLines.length > 1) {
+      return explicitLines.take(maxLines).join('\n');
+    }
+
+    final singleLine = explicitLines.isEmpty ? cleaned.trim() : explicitLines.first;
+    if (singleLine.length <= maxChars) return singleLine;
+
+    var cut = singleLine.substring(0, maxChars);
+    final lastSpace = cut.lastIndexOf(' ');
+    if (lastSpace > 0) cut = cut.substring(0, lastSpace);
+    return '${cut.trim()}...';
+  }
+
   static String _pdfComposeItemDescription(Map<String, dynamic> item) {
-    final lines = <String>[];
+    final description = _pdfDescriptionPreview(item['description']?.toString() ?? '');
+    if (description.isNotEmpty) return description;
+
     final selectedColor = _pdfNormalizeField(item['selectedColor']);
-    final description = _pdfNormalizeField(item['description']);
-    if (selectedColor.isNotEmpty) lines.add('اللون: $selectedColor');
-    if (description.isNotEmpty) lines.add(description);
-    return lines.join('\n');
+    if (selectedColor.isNotEmpty) return 'اللون: $selectedColor';
+
+    return '';
   }
 
   static String _pdfCleanText(String? raw, {bool preserveNewLines = false}) {

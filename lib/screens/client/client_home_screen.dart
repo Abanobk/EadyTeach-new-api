@@ -309,9 +309,9 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     final featuredCount = _featuredProducts.length;
     final screenWidth = MediaQuery.of(context).size.width;
     final productCardAspectRatio = screenWidth < 370
-        ? 0.53
+        ? 0.47
         : screenWidth < 430
-            ? 0.58
+            ? 0.52
             : 0.66;
 
 
@@ -954,12 +954,12 @@ class _ProductCard extends StatelessWidget {
     final theme = Theme.of(context);
     final c = theme.colorScheme;
     final name = product['nameAr'] ?? product['name'] ?? 'منتج بدون اسم';
-    final imageAspectRatio = compact ? 0.92 : 1.0;
+    final imageAspectRatio = compact ? 0.84 : 1.0;
     final contentPadding = compact
-        ? const EdgeInsets.fromLTRB(12, 12, 12, 10)
+        ? const EdgeInsets.fromLTRB(10, 10, 10, 8)
         : const EdgeInsets.fromLTRB(14, 14, 14, 12);
-    final titleFontSize = compact ? 13.0 : 14.0;
-    final actionButtonSize = compact ? 42.0 : 46.0;
+    final titleFontSize = compact ? 12.5 : 14.0;
+    final actionButtonSize = compact ? 40.0 : 46.0;
     final price = double.tryParse(product['price']?.toString() ?? '0') ?? 0;
     final originalPrice = double.tryParse(product['originalPrice']?.toString() ?? '0') ?? 0;
     final discountPercent = double.tryParse(product['discountPercent']?.toString() ?? '0') ?? 0;

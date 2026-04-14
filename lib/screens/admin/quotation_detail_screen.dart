@@ -631,7 +631,6 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         .map((line) {
           if (line.trim().isEmpty) return line;
           final reshaped = _reshapeArabicRuns(line);
-          if (_hasLatinOrDigits(line)) return reshaped;
           return String.fromCharCodes(bidi.logicalToVisual(reshaped));
         })
         .join('\n');
@@ -639,8 +638,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
   static pw.TextDirection _pdfTextDirectionFor(String text) {
     if (!_hasArabic(text)) return pw.TextDirection.ltr;
-    if (_hasLatinOrDigits(text)) return pw.TextDirection.rtl;
-    // السطور العربية الخالصة تم تحويلها مسبقاً إلى ترتيب بصري، لذا تُرسم كـ LTR.
+    // جميع السطور العربية، سواء كانت خالصة أو مختلطة، تُحوَّل مسبقاً إلى ترتيب بصري.
     return pw.TextDirection.ltr;
   }
 
@@ -937,18 +935,24 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           pw.SizedBox(height: 10),
         ]),
         build: (ctx) => [
-          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-            pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-              _pdfText('العميل: ${q['clientName'] ?? '-'}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-              if (q['clientPhone'] != null) _pdfText('الهاتف: ${q['clientPhone']}', style: const pw.TextStyle(fontSize: 11)),
-              if (q['clientEmail'] != null) _pdfText('البريد: ${q['clientEmail']}', style: const pw.TextStyle(fontSize: 11)),
-              if (q['dealerName'] != null && q['dealerName'].toString().isNotEmpty)
-                _pdfText('الموزع المعتمد: ${q['dealerName']}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue700)),
-            ]),
-            pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-              _pdfText('التاريخ: ${_formatDate(q['createdAt'])}', style: const pw.TextStyle(fontSize: 11)),
-            ]),
-          ]),
+          pw.Container(
+            width: double.infinity,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                _pdfText('العميل: ${q['clientName'] ?? '-'}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                if (q['clientPhone'] != null) _pdfText('الهاتف: ${q['clientPhone']}', style: const pw.TextStyle(fontSize: 11)),
+                if (q['clientEmail'] != null) _pdfText('البريد: ${q['clientEmail']}', style: const pw.TextStyle(fontSize: 11)),
+                if (q['dealerName'] != null && q['dealerName'].toString().isNotEmpty)
+                  _pdfText('الموزع المعتمد: ${q['dealerName']}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.blue700)),
+                pw.SizedBox(height: 6),
+                pw.Align(
+                  alignment: pw.Alignment.centerRight,
+                  child: _pdfText('التاريخ: ${_formatDate(q['createdAt'])}', style: const pw.TextStyle(fontSize: 11)),
+                ),
+              ],
+            ),
+          ),
           pw.SizedBox(height: 20),
           // Table header
           pw.Container(

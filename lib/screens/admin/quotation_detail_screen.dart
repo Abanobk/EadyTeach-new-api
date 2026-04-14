@@ -562,11 +562,33 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
     });
   }
 
+  static String _pdfNormalizeField(dynamic raw) => _pdfSafeText(raw?.toString(), preserveNewLines: true);
+
+  static String _pdfComposeItemTitle(Map<String, dynamic> item) {
+    final parts = <String>[];
+    final productName = _pdfNormalizeField(item['productName']);
+    final selectedVariant = _pdfNormalizeField(item['selectedVariant']);
+    if (productName.isNotEmpty) parts.add(productName);
+    if (selectedVariant.isNotEmpty) parts.add(selectedVariant);
+    return parts.join(' - ');
+  }
+
+  static String _pdfComposeItemDescription(Map<String, dynamic> item) {
+    final lines = <String>[];
+    final selectedColor = _pdfNormalizeField(item['selectedColor']);
+    final description = _pdfNormalizeField(item['description']);
+    if (selectedColor.isNotEmpty) lines.add('اللون: $selectedColor');
+    if (description.isNotEmpty) lines.add(description);
+    return lines.join('\n');
+  }
+
   /// تنظيف النص قبل الطباعة داخل PDF مع الإبقاء على الأحرف اللاتينية والرموز الصالحة.
   static String _pdfSafeText(String? raw, {bool preserveNewLines = false}) {
     if (raw == null) return '';
     var s = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     s = s
+        .replaceAll('\\\\', ' ')
+        .replaceAll('\\', ' ')
         .replaceAll('\u2190', ' ← ')
         .replaceAll('\u2192', ' → ')
         .replaceAll('—', '-')
@@ -587,10 +609,12 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         .replaceAll('☆', '- ')
         .replaceAll('■', '- ')
         .replaceAll('□', '')
-        .replaceAll('▪️', '- ');
+        .replaceAll('▪️', '- ')
+        .replaceAll('�', '');
     s = s.replaceAll(RegExp(r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]'), '');
     s = s.replaceAll(RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F]'), '');
     s = s.replaceAll(RegExp(r'[\uE000-\uF8FF\uFFF0-\uFFFF]'), '');
+    s = s.replaceAll(RegExp(r'[^\n\r\t\x20-\x7E\u00A0-\u00FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]'), ' ');
     if (preserveNewLines) {
       final lines = s
           .split('\n')
@@ -951,7 +975,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             final tp = curtainM != null
                 ? quotationPdfClientLineAmount(itemMap)
                 : ((up - rawUp).abs() > 0.02 ? (up * qty) : (storedLine > 0 ? storedLine : (rawUp * qty)));
-            final descriptionText = _pdfSafeText(item['description']?.toString(), preserveNewLines: true);
+            final productTitle = _pdfComposeItemTitle(itemMap);
+            final descriptionText = _pdfComposeItemDescription(itemMap);
             final productUrl = _quotationProductWebUrl(itemMap);
             final hasImage = itemImages.containsKey(i);
             return pw.Container(
@@ -973,7 +998,7 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
-                      _pdfText(item['productName']?.toString() ?? '', style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold)),
+                      _pdfText(productTitle, style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold)),
                       if (descriptionText.isNotEmpty)
                         pw.Padding(
                           padding: const pw.EdgeInsets.only(top: 3),
@@ -1265,8 +1290,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                     size: 60,
                   ),
                   _pdfProductCell(
-                    item['productName']?.toString() ?? '-',
-                    subLines.isEmpty ? null : subLines.join('\n'),
+                    _pdfComposeItemTitle(itemMap),
+                    (() {
+                      final lines = <String>[];
+                      final selectedColor = _pdfNormalizeField(itemMap['selectedColor']);
+                      if (selectedColor.isNotEmpty) lines.add('اللون: $selectedColor');
+                      if (subLines.isNotEmpty) lines.addAll(subLines);
+                      return lines.isEmpty ? null : lines.join('\n');
+                    })(),
                     5,
                   ),
                   _pdfCell('$qty', 1),

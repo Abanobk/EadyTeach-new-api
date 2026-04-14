@@ -309,9 +309,9 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     final featuredCount = _featuredProducts.length;
     final screenWidth = MediaQuery.of(context).size.width;
     final productCardAspectRatio = screenWidth < 370
-        ? 0.47
+        ? 0.42
         : screenWidth < 430
-            ? 0.52
+            ? 0.46
             : 0.66;
 
 
@@ -586,11 +586,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     final c = theme.colorScheme;
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 430;
-    final bannerHeight = isCompact ? 282.0 : 220.0;
-    final bannerTitleSize = isCompact ? 22.0 : 28.0;
-    final bannerDescSize = isCompact ? 12.5 : 14.0;
-    final bannerPadding = isCompact ? 18.0 : 24.0;
-    final badgeFontSize = isCompact ? 11.0 : 12.0;
+    final bannerHeight = isCompact ? 236.0 : 220.0;
+    final bannerTitleSize = isCompact ? 20.0 : 28.0;
+    final bannerDescSize = isCompact ? 12.0 : 14.0;
+    final bannerPadding = isCompact ? 16.0 : 24.0;
+    final badgeFontSize = isCompact ? 10.5 : 12.0;
 
     return Container(
       height: bannerHeight,
@@ -661,9 +661,10 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               padding: EdgeInsets.all(bannerPadding),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Container(
-                    padding: EdgeInsets.symmetric(horizontal: isCompact ? 12 : 14, vertical: isCompact ? 7 : 8),
+                    padding: EdgeInsets.symmetric(horizontal: isCompact ? 10 : 14, vertical: isCompact ? 6 : 8),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(999),
@@ -674,7 +675,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: badgeFontSize),
                     ),
                   ),
-                  const Spacer(),
+                  SizedBox(height: isCompact ? 12 : 16),
                   Text(
                     _bannerTitle.isNotEmpty ? _bannerTitle : 'حلول متكاملة للمنزل الذكي بتجربة أكثر فخامة',
                     maxLines: isCompact ? 2 : 3,
@@ -686,7 +687,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                       height: 1.2,
                     ),
                   ),
-                  SizedBox(height: isCompact ? 8 : 10),
+                  SizedBox(height: isCompact ? 6 : 10),
                   Text(
                     'تصميم أحدث، بحث أسرع، وبطاقات أوضح تساعدك على الوصول للمنتج المناسب واتخاذ القرار بثقة.',
                     maxLines: isCompact ? 3 : 4,
@@ -698,7 +699,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  SizedBox(height: isCompact ? 12 : 18),
+                  SizedBox(height: isCompact ? 10 : 18),
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
@@ -954,12 +955,12 @@ class _ProductCard extends StatelessWidget {
     final theme = Theme.of(context);
     final c = theme.colorScheme;
     final name = product['nameAr'] ?? product['name'] ?? 'منتج بدون اسم';
-    final imageAspectRatio = compact ? 0.84 : 1.0;
+    final imageAspectRatio = compact ? 0.76 : 1.0;
     final contentPadding = compact
-        ? const EdgeInsets.fromLTRB(10, 10, 10, 8)
+        ? const EdgeInsets.fromLTRB(8, 8, 8, 6)
         : const EdgeInsets.fromLTRB(14, 14, 14, 12);
-    final titleFontSize = compact ? 12.5 : 14.0;
-    final actionButtonSize = compact ? 40.0 : 46.0;
+    final titleFontSize = compact ? 12.0 : 14.0;
+    final actionButtonSize = compact ? 38.0 : 46.0;
     final price = double.tryParse(product['price']?.toString() ?? '0') ?? 0;
     final originalPrice = double.tryParse(product['originalPrice']?.toString() ?? '0') ?? 0;
     final discountPercent = double.tryParse(product['discountPercent']?.toString() ?? '0') ?? 0;
@@ -1102,10 +1103,10 @@ class _ProductCard extends StatelessWidget {
                               height: 1.3,
                             ),
                       ),
-                      SizedBox(height: compact ? 6 : 8),
+                      SizedBox(height: compact ? 4 : 8),
                       Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
+                        spacing: compact ? 6 : 8,
+                        runSpacing: compact ? 4 : 6,
                         children: [
                           _ProductMetaPill(
                             icon: Icons.verified_rounded,
@@ -1232,7 +1233,7 @@ class _ProductMetaPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(999),
@@ -1240,11 +1241,11 @@ class _ProductMetaPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: foreground),
-          const SizedBox(width: 5),
+          Icon(icon, size: 11, color: foreground),
+          const SizedBox(width: 4),
           Text(
             label,
-            style: TextStyle(color: foreground, fontSize: 10.5, fontWeight: FontWeight.w700),
+            style: TextStyle(color: foreground, fontSize: 10, fontWeight: FontWeight.w700),
           ),
         ],
       ),

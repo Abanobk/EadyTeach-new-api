@@ -223,27 +223,32 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppThemeDecorations.cardColor(context),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 40,
-          ),
-          child: SingleChildScrollView(
-            child: Directionality(
-              textDirection: TextDirection.rtl,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: Scaffold(
+          backgroundColor: AppThemeDecorations.cardColor(context),
+          body: StatefulBuilder(
+            builder: (ctx, setModalState) => Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 40,
+              ),
+              child: SingleChildScrollView(
+                child: Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                   Text(isEdit ? 'تعديل المنتج' : 'إضافة منتج جديد',
                       style: const TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.bold)),
-                  IconButton(icon: const Icon(Icons.close, color: AppColors.muted), onPressed: () => Navigator.pop(ctx)),
+                  IconButton(
+                      icon: const Icon(Icons.close, color: AppColors.muted),
+                      onPressed: () => Navigator.pop(sheetContext)),
                 ]),
                 const SizedBox(height: 16),
                 const Text('اسم المنتج (إنجليزي) *', style: TextStyle(color: AppColors.muted, fontSize: 13)),
@@ -1169,10 +1174,16 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                   child: ElevatedButton(
                     onPressed: () async {
                       if (nameCtrl.text.trim().isEmpty || priceCtrl.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الاسم والسعر مطلوبان')));
+                        ScaffoldMessenger.of(sheetContext).showSnackBar(
+                          SnackBar(
+                            content: const Text('الاسم والسعر مطلوبان'),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
                         return;
                       }
-                      Navigator.pop(ctx);
+                      Navigator.pop(sheetContext);
                       try {
                         final allImgs = _allEditImages(mainImageUrl, extraImages);
                         final body = <String, dynamic>{
@@ -1231,6 +1242,8 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
               ]),
             ),
           ),
+        ),
+      ),
         ),
       ),
     );

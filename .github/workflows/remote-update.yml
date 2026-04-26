@@ -80,7 +80,8 @@ jobs:
         run: |
           set -e
           DEPLOY_PATH="${WEB_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/app}"
-          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6"
+          # IdentitiesOnly=yes يمنع تجربة مفاتيح أخرى من الـ agent فيُفادى Too many authentication failures
+          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 -o IdentitiesOnly=yes"
           SSH_USER="${SSH_DEPLOY_USER:-root}"
 
           _flag=$(echo "${USE_DIRECT_SSH_FOR_CI:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
@@ -99,6 +100,8 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' 'Host *' '  IdentityFile ~/.ssh/id_rsa' '  IdentitiesOnly yes' >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
 
           echo "Creating archive..."
           tar czf /tmp/deploy.tar -C build web
@@ -165,7 +168,7 @@ jobs:
         run: |
           set -e
           BACKEND_PATH="${BACKEND_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/backend}"
-          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6"
+          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 -o IdentitiesOnly=yes"
           SSH_USER="${SSH_DEPLOY_USER:-root}"
 
           _flag=$(echo "${USE_DIRECT_SSH_FOR_CI:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
@@ -182,6 +185,8 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' 'Host *' '  IdentityFile ~/.ssh/id_rsa' '  IdentitiesOnly yes' >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
           tar czf /tmp/backend.tar -C "$GITHUB_WORKSPACE" backend
 
           if [ "$USE_DIRECT_CI" = 1 ]; then

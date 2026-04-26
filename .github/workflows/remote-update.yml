@@ -149,7 +149,8 @@ jobs:
             if [ "$USE_DIRECT_CI" = 1 ]; then
               echo "::error::Check SERVER_SSH_KEY, DIRECT_SSH_HOST, firewall (port 22), and that this runner IP is allowed if you use allowlists."
             else
-              echo "::error::Cloudflare: websocket bad handshake = Service Token أو سياسة Access. حدّث CF_SERVICE_TOKEN_* في GitHub."
+              echo "::error::إن ظهر في السجل Permission denied (publickey): المفتاح في SERVER_SSH_KEY غير مضاف لـ ~/.ssh/authorized_keys للمستخدم (غالباً root) على السيرفر، أو SECRET SSH_DEPLOY_USER خاطئ."
+              echo "::error::إن ظهر websocket bad handshake: حدّث CF_SERVICE_TOKEN_ID و CF_SERVICE_TOKEN_SECRET أو سياسة Cloudflare Access."
             fi
             exit 1
           fi

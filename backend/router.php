@@ -909,13 +909,15 @@ try {
         case 'products.list':
             _ensureProductPartNumberColumn($db);
             _ensureProductCurtainColumns($db);
+            try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active TINYINT(1) DEFAULT 1'); } catch (\Exception $e) {}
             $catSel = _hasCategoryDiscountColumns()
                 ? ', c.discount_percent AS cat_discount_percent, c.discount_amount AS cat_discount_amount'
                 : '';
+            // NULL أو غياب القيمة = يُعامل كمنشور (متوافق مع formatProduct الذي يستخدم ?? true)
             $sql = 'SELECT p.*' . $catSel . '
                     FROM products p
                     LEFT JOIN categories c ON c.id = p.category_id
-                    WHERE p.is_active = 1';
+                    WHERE COALESCE(p.is_active, 1) = 1';
             $params = [];
             if (!empty($input['categoryId'])) {
                 $sql .= ' AND p.category_id = ?';
@@ -1002,6 +1004,7 @@ try {
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(12,2) DEFAULT 0'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_min_stock INT DEFAULT 0'); } catch (Exception $e) {}
             try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS allow_discount_when_stock_zero TINYINT DEFAULT 0'); } catch (Exception $e) {}
+            try { $db->exec('ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active TINYINT(1) DEFAULT 1'); } catch (Exception $e) {}
 
             $pricingModeRaw = isset($input['pricingMode']) ? trim((string) $input['pricingMode']) : '';
             $pricingMode = $pricingModeRaw !== '' ? $pricingModeRaw : null;
@@ -1013,8 +1016,10 @@ try {
                 $curtainMotorsJson = json_encode($input['curtainMotors'], JSON_UNESCAPED_UNICODE);
             }
 
-            $stmt = $db->prepare('INSERT INTO products (name, name_ar, description, description_ar, price, original_price, stock, is_featured, category_id, main_image_url, images, video_url, variants, types, sku, serial_number, part_number, discount_percent, discount_amount, discount_min_stock, allow_discount_when_stock_zero, pricing_mode, curtain_length_min_cm, curtain_length_max_cm, curtain_wave_surcharge, curtain_motors_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $catId, $imgUrl, $images, $videoUrl, $variants, $types, $sku, $serial, $partNumber, $discountPercent, $discountAmount, $discountMinStock, $allowDiscountWhenStockZero, $pricingMode, $curtainMinCm, $curtainMaxCm, $curtainWave, $curtainMotorsJson]);
+            $isActiveNew = (isset($input['isActive']) && $input['isActive'] === false) ? 0 : 1;
+
+            $stmt = $db->prepare('INSERT INTO products (name, name_ar, description, description_ar, price, original_price, stock, is_featured, is_active, category_id, main_image_url, images, video_url, variants, types, sku, serial_number, part_number, discount_percent, discount_amount, discount_min_stock, allow_discount_when_stock_zero, pricing_mode, curtain_length_min_cm, curtain_length_max_cm, curtain_wave_surcharge, curtain_motors_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $stmt->execute([$name, $nameAr, $desc, $descAr, $price, $origPrice, $stock, $featured, $isActiveNew, $catId, $imgUrl, $images, $videoUrl, $variants, $types, $sku, $serial, $partNumber, $discountPercent, $discountAmount, $discountMinStock, $allowDiscountWhenStockZero, $pricingMode, $curtainMinCm, $curtainMaxCm, $curtainWave, $curtainMotorsJson]);
             $result = ['id' => (int) $db->lastInsertId()];
             break;
 

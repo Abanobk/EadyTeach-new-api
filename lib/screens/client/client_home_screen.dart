@@ -156,6 +156,19 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       await _openPendingProductIfNeeded();
     } catch (e) {
       setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('تعذّر تحميل المنتجات: $e'),
+            backgroundColor: AppColors.error,
+            action: SnackBarAction(
+              label: 'إعادة المحاولة',
+              textColor: Colors.white,
+              onPressed: _loadData,
+            ),
+          ),
+        );
+      }
     }
   }
 

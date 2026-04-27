@@ -22,6 +22,12 @@ class ApiService {
 
   static String _trpcPathForRequest() => _resolvedTrpcPath ?? _apiTrpcPath;
 
+  static String _trpcUrlWithProcedureParam(String pathSeg, String procedure) {
+    final base = _absoluteUrl(pathSeg);
+    final join = base.contains('?') ? '&' : '?';
+    return '$base${join}procedure=$procedure';
+  }
+
   /// Always return an absolute API URL (never relative), with a single slash between origin and path (no double slashes).
   static String _absoluteUrl(String path) {
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
@@ -208,6 +214,33 @@ class ApiService {
     }
 
     if (response.statusCode == 404) {
+      // Some Apache/PHP setups don't serve PATH_INFO for /backend/trpc.php/<procedure>.
+      // Retry with /backend/trpc.php?procedure=<procedure> which trpc.php supports.
+      if (pathSeg.endsWith('trpc.php')) {
+        String altUrl = _trpcUrlWithProcedureParam(pathSeg, procedure);
+        if (input != null) {
+          final wrappedInput = {'json': input};
+          final encoded = Uri.encodeComponent(jsonEncode({'0': wrappedInput}));
+          altUrl += '&batch=1&input=$encoded';
+        } else {
+          altUrl += '&batch=1';
+        }
+        if (token != null) altUrl += '&_token=$token';
+        print('QUERY: retry with procedure param -> $altUrl');
+        try {
+          response = await http.get(
+            Uri.parse(altUrl),
+            headers: _headers(cookie: cookie),
+          ).timeout(const Duration(seconds: 20));
+        } catch (e) {
+          throw Exception(_networkErrorMessage(e));
+        }
+        if (response.statusCode == 200) {
+          _resolvedTrpcPath = pathSeg;
+        }
+      }
+    }
+    if (response.statusCode == 404) {
       final nextPath = pathSeg == _apiTrpcPath
           ? _apiTrpcPathAlt
           : (pathSeg == _apiTrpcPathAlt
@@ -323,6 +356,26 @@ class ApiService {
       await _saveCookieFromHeader(setCookie);
     }
 
+    if (response.statusCode == 404) {
+      // Retry with ?procedure=<procedure> for servers that don't support PATH_INFO.
+      if (pathSeg.endsWith('trpc.php')) {
+        var altUrl = '${_trpcUrlWithProcedureParam(pathSeg, procedure)}&batch=1';
+        if (token != null) altUrl += '&_token=$token';
+        print('MUTATE: retry with procedure param -> $altUrl');
+        try {
+          response = await http.post(
+            Uri.parse(altUrl),
+            headers: _headers(cookie: cookie),
+            body: body,
+          ).timeout(const Duration(seconds: 20));
+        } catch (e) {
+          throw Exception(_networkErrorMessage(e));
+        }
+        if (response.statusCode == 200 || response.statusCode == 207) {
+          _resolvedTrpcPath = pathSeg;
+        }
+      }
+    }
     if (response.statusCode == 404) {
       final nextPath = pathSeg == _apiTrpcPath
           ? _apiTrpcPathAlt

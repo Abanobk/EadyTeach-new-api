@@ -5,10 +5,10 @@
 # SSH مباشر من CI: لازم معًا — USE_DIRECT_SSH_FOR_CI = 1 أو true **و** DIRECT_SSH_HOST.
 # (وجود DIRECT_SSH_HOST وحده يُتجاهل لتفادي فشل Network unreachable من غير قصد.)
 #
-# Tailscale (موصى به إذا Tunnel يفشل من شبكة GitHub):
-#   - أنشئ Repository variable: USE_TAILSCALE_CI = 1
-#   - Secrets: TAILSCALE_AUTHKEY (من Tailscale admin)، TAILSCALE_SSH_HOST (مثلاً 100.x IP للسيرفر)
-#   - نفس SERVER_SSH_KEY يجب أن يكون مضافاً لـ authorized_keys على السيرفر.
+# Tailscale (موصى به إذا Tunnel يفشل من شبكة GitHub) — يُفعَّل تلقائياً عند تعبئة الاثنين:
+#   - Secret: TAILSCALE_AUTHKEY (من Tailscale admin)
+#   - Repository variable: TAILSCALE_SSH_HOST = عنوان السيرفر على Tailscale (مثلاً 100.x)
+#   نفس SERVER_SSH_KEY يجب أن يكون مضافاً لـ authorized_keys على السيرفر.
 name: Remote Update
 
 permissions:
@@ -56,7 +56,8 @@ jobs:
           [ -f build/web/index.html ] || { echo "::error::Build failed"; exit 1; }
 
       - name: Connect Tailscale (اختياري — يتجاوز أعطال Tunnel من GitHub)
-        if: ${{ vars.USE_TAILSCALE_CI == '1' || vars.USE_TAILSCALE_CI == 'true' }}
+        id: ts
+        if: ${{ vars.TAILSCALE_SSH_HOST != '' && secrets.TAILSCALE_AUTHKEY != '' }}
         uses: tailscale/github-action@v2
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
@@ -66,11 +67,11 @@ jobs:
         env:
           DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
           USE_DIRECT_SSH_FOR_CI: ${{ secrets.USE_DIRECT_SSH_FOR_CI }}
-          USE_TAILSCALE_CI: ${{ vars.USE_TAILSCALE_CI }}
+          TS_OUTCOME: ${{ steps.ts.outcome }}
         run: |
           set -e
-          if [ "${USE_TAILSCALE_CI:-}" = "1" ] || [ "$(echo "${USE_TAILSCALE_CI:-}" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
-            echo "Skipping cloudflared (USE_TAILSCALE_CI — deploy over Tailscale)."
+          if [ "${TS_OUTCOME:-}" = "success" ]; then
+            echo "Skipping cloudflared (Tailscale connected on runner)."
             exit 0
           fi
           _flag=$(echo "${USE_DIRECT_SSH_FOR_CI:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
@@ -93,8 +94,8 @@ jobs:
           DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
           USE_DIRECT_SSH_FOR_CI: ${{ secrets.USE_DIRECT_SSH_FOR_CI }}
           SSH_DEPLOY_USER: ${{ secrets.SSH_DEPLOY_USER }}
-          USE_TAILSCALE_CI: ${{ vars.USE_TAILSCALE_CI }}
-          TAILSCALE_SSH_HOST: ${{ secrets.TAILSCALE_SSH_HOST }}
+          TAILSCALE_SSH_HOST: ${{ vars.TAILSCALE_SSH_HOST }}
+          TS_OUTCOME: ${{ steps.ts.outcome }}
         run: |
           set -e
           DEPLOY_PATH="${WEB_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/app}"
@@ -106,11 +107,7 @@ jobs:
           USE_DIRECT_CI=0
           EFFECTIVE_DIRECT_HOST="${DIRECT_SSH_HOST:-}"
 
-          if [ "${USE_TAILSCALE_CI:-}" = "1" ] || [ "$(echo "${USE_TAILSCALE_CI:-}" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
-            if [ -z "${TAILSCALE_SSH_HOST:-}" ]; then
-              echo "::error::USE_TAILSCALE_CI مفعّل لكن TAILSCALE_SSH_HOST فارغ — أضف Secret بعنوان Tailscale للسيرفر (100.x)."
-              exit 1
-            fi
+          if [ "${TS_OUTCOME:-}" = "success" ] && [ -n "${TAILSCALE_SSH_HOST:-}" ]; then
             USE_DIRECT_CI=1
             EFFECTIVE_DIRECT_HOST="${TAILSCALE_SSH_HOST}"
             echo "::notice::النشر عبر Tailscale → ${SSH_USER}@${EFFECTIVE_DIRECT_HOST}"
@@ -149,7 +146,7 @@ jobs:
           else
             CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
             if [ -z "$CF_SERVICE_TOKEN_ID" ] || [ -z "$CF_SERVICE_TOKEN_SECRET" ]; then
-              echo "::error::أضف CF_SERVICE_TOKEN_ID + CF_SERVICE_TOKEN_SECRET (Tunnel)، أو فعّل SSH المباشر بـ USE_DIRECT_SSH_FOR_CI=1 مع DIRECT_SSH_HOST."
+              echo "::error::أضف CF_SERVICE_TOKEN_ID + CF_SERVICE_TOKEN_SECRET (Tunnel)، أو USE_DIRECT_SSH_FOR_CI=1 مع DIRECT_SSH_HOST، أو Secret TAILSCALE_AUTHKEY + Variable TAILSCALE_SSH_HOST للنشر عبر Tailscale."
               exit 1
             fi
             export TUNNEL_SERVICE_TOKEN_ID="$CF_SERVICE_TOKEN_ID"
@@ -180,7 +177,7 @@ jobs:
               echo "::error::تحقق من SERVER_SSH_KEY، وauthorized_keys للمستخدم، وTAILSCALE_SSH_HOST/DIRECT_SSH_HOST، والجدار الناري (22) وقوائم السماح."
             else
               echo "::error::إن ظهر في السجل Permission denied (publickey): المفتاح في SERVER_SSH_KEY غير مضاف لـ ~/.ssh/authorized_keys للمستخدم (غالباً root) على السيرفر، أو SECRET SSH_DEPLOY_USER خاطئ."
-              echo "::error::إن ظهر websocket bad handshake: حدّث CF_SERVICE_TOKEN_ID و CF_SERVICE_TOKEN_SECRET أو سياسة Cloudflare Access."
+              echo "::error::إن ظهر websocket bad handshake: حدّث CF_SERVICE_TOKEN_ID و CF_SERVICE_TOKEN_SECRET أو سياسة Cloudflare Access — أو استخدم Tailscale (TAILSCALE_AUTHKEY + TAILSCALE_SSH_HOST)."
             fi
             exit 1
           fi
@@ -196,8 +193,8 @@ jobs:
           DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
           USE_DIRECT_SSH_FOR_CI: ${{ secrets.USE_DIRECT_SSH_FOR_CI }}
           SSH_DEPLOY_USER: ${{ secrets.SSH_DEPLOY_USER }}
-          USE_TAILSCALE_CI: ${{ vars.USE_TAILSCALE_CI }}
-          TAILSCALE_SSH_HOST: ${{ secrets.TAILSCALE_SSH_HOST }}
+          TAILSCALE_SSH_HOST: ${{ vars.TAILSCALE_SSH_HOST }}
+          TS_OUTCOME: ${{ steps.ts.outcome }}
         run: |
           set -e
           BACKEND_PATH="${BACKEND_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/backend}"
@@ -208,11 +205,7 @@ jobs:
           USE_DIRECT_CI=0
           EFFECTIVE_DIRECT_HOST="${DIRECT_SSH_HOST:-}"
 
-          if [ "${USE_TAILSCALE_CI:-}" = "1" ] || [ "$(echo "${USE_TAILSCALE_CI:-}" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
-            if [ -z "${TAILSCALE_SSH_HOST:-}" ]; then
-              echo "::error::USE_TAILSCALE_CI مفعّل لكن TAILSCALE_SSH_HOST فارغ."
-              exit 1
-            fi
+          if [ "${TS_OUTCOME:-}" = "success" ] && [ -n "${TAILSCALE_SSH_HOST:-}" ]; then
             USE_DIRECT_CI=1
             EFFECTIVE_DIRECT_HOST="${TAILSCALE_SSH_HOST}"
           elif [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ]; }; then

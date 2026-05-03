@@ -4,6 +4,11 @@
 # الافتراضي: Cloudflare Tunnel (cloudflared access tcp).
 # SSH مباشر من CI: لازم معًا — USE_DIRECT_SSH_FOR_CI = 1 أو true **و** DIRECT_SSH_HOST.
 # (وجود DIRECT_SSH_HOST وحده يُتجاهل لتفادي فشل Network unreachable من غير قصد.)
+#
+# Tailscale (موصى به إذا Tunnel يفشل من شبكة GitHub):
+#   - أنشئ Repository variable: USE_TAILSCALE_CI = 1
+#   - Secrets: TAILSCALE_AUTHKEY (من Tailscale admin)، TAILSCALE_SSH_HOST (مثلاً 100.x IP للسيرفر)
+#   - نفس SERVER_SSH_KEY يجب أن يكون مضافاً لـ authorized_keys على السيرفر.
 name: Remote Update
 
 permissions:
@@ -50,13 +55,24 @@ jobs:
           flutter build web --release --base-href "/app/" --no-wasm-dry-run
           [ -f build/web/index.html ] || { echo "::error::Build failed"; exit 1; }
 
+      - name: Connect Tailscale (اختياري — يتجاوز أعطال Tunnel من GitHub)
+        if: ${{ vars.USE_TAILSCALE_CI == '1' || vars.USE_TAILSCALE_CI == 'true' }}
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
       - name: Install Cloudflared (للنشر عبر Tunnel فقط)
         if: ${{ github.event_name == 'push' || github.event.inputs.deploy_target == 'both' || github.event.inputs.deploy_target == 'web' || github.event.inputs.deploy_target == 'backend' }}
         env:
           DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
           USE_DIRECT_SSH_FOR_CI: ${{ secrets.USE_DIRECT_SSH_FOR_CI }}
+          USE_TAILSCALE_CI: ${{ vars.USE_TAILSCALE_CI }}
         run: |
           set -e
+          if [ "${USE_TAILSCALE_CI:-}" = "1" ] || [ "$(echo "${USE_TAILSCALE_CI:-}" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
+            echo "Skipping cloudflared (USE_TAILSCALE_CI — deploy over Tailscale)."
+            exit 0
+          fi
           _flag=$(echo "${USE_DIRECT_SSH_FOR_CI:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
           if [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ]; }; then
             echo "Skipping cloudflared (USE_DIRECT_SSH_FOR_CI + DIRECT_SSH_HOST — direct SSH)."
@@ -77,16 +93,28 @@ jobs:
           DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
           USE_DIRECT_SSH_FOR_CI: ${{ secrets.USE_DIRECT_SSH_FOR_CI }}
           SSH_DEPLOY_USER: ${{ secrets.SSH_DEPLOY_USER }}
+          USE_TAILSCALE_CI: ${{ vars.USE_TAILSCALE_CI }}
+          TAILSCALE_SSH_HOST: ${{ secrets.TAILSCALE_SSH_HOST }}
         run: |
           set -e
           DEPLOY_PATH="${WEB_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/app}"
-          # IdentityAgent=none + IdentitiesOnly: على runner غالباً يوجد ssh-agent بمفاتيح كثيرة فيُرفض الاتصال (Too many authentication failures)
-          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 -o IdentitiesOnly=yes -o IdentityAgent=none -o PreferredAuthentications=publickey -o PasswordAuthentication=no"
+          # IdentityAgent=none + IdentitiesOnly + BatchMode: يقلّل فشل Too many authentication failures من ssh-agent على الـ runner
+          SSH_OPTS="-o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 -o IdentitiesOnly=yes -o IdentityAgent=none -o PreferredAuthentications=publickey -o PasswordAuthentication=no"
           SSH_USER="${SSH_DEPLOY_USER:-root}"
 
           _flag=$(echo "${USE_DIRECT_SSH_FOR_CI:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
           USE_DIRECT_CI=0
-          if [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ]; }; then
+          EFFECTIVE_DIRECT_HOST="${DIRECT_SSH_HOST:-}"
+
+          if [ "${USE_TAILSCALE_CI:-}" = "1" ] || [ "$(echo "${USE_TAILSCALE_CI:-}" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
+            if [ -z "${TAILSCALE_SSH_HOST:-}" ]; then
+              echo "::error::USE_TAILSCALE_CI مفعّل لكن TAILSCALE_SSH_HOST فارغ — أضف Secret بعنوان Tailscale للسيرفر (100.x)."
+              exit 1
+            fi
+            USE_DIRECT_CI=1
+            EFFECTIVE_DIRECT_HOST="${TAILSCALE_SSH_HOST}"
+            echo "::notice::النشر عبر Tailscale → ${SSH_USER}@${EFFECTIVE_DIRECT_HOST}"
+          elif [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ]; }; then
             USE_DIRECT_CI=1
           elif [ -n "${DIRECT_SSH_HOST:-}" ]; then
             echo "::notice::DIRECT_SSH_HOST موجود لكن USE_DIRECT_SSH_FOR_CI ليس 1/true — استخدام Cloudflare Tunnel (تجاهل SSH المباشر)."
@@ -98,8 +126,10 @@ jobs:
           fi
 
           mkdir -p ~/.ssh
-          echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 700 ~/.ssh
+          printf '%s\n' "${SERVER_SSH_KEY}" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          ssh-keygen -l -f ~/.ssh/id_rsa >/dev/null 2>&1 || { echo "::error::SERVER_SSH_KEY ليس مفتاح OpenSSH صالحاً (تحقق من اللصق والسطور)."; exit 1; }
           printf '%s\n' 'Host *' '  IdentityFile ~/.ssh/id_rsa' '  IdentitiesOnly yes' '  IdentityAgent none' >> ~/.ssh/config
           chmod 600 ~/.ssh/config
 
@@ -107,7 +137,7 @@ jobs:
           tar czf /tmp/deploy.tar -C build web
 
           if [ "$USE_DIRECT_CI" = 1 ]; then
-            TARGET="${SSH_USER}@${DIRECT_SSH_HOST}"
+            TARGET="${SSH_USER}@${EFFECTIVE_DIRECT_HOST}"
             echo "::notice::Deploy via direct SSH → $TARGET"
             upload_and_extract() {
               echo "Uploading (scp)..."
@@ -147,7 +177,7 @@ jobs:
           if [ "$ok" != 1 ]; then
             echo "::error::Deploy failed after 3 attempts."
             if [ "$USE_DIRECT_CI" = 1 ]; then
-              echo "::error::Check SERVER_SSH_KEY, DIRECT_SSH_HOST, firewall (port 22), and that this runner IP is allowed if you use allowlists."
+              echo "::error::تحقق من SERVER_SSH_KEY، وauthorized_keys للمستخدم، وTAILSCALE_SSH_HOST/DIRECT_SSH_HOST، والجدار الناري (22) وقوائم السماح."
             else
               echo "::error::إن ظهر في السجل Permission denied (publickey): المفتاح في SERVER_SSH_KEY غير مضاف لـ ~/.ssh/authorized_keys للمستخدم (غالباً root) على السيرفر، أو SECRET SSH_DEPLOY_USER خاطئ."
               echo "::error::إن ظهر websocket bad handshake: حدّث CF_SERVICE_TOKEN_ID و CF_SERVICE_TOKEN_SECRET أو سياسة Cloudflare Access."
@@ -166,15 +196,26 @@ jobs:
           DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
           USE_DIRECT_SSH_FOR_CI: ${{ secrets.USE_DIRECT_SSH_FOR_CI }}
           SSH_DEPLOY_USER: ${{ secrets.SSH_DEPLOY_USER }}
+          USE_TAILSCALE_CI: ${{ vars.USE_TAILSCALE_CI }}
+          TAILSCALE_SSH_HOST: ${{ secrets.TAILSCALE_SSH_HOST }}
         run: |
           set -e
           BACKEND_PATH="${BACKEND_DEPLOY_PATH:-/mnt/marichia/files/easytech-new-api/backend}"
-          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 -o IdentitiesOnly=yes -o IdentityAgent=none -o PreferredAuthentications=publickey -o PasswordAuthentication=no"
+          SSH_OPTS="-o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 -o IdentitiesOnly=yes -o IdentityAgent=none -o PreferredAuthentications=publickey -o PasswordAuthentication=no"
           SSH_USER="${SSH_DEPLOY_USER:-root}"
 
           _flag=$(echo "${USE_DIRECT_SSH_FOR_CI:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
           USE_DIRECT_CI=0
-          if [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ]; }; then
+          EFFECTIVE_DIRECT_HOST="${DIRECT_SSH_HOST:-}"
+
+          if [ "${USE_TAILSCALE_CI:-}" = "1" ] || [ "$(echo "${USE_TAILSCALE_CI:-}" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
+            if [ -z "${TAILSCALE_SSH_HOST:-}" ]; then
+              echo "::error::USE_TAILSCALE_CI مفعّل لكن TAILSCALE_SSH_HOST فارغ."
+              exit 1
+            fi
+            USE_DIRECT_CI=1
+            EFFECTIVE_DIRECT_HOST="${TAILSCALE_SSH_HOST}"
+          elif [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ]; }; then
             USE_DIRECT_CI=1
           fi
 
@@ -184,14 +225,16 @@ jobs:
           fi
 
           mkdir -p ~/.ssh
-          echo "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 700 ~/.ssh
+          printf '%s\n' "${SERVER_SSH_KEY}" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          ssh-keygen -l -f ~/.ssh/id_rsa >/dev/null 2>&1 || { echo "::error::SERVER_SSH_KEY غير صالح."; exit 1; }
           printf '%s\n' 'Host *' '  IdentityFile ~/.ssh/id_rsa' '  IdentitiesOnly yes' '  IdentityAgent none' >> ~/.ssh/config
           chmod 600 ~/.ssh/config
           tar czf /tmp/backend.tar -C "$GITHUB_WORKSPACE" backend
 
           if [ "$USE_DIRECT_CI" = 1 ]; then
-            TARGET="${SSH_USER}@${DIRECT_SSH_HOST}"
+            TARGET="${SSH_USER}@${EFFECTIVE_DIRECT_HOST}"
             run_scp_ssh() {
               scp $SSH_OPTS -i ~/.ssh/id_rsa /tmp/backend.tar "${TARGET}:/tmp/backend.tar" \
                 && ssh $SSH_OPTS -i ~/.ssh/id_rsa "${TARGET}" \

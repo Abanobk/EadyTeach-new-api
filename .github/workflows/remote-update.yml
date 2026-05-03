@@ -2,8 +2,10 @@
 # Secrets شائعة: SERVER_SSH_KEY, WEB_DEPLOY_PATH, CF_SERVICE_TOKEN_*, CF_TUNNEL_HOST
 #
 # الافتراضي: Cloudflare Tunnel (cloudflared access tcp).
-# SSH مباشر من CI: لازم معًا — USE_DIRECT_SSH_FOR_CI = 1 أو true **و** DIRECT_SSH_HOST.
-# (وجود DIRECT_SSH_HOST وحده يُتجاهل لتفادي فشل Network unreachable من غير قصد.)
+# SSH مباشر من CI: أحد الخيارين:
+#   - Secret USE_DIRECT_SSH_FOR_CI = 1/true مع DIRECT_SSH_HOST، أو
+#   - Repository variable SSH_DIRECT_WHEN_HOST = 1 (يُفعّل SSH المباشر عندما يكون DIRECT_SSH_HOST مضبوطاً — مفيد إذا نسيت السر USE_DIRECT_SSH_FOR_CI).
+# (بدون أيهما: يُفضَّل Tunnel لتفادي محاولة الوصول لعنوان غير قابل للوصول من GitHub.)
 #
 # Tailscale (موصى به إذا Tunnel يفشل من شبكة GitHub) — عند تعبئة الاثنين معاً:
 #   - Secret: TAILSCALE_AUTHKEY (من Tailscale admin)
@@ -69,6 +71,7 @@ jobs:
         env:
           DIRECT_SSH_HOST: ${{ secrets.DIRECT_SSH_HOST }}
           USE_DIRECT_SSH_FOR_CI: ${{ secrets.USE_DIRECT_SSH_FOR_CI }}
+          SSH_DIRECT_WHEN_HOST: ${{ vars.SSH_DIRECT_WHEN_HOST }}
           TS_OUTCOME: ${{ steps.ts.outcome }}
         run: |
           set -e
@@ -77,8 +80,9 @@ jobs:
             exit 0
           fi
           _flag=$(echo "${USE_DIRECT_SSH_FOR_CI:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
-          if [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ]; }; then
-            echo "Skipping cloudflared (USE_DIRECT_SSH_FOR_CI + DIRECT_SSH_HOST — direct SSH)."
+          _var=$(echo "${SSH_DIRECT_WHEN_HOST:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          if [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ] || [ "$_var" = "1" ] || [ "$_var" = "true" ]; }; then
+            echo "Skipping cloudflared (direct SSH: USE_DIRECT_SSH_FOR_CI and/or SSH_DIRECT_WHEN_HOST + DIRECT_SSH_HOST)."
             exit 0
           fi
           curl -fLsS -o cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
@@ -97,6 +101,7 @@ jobs:
           USE_DIRECT_SSH_FOR_CI: ${{ secrets.USE_DIRECT_SSH_FOR_CI }}
           SSH_DEPLOY_USER: ${{ secrets.SSH_DEPLOY_USER }}
           TAILSCALE_SSH_HOST: ${{ vars.TAILSCALE_SSH_HOST }}
+          SSH_DIRECT_WHEN_HOST: ${{ vars.SSH_DIRECT_WHEN_HOST }}
           TS_OUTCOME: ${{ steps.ts.outcome }}
         run: |
           set -e
@@ -106,6 +111,7 @@ jobs:
           SSH_USER="${SSH_DEPLOY_USER:-root}"
 
           _flag=$(echo "${USE_DIRECT_SSH_FOR_CI:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          _var=$(echo "${SSH_DIRECT_WHEN_HOST:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
           USE_DIRECT_CI=0
           EFFECTIVE_DIRECT_HOST="${DIRECT_SSH_HOST:-}"
 
@@ -113,10 +119,10 @@ jobs:
             USE_DIRECT_CI=1
             EFFECTIVE_DIRECT_HOST="${TAILSCALE_SSH_HOST}"
             echo "::notice::النشر عبر Tailscale → ${SSH_USER}@${EFFECTIVE_DIRECT_HOST}"
-          elif [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ]; }; then
+          elif [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ] || [ "$_var" = "1" ] || [ "$_var" = "true" ]; }; then
             USE_DIRECT_CI=1
           elif [ -n "${DIRECT_SSH_HOST:-}" ]; then
-            echo "::notice::DIRECT_SSH_HOST موجود لكن USE_DIRECT_SSH_FOR_CI ليس 1/true — استخدام Cloudflare Tunnel (تجاهل SSH المباشر)."
+            echo "::notice::DIRECT_SSH_HOST موجود لكن لا يُستخدم SSH المباشر — عيّن Secret USE_DIRECT_SSH_FOR_CI=1 أو Variable SSH_DIRECT_WHEN_HOST=1، أو استخدم Tailscale."
           fi
 
           if [ -z "$SERVER_SSH_KEY" ]; then
@@ -148,7 +154,7 @@ jobs:
           else
             CF_HOST="${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}"
             if [ -z "$CF_SERVICE_TOKEN_ID" ] || [ -z "$CF_SERVICE_TOKEN_SECRET" ]; then
-              echo "::error::أضف CF_SERVICE_TOKEN_ID + CF_SERVICE_TOKEN_SECRET (Tunnel)، أو USE_DIRECT_SSH_FOR_CI=1 مع DIRECT_SSH_HOST، أو Secret TAILSCALE_AUTHKEY + Variable TAILSCALE_SSH_HOST للنشر عبر Tailscale."
+              echo "::error::أضف CF_SERVICE_TOKEN_ID + CF_SERVICE_TOKEN_SECRET (Tunnel)، أو DIRECT_SSH_HOST مع USE_DIRECT_SSH_FOR_CI=1 أو Variable SSH_DIRECT_WHEN_HOST=1، أو TAILSCALE_AUTHKEY + TAILSCALE_SSH_HOST."
               exit 1
             fi
             export TUNNEL_SERVICE_TOKEN_ID="$CF_SERVICE_TOKEN_ID"
@@ -196,6 +202,7 @@ jobs:
           USE_DIRECT_SSH_FOR_CI: ${{ secrets.USE_DIRECT_SSH_FOR_CI }}
           SSH_DEPLOY_USER: ${{ secrets.SSH_DEPLOY_USER }}
           TAILSCALE_SSH_HOST: ${{ vars.TAILSCALE_SSH_HOST }}
+          SSH_DIRECT_WHEN_HOST: ${{ vars.SSH_DIRECT_WHEN_HOST }}
           TS_OUTCOME: ${{ steps.ts.outcome }}
         run: |
           set -e
@@ -204,13 +211,14 @@ jobs:
           SSH_USER="${SSH_DEPLOY_USER:-root}"
 
           _flag=$(echo "${USE_DIRECT_SSH_FOR_CI:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+          _var=$(echo "${SSH_DIRECT_WHEN_HOST:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
           USE_DIRECT_CI=0
           EFFECTIVE_DIRECT_HOST="${DIRECT_SSH_HOST:-}"
 
           if [ "${TS_OUTCOME:-}" = "success" ] && [ -n "${TAILSCALE_SSH_HOST:-}" ]; then
             USE_DIRECT_CI=1
             EFFECTIVE_DIRECT_HOST="${TAILSCALE_SSH_HOST}"
-          elif [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ]; }; then
+          elif [ -n "${DIRECT_SSH_HOST:-}" ] && { [ "$_flag" = "1" ] || [ "$_flag" = "true" ] || [ "$_flag" = "yes" ] || [ "$_var" = "1" ] || [ "$_var" = "true" ]; }; then
             USE_DIRECT_CI=1
           fi
 

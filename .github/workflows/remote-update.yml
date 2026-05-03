@@ -5,9 +5,10 @@
 # SSH مباشر من CI: لازم معًا — USE_DIRECT_SSH_FOR_CI = 1 أو true **و** DIRECT_SSH_HOST.
 # (وجود DIRECT_SSH_HOST وحده يُتجاهل لتفادي فشل Network unreachable من غير قصد.)
 #
-# Tailscale (موصى به إذا Tunnel يفشل من شبكة GitHub) — يُفعَّل تلقائياً عند تعبئة الاثنين:
+# Tailscale (موصى به إذا Tunnel يفشل من شبكة GitHub) — عند تعبئة الاثنين معاً:
 #   - Secret: TAILSCALE_AUTHKEY (من Tailscale admin)
 #   - Repository variable: TAILSCALE_SSH_HOST = عنوان السيرفر على Tailscale (مثلاً 100.x)
+#   إن وُجد المضيف فقط بدون المفتاح ستفشل خطوة الاتصال عمداً — أضف المفتاح أو احذف المتغير.
 #   نفس SERVER_SSH_KEY يجب أن يكون مضافاً لـ authorized_keys على السيرفر.
 name: Remote Update
 
@@ -55,9 +56,10 @@ jobs:
           flutter build web --release --base-href "/app/" --no-wasm-dry-run
           [ -f build/web/index.html ] || { echo "::error::Build failed"; exit 1; }
 
+      # ملاحظة: لا يُسمح باستخدام secrets في if — نعتمد على Variable للمضيف؛ Secret مطلوب لنجاح الخطوة.
       - name: Connect Tailscale (اختياري — يتجاوز أعطال Tunnel من GitHub)
         id: ts
-        if: ${{ vars.TAILSCALE_SSH_HOST != '' && secrets.TAILSCALE_AUTHKEY != '' }}
+        if: ${{ vars.TAILSCALE_SSH_HOST != '' }}
         uses: tailscale/github-action@v2
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
